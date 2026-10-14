@@ -4,9 +4,11 @@
 [![license: GPLv3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![latest release](https://img.shields.io/github/v/release/tailiang2008/NX-Pctl-Manager)](https://github.com/tailiang2008/NX-Pctl-Manager/releases/latest)
 
+**English** | [简体中文](README.zh-CN.md)
+
 A Nintendo Switch parental-controls tool — **no phone app, no Nintendo account, no internet** — configure the daily play-time limit directly on the console, and reset / delete the PIN or unlink the companion app while you're at it.
 
-> ⚠️ **Requires custom firmware (CFW; Atmosphère recommended).** It calls the restricted system `pctl` service directly, so it only runs on a hacked console (a stock retail console can't use it). It doesn't bypass any account or online verification — it just brings the parental-controls settings that are otherwise buried in the phone app / deep in System Settings (plus the forgot-PIN recovery options) onto the console, for CFW users to do offline.
+> ⚠️ **Requires custom firmware (CFW; Atmosphère recommended).** It calls the restricted system `pctl` service directly, so it only runs on a hacked console (a stock retail console can't use it). It doesn't bypass any account or online verification — it just brings the parental-controls settings that are otherwise buried in the phone app / deep in System Settings onto the console, for CFW users to do offline.
 >
 > It talks to restricted / `*ForDebug` `pctl` commands directly. **Needs firmware 21.0.0 or newer. Tested on 22.5.0 / Atmosphère 1.12.0 (v3.1.0) and 22.1.0 / Atmosphère 1.11.1 (v3.0.0); other versions are unverified. Use at your own risk.** How `pctl` treats these writes is documented in [`docs/pctl-reverse-engineering.md`](docs/pctl-reverse-engineering.md).
 
