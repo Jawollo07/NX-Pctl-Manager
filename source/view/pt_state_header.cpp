@@ -20,16 +20,31 @@ std::string fmt_remaining(const PtState& pt)
     return "0";
 }
 
+std::string fmt_limits(const PtState& pt);
+
 std::string fmt_configured(const PtState& pt)
 {
-    if (!pt.valid) return "(unavailable)";
+    if (!pt.supported) return "n/a — needs firmware 21.0.0+";
+    if (!pt.valid)     return "(unavailable)";
+    std::string out = fmt_limits(pt);
+    if (pt.bedtime.enabled) {
+        char buf[40];
+        std::snprintf(buf, sizeof(buf), "; bedtime %02u:%02u-%02u:%02u",
+                      pt.bedtime.hour, pt.bedtime.minute, pt.bedtime.reset_hour, pt.bedtime.reset_minute);
+        out += buf;
+    }
+    return out;
+}
+
+std::string fmt_limits(const PtState& pt)
+{
 
     bool any = false, uniform = true;
     for (int i = 0; i < 7; i++) {
         if (pt.day_min[i] != PT_DAY_NOLIMIT)  any = true;
         if (pt.day_min[i] != pt.day_min[0])   uniform = false;
     }
-    if (!any)                            return "not set (timer off)";
+    if (!any)                            return pt.bedtime.enabled ? "no daily limit" : "not set (timer off)";
     if (uniform && pt.day_min[0] == 0)   return "every day blocked";
     if (uniform) {
         char buf[32];

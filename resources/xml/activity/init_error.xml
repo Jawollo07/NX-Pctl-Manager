@@ -36,8 +36,7 @@
 
         <brls:Label
             text="@i18n/nx_pctl/init_error/body"
-            horizontalAlign="center"
-            multiline="true"/>
+            horizontalAlign="center"/>
 
     </brls:Box>
 

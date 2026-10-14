@@ -1,11 +1,13 @@
 // Copyright (C) 2026 Taylor.  GPLv3-or-later (see LICENSE).
 #include "activity/main_activity.hpp"
 
+#include <cstdio>
 #include <fmt/format.h>
 
 #include "activity/play_timer_activity.hpp"
 #include "app.hpp"
 #include "util/pctl_ops_c.hpp"
+#include "util/trf.hpp"
 
 using namespace brls::literals;   // for "key"_i18n
 
@@ -101,9 +103,54 @@ void MainActivity::onContentAvailable()
         return true;
     });
 
+    // Seed the network clock from the system clock (issue #2: without a valid
+    // network clock the play timer never counts down).
+    this->item_clock->registerClickAction([this](brls::View*) {
+        Result rc = clock_seed_network_from_user();
+        this->status_panel->refresh();
+        if (R_SUCCEEDED(rc))
+            brls::Application::notify("nx_pctl/toast/clock_ok"_i18n);
+        else
+            brls::Application::notify(trf("nx_pctl/toast/clock_err"_i18n, (unsigned)rc));
+        return true;
+    });
+
+    // Read-only diagnostic report → SD card (attach it to bug reports).
+    this->item_diag->registerClickAction([](brls::View*) {
+        static char buf[8192];
+        pctl_play_timer_dump(buf, sizeof(buf));
+        FILE* f = std::fopen("/switch/nx_pctl_dump.txt", "w");
+        bool ok = f && std::fputs(buf, f) >= 0;
+        if (f) std::fclose(f);
+        brls::Application::notify(ok ? "nx_pctl/toast/diag_saved"_i18n : "nx_pctl/toast/diag_err"_i18n);
+        return true;
+    });
+
     // First read of the status panel — onResume runs it again on every entry,
     // but a freshly created Activity doesn't get an onResume call.
     this->status_panel->refresh();
+
+    brls::sync([this]() { this->check_network_clock(); });
+}
+
+void MainActivity::check_network_clock()
+{
+    if (!pctl_fw_play_timer_supported()) return;
+    ClockStatus cs;
+    clock_status(&cs);
+    if (cs.network_ok || !cs.user_ok) return;
+
+    auto* dialog = new brls::Dialog("nx_pctl/dialog/clock/body"_i18n);
+    dialog->addButton("nx_pctl/dialog/clock/later"_i18n, []() {});
+    dialog->addButton("nx_pctl/dialog/clock/confirm"_i18n, [this]() {
+        Result rc = clock_seed_network_from_user();
+        this->status_panel->refresh();
+        if (R_SUCCEEDED(rc))
+            brls::Application::notify("nx_pctl/toast/clock_ok"_i18n);
+        else
+            brls::Application::notify(trf("nx_pctl/toast/clock_err"_i18n, (unsigned)rc));
+    });
+    dialog->open();
 }
 
 void MainActivity::onResume()

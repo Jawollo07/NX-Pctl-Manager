@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+    Launch-time PIN check (root Activity when a PIN is registered). A opens the
+    keypad, B exits; the status label shows wrong-PIN / error feedback.
+-->
+
+<brls:AppletFrame
+    title="@i18n/nx_pctl/title"
+    iconInterpolation="linear">
+
+    <brls:Box
+        width="auto"
+        height="auto"
+        axis="column"
+        justifyContent="center"
+        alignItems="center"
+        grow="1.0"
+        paddingLeft="60"
+        paddingRight="60">
+
+        <brls:Label
+            text="@i18n/nx_pctl/pin_gate/headline"
+            fontSize="28"
+            horizontalAlign="center"
+            marginBottom="20"/>
+
+        <brls:Label
+            id="status"
+            text="@i18n/nx_pctl/pin_gate/hint"
+            horizontalAlign="center"
+            textColor="@theme/brls/text_disabled"/>
+
+    </brls:Box>
+
+</brls:AppletFrame>

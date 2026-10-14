@@ -1,0 +1,133 @@
+{
+    "title":   "Pctl Manager",
+    "actions": "操作",
+
+    "status": {
+        "firmware":      "系统版本",
+        "pin":           "PIN 码",
+        "restrictions":  "限制已启用",
+        "pc_enabled":    "家长控制已启用",
+        "network_clock": "网络时钟"
+    },
+
+    "items": {
+        "refresh":    "刷新状态",
+        "play_timer": "游玩时间（每日限时 / 就寝闹钟）",
+        "clock":      "用系统时间设置网络时钟",
+        "set_pin":    "设置 / 修改家长控制 PIN 码",
+        "delete_pc":  "删除全部家长控制",
+        "unlink":     "解除手机 App 绑定",
+        "diag":       "保存诊断报告 → sd:/switch/nx_pctl_dump.txt"
+    },
+
+    "dialog": {
+        "delete_pc": {
+            "body":    "删除全部家长控制？\n\n这会清除 PIN 码和所有限制，且无法恢复。",
+            "confirm": "删除"
+        },
+        "unlink": {
+            "body":    "解除手机 App（Nintendo Switch 家长控制）与本机的绑定？",
+            "confirm": "解除绑定"
+        },
+        "clock": {
+            "body":    "本机的网络时钟从未设置过（主机离线，或无法连接任天堂的时间服务器）。\n\n没有网络时钟，游玩时间限制不会开始倒计时。\n\n现在用系统时间设置网络时钟吗？",
+            "later":   "以后再说",
+            "confirm": "立即设置"
+        }
+    },
+
+    "play_timer": {
+        "title": "游玩时间",
+
+        "state": {
+            "restricted": "今日已达上限",
+            "remaining":  "今日剩余",
+            "configured": "当前设置"
+        },
+
+        "items": {
+            "set_all":  "设置每日限时（所有日子）…",
+            "per_day":  "按星期分别设置…",
+            "bedtime":  "就寝闹钟…",
+            "remove":   "取消每日限时",
+            "mode":     "到时间后"
+        },
+
+        "dialog": {
+            "remove": {
+                "body":    "取消每日游玩时间限制（所有日子）？\n\n如果设置了就寝闹钟，会保留。",
+                "confirm": "取消限时"
+            }
+        },
+
+        "numpad_all":   "所有日子的每日限时（分钟，0 = 每天都禁止游玩）",
+        "ok_all":       "已写入每日限时：{} 分钟/天。",
+        "ok_all_zero":  "已写入每日限时：0 分钟/天，每天都不能玩。（如果是想关闭限时，请用“取消每日限时”。）",
+        "ok_removed":   "已取消每日限时。",
+
+        "fw_unsupported": "本机系统版本为 {}.{}.{}。\n\n设置游玩时间需要 21.0.0 或更新的系统（已在 22.1.0 上测试）。未写入任何内容。",
+        "need_pin":       "请先设置家长控制 PIN 码（主菜单 → 设置 / 修改家长控制 PIN 码）。\n\n没有 PIN 码时，系统会直接丢弃游玩时间设置。",
+        "unlock_failed":  "无法临时暂停家长控制以写入设置（错误 0x{:08X}）。未写入任何内容。",
+        "write_failed":   "写入游玩时间设置失败（错误 0x{:08X}）。",
+        "relock_failed":  "新设置已写入，但未能自动重新开启家长控制。\n\n请在 HOME 菜单中选择家长控制提示条，手动重新开启家长控制。",
+
+        "mode": {
+            "body":       "达到每日限时（或就寝时间）后：",
+            "suspend":    "中断软件",
+            "alarm":      "仅提醒",
+            "ok_suspend": "到时间后将中断正在运行的软件。",
+            "ok_alarm":   "到时间后只显示提醒。",
+            "need_limit": "请先设置每日限时或就寝闹钟。"
+        },
+
+        "bedtime": {
+            "current_on":  "就寝闹钟：已开启，{} 至次日 {}。",
+            "current_off": "就寝闹钟：未开启。",
+            "set":         "设置…",
+            "turn_off":    "关闭",
+            "at":          "就寝时间：从几点开始限制（HHMM）",
+            "reset":       "……到第二天早上几点解除（HHMM）",
+            "ok_on":       "已设置就寝闹钟：{} 至次日 {}。",
+            "ok_off":      "已关闭就寝闹钟。",
+            "mismatch":    "就寝闹钟已写入，但系统读回的结果不一致：{}，{} 至 {}。\n\n请在主菜单保存诊断报告，并附在问题反馈中。"
+        },
+
+        "perday": {
+            "title":         "按星期设置每日限时",
+            "section_days":  "每日限时（按 A 编辑；(*) 表示尚未保存的修改）",
+            "section_save":  "保存",
+            "save":          "保存按星期的设置",
+            "no_limit":      "不限时",
+            "set_minutes":   "设置分钟数…"
+        }
+    },
+
+    "pin_gate": {
+        "title":       "请输入家长控制 PIN 码",
+        "headline":    "请输入家长控制 PIN 码以继续。",
+        "hint":        "(A) 输入 PIN 码    (B) 退出",
+        "enter":       "输入 PIN 码",
+        "wrong":       "PIN 码错误，还可以尝试 {} 次。",
+        "read_failed": "无法读取本机的 PIN 码（错误 0x{:08X}）。"
+    },
+
+    "init_error": {
+        "title":    "Pctl Manager",
+        "headline": "无法打开家长控制服务。",
+        "body":     "本程序只能在运行大气层（Atmosphère）等自定义系统的主机上使用；正版未破解的主机无法打开 pctl 服务。"
+    },
+
+    "toast": {
+        "status_refreshed": "状态已刷新。",
+        "delete_pc_ok":     "已删除家长控制。",
+        "delete_pc_err":    "删除家长控制失败",
+        "unlink_ok":        "已解除手机 App 绑定。",
+        "unlink_err":       "解除手机 App 绑定失败",
+        "set_pin_ok":       "家长控制 PIN 码已更新。",
+        "set_pin_err":      "更新 PIN 码失败",
+        "clock_ok":         "已用系统时间设置网络时钟。",
+        "clock_err":        "设置网络时钟失败（错误 0x{:08X}）。",
+        "diag_saved":       "报告已保存到 sd:/switch/nx_pctl_dump.txt",
+        "diag_err":         "无法写入 sd:/switch/nx_pctl_dump.txt"
+    }
+}

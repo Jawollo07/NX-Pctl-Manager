@@ -8,6 +8,7 @@
 #include "activity/play_timer_perday_activity.hpp"
 #include "util/numpad.hpp"
 #include "util/pctl_ops_c.hpp"
+#include "util/trf.hpp"
 
 using namespace brls::literals;
 
@@ -26,47 +27,108 @@ uint16_t guess_uniform_seed()
     return (pt.day_min[0] == PT_DAY_NOLIMIT) ? 60 : pt.day_min[0];
 }
 
-// Pop the "Parental controls are temporarily off — return to the main menu;
-// the new limit takes effect once parental controls are active again." dialog.
-// Called only after a write that went through the gate's unlock branch.
-void show_did_unlock_notice()
+std::string fmt_hm(uint8_t h, uint8_t m) { return fmt::format("{:02}:{:02}", h, m); }
+
+// A daily limit on any day, or the bedtime alarm.
+bool is_configured(const PtState& pt)
 {
-    auto* d = new brls::Dialog("nx_pctl/play_timer/did_unlock_notice"_i18n);
-    d->addButton("hints/ok"_i18n, [] {});
-    d->open();
+    if (pt.bedtime.enabled) return true;
+    for (int i = 0; i < 7; i++)
+        if (pt.day_min[i] != PT_DAY_NOLIMIT) return true;
+    return false;
 }
+
+// Writes the bedtime alarm, then asks the system (1954 / 1956-1959) how it
+// interpreted the write — confirms the PlayTimerSettings layout on this console.
+void write_bedtime(const PtBedtime& bed)
+{
+    std::string ok_text = bed.enabled
+        ? trf("nx_pctl/play_timer/bedtime/ok_on"_i18n, fmt_hm(bed.hour, bed.minute),
+              fmt_hm(bed.reset_hour, bed.reset_minute))
+        : "nx_pctl/play_timer/bedtime/ok_off"_i18n;
+    if (!pt_flow::guarded_write([bed]() { return pctl_play_timer_set_bedtime(&bed); }, ok_text))
+        return;
+
+    PtBedtime sys;
+    bool ok = false;
+    pctl_bedtime_readback(&sys, &ok);
+    if (!ok) return;   // getters unavailable — nothing to compare
+    bool match = sys.enabled == bed.enabled
+        && (!bed.enabled || (sys.hour == bed.hour && sys.minute == bed.minute
+                             && sys.reset_hour == bed.reset_hour && sys.reset_minute == bed.reset_minute));
+    pctl_logf("bedtime readback: enabled=%d %02u:%02u reset %02u:%02u  match=%d", sys.enabled,
+              sys.hour, sys.minute, sys.reset_hour, sys.reset_minute, match);
+    if (!match) {
+        auto* d = new brls::Dialog(trf("nx_pctl/play_timer/bedtime/mismatch"_i18n,
+                                       sys.enabled ? "on" : "off", fmt_hm(sys.hour, sys.minute),
+                                       fmt_hm(sys.reset_hour, sys.reset_minute)));
+        d->addButton("hints/ok"_i18n, [] {});
+        d->open();
+    }
+}
+
+void edit_bedtime()
+{
+    PtState pt;
+    pctl_play_timer_query(&pt);
+    numpad::HourMinute at_seed    = { 21, 0 };
+    numpad::HourMinute reset_seed = { 6, 0 };
+    if (pt.bedtime.enabled) {
+        at_seed    = { pt.bedtime.hour, pt.bedtime.minute };
+        reset_seed = { pt.bedtime.reset_hour, pt.bedtime.reset_minute };
+    }
+
+    auto at = numpad::prompt_hhmm("nx_pctl/play_timer/bedtime/at"_i18n, at_seed);
+    if (!at.has_value()) return;
+    auto reset = numpad::prompt_hhmm("nx_pctl/play_timer/bedtime/reset"_i18n, reset_seed);
+    if (!reset.has_value()) return;
+
+    PtBedtime bed = { true, at->hour, at->minute, reset->hour, reset->minute };
+    write_bedtime(bed);
+}
+
 }   // namespace
 
 void PlayTimerActivity::onContentAvailable()
 {
-    // Set daily limit (all days) — numpad → write-gate → cmd 195101.
+    // Set daily limit (all days) — numpad → guarded write (cmd 195101).
     this->pt_set_all->registerClickAction([this](brls::View*) {
-        auto v = numpad::prompt_minutes(
-            "Daily play-time limit for ALL days  (0 = block every day)",
-            guess_uniform_seed());
+        auto v = numpad::prompt_minutes("nx_pctl/play_timer/numpad_all"_i18n, guess_uniform_seed());
         if (!v.has_value()) return true;   // user cancelled
         uint16_t value = *v;
 
-        pt_flow::ready_to_write([this, value](bool ok, bool did_unlock) {
-            if (!ok) return;   // declined / failed — gate already toasted
-            Result rc = pctl_play_timer_set_uniform(value);
-            this->state_header->refresh();
-            if (R_FAILED(rc)) {
-                brls::Application::notify(fmt::format(
-                    "Failed to write the play-time limit (error 0x{:08X}).",
-                    (unsigned)rc));
-                return;
-            }
-            if (value)
-                brls::Application::notify(fmt::format(
-                    "Play-time limit written: {} minute(s)/day.", value));
-            else
-                brls::Application::notify(
-                    "Play-time limit written: 0 minutes/day — "
-                    "no play allowed any day. "
-                    "(Use 'Remove play-time limit' to turn the timer OFF instead.)");
-            if (did_unlock) show_did_unlock_notice();
+        std::string ok_text = value ? trf("nx_pctl/play_timer/ok_all"_i18n, value)
+                                    : "nx_pctl/play_timer/ok_all_zero"_i18n;
+        pt_flow::guarded_write([value]() { return pctl_play_timer_set_uniform(value); }, ok_text);
+        this->refresh_all();
+        return true;
+    });
+
+    // When time is up: suspend the software, or notify only (restrictionMode).
+    this->pt_mode->registerClickAction([this](brls::View*) {
+        PtState pt;
+        pctl_play_timer_query(&pt);
+        if (!is_configured(pt)) {   // the mode lives in the play-timer settings; nothing to attach it to yet
+            brls::Application::notify("nx_pctl/play_timer/mode/need_limit"_i18n);
+            return true;
+        }
+        auto* dialog = new brls::Dialog("nx_pctl/play_timer/mode/body"_i18n);
+        dialog->addButton("hints/cancel"_i18n, [] {});
+        dialog->addButton("nx_pctl/play_timer/mode/alarm"_i18n, [this]() {
+            brls::sync([this]() {
+                pt_flow::guarded_write([]() { return pctl_play_timer_set_mode(PT_MODE_ALARM); },
+                                       "nx_pctl/play_timer/mode/ok_alarm"_i18n);
+                this->refresh_all();
+            });
         });
+        dialog->addButton("nx_pctl/play_timer/mode/suspend"_i18n, [this]() {
+            brls::sync([this]() {
+                pt_flow::guarded_write([]() { return pctl_play_timer_set_mode(PT_MODE_SUSPEND); },
+                                       "nx_pctl/play_timer/mode/ok_suspend"_i18n);
+                this->refresh_all();
+            });
+        });
+        dialog->open();
         return true;
     });
 
@@ -76,47 +138,69 @@ void PlayTimerActivity::onContentAvailable()
         return true;
     });
 
-#ifdef PCTL_PROBE
-    // PROBE build: surface the read-only "Dump current config" cell — same
-    // diagnostic as v2.0.0 PROBE=1. Writes a multi-line report to
-    // sd:/nx_pctl_probe.txt (PIN digits masked) and toasts the path.
-    this->pt_diag->setVisibility(brls::Visibility::VISIBLE);
-    this->pt_diag->registerClickAction([](brls::View*) {
-        static char buf[6144];
-        pctl_play_timer_dump(buf, sizeof(buf));
-        FILE* f = std::fopen("/nx_pctl_probe.txt", "w");
-        if (f) { std::fputs(buf, f); std::fclose(f); }
-        brls::Application::notify("nx_pctl/toast/diag_saved"_i18n);
-        return true;
-    });
-#endif
+    // Bedtime alarm (issue #4) — set (two HHMM prompts) or turn off.
+    this->pt_bedtime->registerClickAction([this](brls::View*) {
+        PtState pt;
+        pctl_play_timer_query(&pt);
+        std::string current = pt.bedtime.enabled
+            ? trf("nx_pctl/play_timer/bedtime/current_on"_i18n, fmt_hm(pt.bedtime.hour, pt.bedtime.minute),
+                  fmt_hm(pt.bedtime.reset_hour, pt.bedtime.reset_minute))
+            : "nx_pctl/play_timer/bedtime/current_off"_i18n;
 
-    // Remove play-time limit — destructive, **deliberately skips** pt_flow's
-    // write-gate (it IS the "turn the timer off" path; routing through 1201
-    // would be circular). See CLAUDE.md / PROGRESS.md for the known crash
-    // when called while the "time's up" lock screen is showing.
-    this->pt_remove->registerClickAction([this](brls::View*) {
-        auto* dialog = new brls::Dialog("nx_pctl/play_timer/dialog/remove/body"_i18n);
+        auto* dialog = new brls::Dialog(current);
         dialog->addButton("hints/cancel"_i18n, [] {});
-        dialog->addButton("nx_pctl/play_timer/dialog/remove/confirm"_i18n, [this]() {
-            Result rc = pctl_play_timer_clear();
-            this->state_header->refresh();
-            if (R_SUCCEEDED(rc))
-                brls::Application::notify("Play timer turned off.");
-            else
-                brls::Application::notify(fmt::format(
-                    "Could not turn off the play timer (error 0x{:08X}).",
-                    (unsigned)rc));
+        dialog->addButton("nx_pctl/play_timer/bedtime/turn_off"_i18n, [this]() {
+            brls::sync([this]() {
+                PtBedtime off = { false, 0, 0, 6, 0 };
+                write_bedtime(off);
+                this->refresh_all();
+            });
+        });
+        dialog->addButton("nx_pctl/play_timer/bedtime/set"_i18n, [this]() {
+            // Defer: open the keypad after the dialog has closed.
+            brls::sync([this]() {
+                edit_bedtime();
+                this->refresh_all();
+            });
         });
         dialog->open();
         return true;
     });
 
-    this->state_header->refresh();
+    // Remove play-time limit. Goes through the guarded write like every other
+    // write: removing it while the "time's up" lock was up could crash
+    // Atmosphère in v3.0.0, which wrote here without the temporary unlock.
+    this->pt_remove->registerClickAction([this](brls::View*) {
+        auto* dialog = new brls::Dialog("nx_pctl/play_timer/dialog/remove/body"_i18n);
+        dialog->addButton("hints/cancel"_i18n, [] {});
+        dialog->addButton("nx_pctl/play_timer/dialog/remove/confirm"_i18n, [this]() {
+            brls::sync([this]() {
+                pt_flow::guarded_write([]() { return pctl_play_timer_clear(); },
+                                       "nx_pctl/play_timer/ok_removed"_i18n);
+                this->refresh_all();
+            });
+        });
+        dialog->open();
+        return true;
+    });
+
+    this->refresh_all();
 }
 
 void PlayTimerActivity::onResume()
 {
     brls::Activity::onResume();
+    this->refresh_all();
+}
+
+void PlayTimerActivity::refresh_all()
+{
     this->state_header->refresh();
+    PtState pt;
+    pctl_play_timer_query(&pt);
+    // Nothing configured yet reads back as all-zero (ALARM), but the first
+    // write defaults to suspending — show what will actually apply.
+    this->pt_mode->setDetailText(is_configured(pt) && pt.restriction_mode == PT_MODE_ALARM
+                                     ? "nx_pctl/play_timer/mode/alarm"_i18n
+                                     : "nx_pctl/play_timer/mode/suspend"_i18n);
 }

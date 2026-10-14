@@ -5,4 +5,5 @@
 
 extern "C" {
 #include "../pctl_ops.h"
+#include "../clock_ops.h"
 }

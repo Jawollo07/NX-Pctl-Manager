@@ -9,21 +9,26 @@
 #include "app.hpp"
 #include "activity/init_error_activity.hpp"
 #include "activity/main_activity.hpp"
+#include "activity/pin_gate_activity.hpp"
+#include "util/pctl_ops_c.hpp"
 #include "view/pt_state_header.hpp"
 #include "view/status_panel.hpp"
 
 using namespace brls::literals;   // enables the "key"_i18n suffix
 
-int main(int argc, char* argv[])
+namespace
 {
-    (void)argc; (void)argv;
+bool g_window_created = false;
 
+int run()
+{
     if (!brls::Application::init()) {
         brls::Logger::error("Unable to init borealis Application");
         return EXIT_FAILURE;
     }
 
     brls::Application::createWindow("nx_pctl/title"_i18n);
+    g_window_created = true;
 
     // Auto-follow system theme; user can override in dev settings if they want.
     brls::Application::getPlatform()->setThemeVariant(brls::ThemeVariant::DARK);
@@ -39,7 +44,13 @@ int main(int argc, char* argv[])
     // we show a dedicated InitErrorActivity (the only thing the user can do
     // is press B to exit).
     if (app::init()) {
-        brls::Application::pushActivity(new MainActivity());
+        // A registered PIN guards the whole tool (it can lift every restriction).
+        PctlStatus st;
+        pctl_status_fetch(&st);
+        if (st.pin_length_ok && st.pin_length == 0)
+            brls::Application::pushActivity(new MainActivity());
+        else
+            brls::Application::pushActivity(new PinGateActivity());
     } else {
         brls::Logger::error("pctl_ops_init failed (0x{:08X}) — pushing InitErrorActivity",
                             app::pctl_init_result());
@@ -51,4 +62,50 @@ int main(int argc, char* argv[])
 
     app::shutdown();
     return EXIT_SUCCESS;
+}
+}   // namespace
+
+int main(int argc, char* argv[])
+{
+    (void)argc; (void)argv;
+
+    // borealis only logs to stdout (nxlink); keep a copy on the SD card so
+    // start-up failures can be diagnosed without a debugger.
+    std::FILE* log = std::fopen("/switch/nx_pctl_borealis.log", "w");
+    if (log) {
+        std::setvbuf(log, nullptr, _IONBF, 0);   // unbuffered: survive a hard crash
+        brls::Logger::setLogOutput(log);
+        brls::Logger::setLogLevel(brls::LogLevel::LOG_DEBUG);
+    }
+
+    int rc = EXIT_FAILURE;
+    try {
+        rc = run();
+    } catch (const std::exception& e) {
+        // brls::fatal() throws. Left uncaught it reaches abort(), which under
+        // hbloader returns straight to the loader while borealis's task thread
+        // is still alive — that thread then runs unmapped code (2168-0001).
+        brls::Logger::error("Uncaught exception: {}", e.what());
+        if (g_window_created) {
+            // One more loop iteration with quit requested runs Application::exit():
+            // stops the task thread and tears down the window / GPU context, so
+            // hbmenu can start cleanly afterwards.
+            brls::Application::quit();
+            try {
+                brls::Application::mainLoop();
+            } catch (const std::exception& e2) {
+                brls::Logger::error("Exception during shutdown: {}", e2.what());
+                brls::Threading::stop();
+            }
+        } else {
+            brls::Threading::stop();
+        }
+        app::shutdown();
+    }
+
+    if (log) {
+        brls::Logger::setLogOutput(stdout);
+        std::fclose(log);
+    }
+    return rc;
 }

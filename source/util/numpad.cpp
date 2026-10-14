@@ -36,4 +36,49 @@ std::optional<uint16_t> prompt_minutes(const std::string& header, uint16_t curre
     return (uint16_t)v;
 }
 
+std::optional<HourMinute> prompt_hhmm(const std::string& header, HourMinute current)
+{
+    SwkbdConfig kbd;
+    if (R_FAILED(swkbdCreate(&kbd, 0))) return std::nullopt;
+
+    swkbdConfigMakePresetDefault(&kbd);
+    swkbdConfigSetType(&kbd, SwkbdType_NumPad);
+    swkbdConfigSetStringLenMin(&kbd, 3);
+    swkbdConfigSetStringLenMax(&kbd, 4);
+    swkbdConfigSetHeaderText(&kbd, header.c_str());
+    swkbdConfigSetGuideText(&kbd, "HHMM, 24-hour  (e.g. 2100 = 9:00 pm)");
+
+    char initial[8];
+    std::snprintf(initial, sizeof(initial), "%02u%02u", (unsigned)current.hour, (unsigned)current.minute);
+    swkbdConfigSetInitialText(&kbd, initial);
+
+    char out[16] = {0};
+    Result rc    = swkbdShow(&kbd, out, sizeof(out));
+    swkbdClose(&kbd);
+    if (R_FAILED(rc)) return std::nullopt;
+
+    long v = std::strtol(out, nullptr, 10);
+    long h = v / 100, m = v % 100;
+    if (v < 0 || h > 23 || m > 59) return std::nullopt;
+    return HourMinute{ (uint8_t)h, (uint8_t)m };
+}
+
+std::optional<std::string> prompt_pin(const std::string& header)
+{
+    SwkbdConfig kbd;
+    if (R_FAILED(swkbdCreate(&kbd, 0))) return std::nullopt;
+
+    swkbdConfigMakePresetPassword(&kbd);
+    swkbdConfigSetType(&kbd, SwkbdType_NumPad);
+    swkbdConfigSetStringLenMin(&kbd, 4);
+    swkbdConfigSetStringLenMax(&kbd, 8);
+    swkbdConfigSetHeaderText(&kbd, header.c_str());
+
+    char out[16] = {0};
+    Result rc    = swkbdShow(&kbd, out, sizeof(out));
+    swkbdClose(&kbd);
+    if (R_FAILED(rc)) return std::nullopt;
+    return std::string(out);
+}
+
 }   // namespace numpad
