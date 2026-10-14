@@ -4,6 +4,8 @@
 
 Fixes for every open issue, a bedtime alarm, and a PlayTimerSettings layout confirmed by reversing the fw 22.5.0 `pctl` sysmodule (see [`docs/pctl-reverse-engineering.md`](docs/pctl-reverse-engineering.md)).
 
+Many thanks to [@puppywang](https://github.com/puppywang), who contributed the fixes and features in this release ([#8](https://github.com/tailiang2008/NX-Pctl-Manager/pull/8)).
+
 ### Fixes
 
 - **The limit now applies right after writing it (#3, #6, #7).** v3.0.0 unlocked parental controls temporarily (cmd 1201) and never re-locked them. Every write now ends with cmd 1007 RevertRestrictionTemporaryUnlocked. The "Turn off & write" prompt is gone.
