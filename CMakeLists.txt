@@ -13,7 +13,7 @@ project(nx_pctl_manager LANGUAGES CXX C)
 
 # App metadata — kept in sync with the legacy Makefile.
 set(VERSION_MAJOR "3")
-set(VERSION_MINOR "0")
+set(VERSION_MINOR "1")
 set(VERSION_ALTER "0")
 set(PROJECT_TITLEID "")
 set(PROJECT_AUTHOR "Taylor")

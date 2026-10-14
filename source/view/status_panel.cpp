@@ -24,8 +24,32 @@ std::string fmt_pin(const PctlStatus& s)
 
 // Reads as "Parental control enabled : <value>" — the value carries the
 // configured-limit detail when the timer is on.
+std::string fmt_firmware()
+{
+    u32 hv = hosversionGet();
+    char buf[48];
+    std::snprintf(buf, sizeof(buf), "%u.%u.%u%s", HOSVER_MAJOR(hv), HOSVER_MINOR(hv), HOSVER_MICRO(hv),
+                  pctl_fw_play_timer_supported() ? "" : "  (play timer needs 21.0.0+)");
+    return buf;
+}
+
+std::string fmt_clock()
+{
+    ClockStatus cs;
+    clock_status(&cs);
+    if (!cs.network_ok) return "NOT SET — timer won't count down";
+    long long drift = (long long)cs.network - (long long)cs.user;
+    if (cs.user_ok && (drift > 300 || drift < -300)) {
+        char buf[48];
+        std::snprintf(buf, sizeof(buf), "set (%+lld min vs system)", drift / 60);
+        return buf;
+    }
+    return "set";
+}
+
 std::string fmt_play_timer(const PtState& pt)
 {
+    if (!pt.supported) return "n/a on this firmware";
     if (!pt.valid)    return UNAVAILABLE;
     if (!pt.enabled)  return "no";
 
@@ -53,6 +77,9 @@ StatusPanel::StatusPanel()
 
 void StatusPanel::refresh()
 {
+    this->firmware_value->setText(fmt_firmware());
+    this->clock_value->setText(fmt_clock());
+
     if (!app::pctl_available()) {
         this->pin_value->setText(UNAVAILABLE);
         this->restrictions_value->setText(UNAVAILABLE);

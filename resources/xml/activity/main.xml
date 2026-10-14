@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <!--
-    Main menu: 4-line StatusPanel above an "Actions" section with the 5 cells
-    that replace the old text-console menu items. Wired in MainActivity.cpp.
+    Main menu: 4-line StatusPanel above an "Actions" section with the action
+    cells that replace the old text-console menu items. Wired in MainActivity.cpp.
 -->
 
 <brls:AppletFrame
@@ -35,9 +35,11 @@
 
             <brls:DetailCell id="item_refresh"    title="@i18n/nx_pctl/items/refresh"/>
             <brls:DetailCell id="item_play_timer" title="@i18n/nx_pctl/items/play_timer"/>
+            <brls:DetailCell id="item_clock"      title="@i18n/nx_pctl/items/clock"/>
             <brls:DetailCell id="item_set_pin"    title="@i18n/nx_pctl/items/set_pin"/>
             <brls:DetailCell id="item_delete_pc"  title="@i18n/nx_pctl/items/delete_pc"/>
             <brls:DetailCell id="item_unlink"     title="@i18n/nx_pctl/items/unlink"/>
+            <brls:DetailCell id="item_diag"       title="@i18n/nx_pctl/items/diag"/>
 
         </brls:Box>
 

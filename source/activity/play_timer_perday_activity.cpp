@@ -86,16 +86,27 @@ void PlayTimerPerDayActivity::rerender_day_labels()
 
 void PlayTimerPerDayActivity::open_numpad_for(int d)
 {
-    // Seed numpad: use current pending value, or 60 when "no limit" (the user
-    // is presumably trying to put a value on this day, so no-limit isn't a
-    // useful starting point).
-    u16 seed = (this->pending[d] == PT_DAY_NOLIMIT) ? 60 : this->pending[d];
-    auto v = numpad::prompt_minutes(
-        fmt::format("{} limit  (0 = no play that day)", DAY_NAMES[d]),
-        seed);
-    if (!v.has_value()) return;   // cancelled
-    this->pending[d] = *v;
-    this->rerender_day_labels();
+    // "No limit" can't be typed on the number pad (0 means "no play"), so each
+    // day first offers a choice: set minutes, or no limit for that day.
+    auto* dialog = new brls::Dialog(fmt::format("{}: {}", DAY_NAMES[d], fmt_minutes(this->pending[d])));
+    dialog->addButton("hints/cancel"_i18n, [] {});
+    dialog->addButton("nx_pctl/play_timer/perday/no_limit"_i18n, [this, d]() {
+        this->pending[d] = PT_DAY_NOLIMIT;
+        this->rerender_day_labels();
+    });
+    dialog->addButton("nx_pctl/play_timer/perday/set_minutes"_i18n, [this, d]() {
+        brls::sync([this, d]() {
+            // Seed numpad: use current pending value, or 60 when "no limit".
+            u16 seed = (this->pending[d] == PT_DAY_NOLIMIT) ? 60 : this->pending[d];
+            auto v = numpad::prompt_minutes(
+                fmt::format("{} limit  (0 = no play that day)", DAY_NAMES[d]),
+                seed);
+            if (!v.has_value()) return;   // cancelled
+            this->pending[d] = *v;
+            this->rerender_day_labels();
+        });
+    });
+    dialog->open();
 }
 
 void PlayTimerPerDayActivity::do_save()
@@ -109,46 +120,22 @@ void PlayTimerPerDayActivity::do_save()
         return;
     }
 
-    // Snapshot pending now so the gate's async callback uses a stable value
-    // (the user could keep editing during the dialog — borealis blocks input
-    // to this Activity while a Dialog is open, but capturing by value is
-    // belt-and-braces anyway).
     u16 snapshot[7];
     std::memcpy(snapshot, this->pending, sizeof(snapshot));
 
-    pt_flow::ready_to_write([this, snapshot](bool ok, bool did_unlock) {
-        if (!ok) {
-            // Declined / unlock failed; pending stays, refresh labels in case
-            // `live` shifted while the gate was up (state_header re-renders too).
-            this->reload_from_service();
-            this->state_header->refresh();
-            this->rerender_day_labels();
-            return;
-        }
-        Result rc = pctl_play_timer_set_days(snapshot);
+    // Build a summary line: "Su: 60 min  Mo: 30 min  …"
+    std::string summary = "Per-day limits written: ";
+    for (int d = 0; d < 7; d++) {
+        summary += fmt::format("{}: {}", DAY_NAMES[d], fmt_minutes(snapshot[d]));
+        if (d < 6) summary += "  ";
+    }
 
-        // Re-read live and re-seed pending — clears all (*) markers on success.
-        this->reload_from_service();
-        this->state_header->refresh();
-        this->rerender_day_labels();
+    bool ok = pt_flow::guarded_write([snapshot]() { return pctl_play_timer_set_days(snapshot); }, summary);
 
-        if (R_FAILED(rc)) {
-            brls::Application::notify(fmt::format(
-                "Failed to write the per-day limits (error 0x{:08X}).",
-                (unsigned)rc));
-            return;
-        }
-        // Build a summary line: "Su: 60 min  Mo: 30 min  …"
-        std::string summary = "Per-day limits written: ";
-        for (int d = 0; d < 7; d++) {
-            summary += fmt::format("{}: {}", DAY_NAMES[d], fmt_minutes(snapshot[d]));
-            if (d < 6) summary += "  ";
-        }
-        brls::Application::notify(summary);
-        if (did_unlock) {
-            auto* d = new brls::Dialog("nx_pctl/play_timer/did_unlock_notice"_i18n);
-            d->addButton("hints/ok"_i18n, [] {});
-            d->open();
-        }
-    });
+    // Success: re-read live and re-seed pending (clears all (*) markers).
+    // Failure: keep the staged edits, but refresh `live` in case it shifted.
+    if (ok) this->reload_from_service();
+    else    pctl_play_timer_query(&this->live);
+    this->state_header->refresh();
+    this->rerender_day_labels();
 }

@@ -1,6 +1,6 @@
 // PlayTimerActivity — the play-timer sub-menu (entered from the main menu's
-// "Play timer (daily limit)" cell). State header on top, 3 action cells
-// (set-all / per-day / remove) below.
+// "Play timer (daily limit)" cell). State header on top, action cells
+// (set-all / per-day / bedtime / remove) below.
 // Copyright (C) 2026 Taylor.  GPLv3-or-later (see LICENSE).
 #pragma once
 
@@ -20,6 +20,8 @@ class PlayTimerActivity : public brls::Activity
     BRLS_BIND(PtStateHeader,    state_header, "pt_state_header");
     BRLS_BIND(brls::DetailCell, pt_set_all,   "pt_set_all");
     BRLS_BIND(brls::DetailCell, pt_per_day,   "pt_per_day");
+    BRLS_BIND(brls::DetailCell, pt_bedtime,   "pt_bedtime");
     BRLS_BIND(brls::DetailCell, pt_remove,    "pt_remove");
-    BRLS_BIND(brls::DetailCell, pt_diag,      "pt_diag");   // PROBE-gated; see .cpp
+    BRLS_BIND(brls::DetailCell, pt_exp_hdr1,  "pt_exp_hdr1");   // PROBE-gated; see .cpp
+    BRLS_BIND(brls::DetailCell, pt_exp_hdr2,  "pt_exp_hdr2");   // PROBE-gated; see .cpp
 };

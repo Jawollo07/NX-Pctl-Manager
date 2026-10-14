@@ -1,5 +1,5 @@
 // MainActivity — root view. Hosts the StatusPanel (read from pctl_ops) and
-// the 5 action cells. Layout in resources/xml/activity/main.xml; per-cell
+// the action cells. Layout in resources/xml/activity/main.xml; per-cell
 // wiring in onContentAvailable.
 // Copyright (C) 2026 Taylor.  GPLv3-or-later (see LICENSE).
 #pragma once
@@ -23,4 +23,8 @@ class MainActivity : public brls::Activity
     BRLS_BIND(brls::DetailCell,  item_set_pin,    "item_set_pin");
     BRLS_BIND(brls::DetailCell,  item_delete_pc,  "item_delete_pc");
     BRLS_BIND(brls::DetailCell,  item_unlink,     "item_unlink");
+    BRLS_BIND(brls::DetailCell,  item_clock,      "item_clock");
+    BRLS_BIND(brls::DetailCell,  item_diag,       "item_diag");
+
+    void check_network_clock();   // one-time prompt when the network clock was never set
 };
