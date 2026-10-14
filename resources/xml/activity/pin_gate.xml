@@ -29,7 +29,6 @@
             id="status"
             text="@i18n/nx_pctl/pin_gate/hint"
             horizontalAlign="center"
-            multiline="true"
             textColor="@theme/brls/text_disabled"/>
 
     </brls:Box>

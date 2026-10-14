@@ -16,16 +16,19 @@
 
 using namespace brls::literals;   // enables the "key"_i18n suffix
 
-int main(int argc, char* argv[])
+namespace
 {
-    (void)argc; (void)argv;
+bool g_window_created = false;
 
+int run()
+{
     if (!brls::Application::init()) {
         brls::Logger::error("Unable to init borealis Application");
         return EXIT_FAILURE;
     }
 
     brls::Application::createWindow("nx_pctl/title"_i18n);
+    g_window_created = true;
 
     // Auto-follow system theme; user can override in dev settings if they want.
     brls::Application::getPlatform()->setThemeVariant(brls::ThemeVariant::DARK);
@@ -59,4 +62,50 @@ int main(int argc, char* argv[])
 
     app::shutdown();
     return EXIT_SUCCESS;
+}
+}   // namespace
+
+int main(int argc, char* argv[])
+{
+    (void)argc; (void)argv;
+
+    // borealis only logs to stdout (nxlink); keep a copy on the SD card so
+    // start-up failures can be diagnosed without a debugger.
+    std::FILE* log = std::fopen("/switch/nx_pctl_borealis.log", "w");
+    if (log) {
+        std::setvbuf(log, nullptr, _IONBF, 0);   // unbuffered: survive a hard crash
+        brls::Logger::setLogOutput(log);
+        brls::Logger::setLogLevel(brls::LogLevel::LOG_DEBUG);
+    }
+
+    int rc = EXIT_FAILURE;
+    try {
+        rc = run();
+    } catch (const std::exception& e) {
+        // brls::fatal() throws. Left uncaught it reaches abort(), which under
+        // hbloader returns straight to the loader while borealis's task thread
+        // is still alive — that thread then runs unmapped code (2168-0001).
+        brls::Logger::error("Uncaught exception: {}", e.what());
+        if (g_window_created) {
+            // One more loop iteration with quit requested runs Application::exit():
+            // stops the task thread and tears down the window / GPU context, so
+            // hbmenu can start cleanly afterwards.
+            brls::Application::quit();
+            try {
+                brls::Application::mainLoop();
+            } catch (const std::exception& e2) {
+                brls::Logger::error("Exception during shutdown: {}", e2.what());
+                brls::Threading::stop();
+            }
+        } else {
+            brls::Threading::stop();
+        }
+        app::shutdown();
+    }
+
+    if (log) {
+        brls::Logger::setLogOutput(stdout);
+        std::fclose(log);
+    }
+    return rc;
 }
