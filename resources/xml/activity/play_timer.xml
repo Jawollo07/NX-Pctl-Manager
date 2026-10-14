@@ -2,7 +2,7 @@
 
 <!--
     Play timer sub-menu — entered when the user picks "Play timer (daily limit)"
-    from the main menu. state header above the actions (+2 experiments when PROBE=1).
+    from the main menu. state header above the actions.
 -->
 
 <brls:AppletFrame
@@ -37,16 +37,10 @@
                              title="@i18n/nx_pctl/play_timer/items/per_day"/>
             <brls:DetailCell id="pt_bedtime"
                              title="@i18n/nx_pctl/play_timer/items/bedtime"/>
+            <brls:DetailCell id="pt_mode"
+                             title="@i18n/nx_pctl/play_timer/items/mode"/>
             <brls:DetailCell id="pt_remove"
                              title="@i18n/nx_pctl/play_timer/items/remove"/>
-            <!-- PROBE-only experiments. Hidden by default; PlayTimerActivity
-                 makes them visible + wires the clicks under #ifdef PCTL_PROBE. -->
-            <brls:DetailCell id="pt_exp_hdr1"
-                             title="@i18n/nx_pctl/play_timer/items/exp_hdr1"
-                             visibility="gone"/>
-            <brls:DetailCell id="pt_exp_hdr2"
-                             title="@i18n/nx_pctl/play_timer/items/exp_hdr2"
-                             visibility="gone"/>
 
         </brls:Box>
 

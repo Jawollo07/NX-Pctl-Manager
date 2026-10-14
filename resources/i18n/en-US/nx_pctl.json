@@ -50,8 +50,7 @@
             "per_day":  "Per-day limits…",
             "bedtime":  "Bedtime alarm…",
             "remove":   "Remove play-time limit",
-            "exp_hdr1": "[PROBE] Flip header byte 1 (suspend mode?)",
-            "exp_hdr2": "[PROBE] Flip header byte 2 (per-day mode?)"
+            "mode":     "When time is up"
         },
 
         "dialog": {
@@ -67,10 +66,19 @@
         "ok_removed":   "Daily play-time limit removed.",
 
         "fw_unsupported": "This console runs firmware {}.{}.{}.\n\nSetting the play timer needs firmware 21.0.0 or newer (tested on 22.1.0). Nothing was written.",
-        "need_pin":       "Set a parental-control PIN first (main menu → Set / change parental control PIN).\n\nWithout a PIN, anyone can change these settings, and the limit can't be updated safely once it is active.",
+        "need_pin":       "Set a parental-control PIN first (main menu → Set / change parental control PIN).\n\nWithout a PIN the system silently discards play-timer settings.",
         "unlock_failed":  "Could not pause parental controls for the write (error 0x{:08X}). Nothing was written.",
         "write_failed":   "Failed to write the play timer (error 0x{:08X}).",
         "relock_failed":  "The new settings were written, but parental controls could not be switched back on automatically.\n\nOn the HOME menu, select the parental-controls banner and turn parental controls back on.",
+
+        "mode": {
+            "body":       "When the daily limit (or bedtime) is reached:",
+            "suspend":    "Suspend software",
+            "alarm":      "Notify only",
+            "ok_suspend": "When time is up, the software will be suspended.",
+            "ok_alarm":   "When time is up, only a notification will be shown.",
+            "need_limit": "Set a daily limit or bedtime alarm first."
+        },
 
         "bedtime": {
             "current_on":  "Bedtime alarm: on, {} until {}.",

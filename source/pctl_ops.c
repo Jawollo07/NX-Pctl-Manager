@@ -212,6 +212,11 @@ const char *pctl_safety_level_name(u32 level)
  * pctl_ops.h. v3.0.0 wrote the same bytes through a u16[34] view; for the same
  * input, compose_settings() below produces byte-identical output except that
  * unrestricted days keep the 06:00 bedtime-reset default instead of all-zero.
+ *
+ * What pctl does with a 195101 write (fw 22.5.0, see docs/pctl-reverse-engineering.md):
+ *  - with no PIN registered the write is silently dropped (still returns success);
+ *  - otherwise it stores the struct with `enabled` cleared, then re-enables the
+ *    timer only if the NetworkSystemClock yields the current time (issue #2).
  * ------------------------------------------------------------------------- */
 
 #define PT_UNSUPPORTED MAKERESULT(Module_Libnx, LibnxError_IncompatSysVer)
@@ -246,15 +251,11 @@ static Result write_settings(const PtSettings *s)
     return rc;
 }
 
-// The slot a given weekday is read from. This tool always writes the per-day
-// slots, but a config synced from the companion app in "same every day" mode
-// may only fill the daily slot — fall back to it when every per-day slot is empty.
+// The slot pctl uses for weekday n: timerMode DAILY (week_used == 0, e.g. a
+// config synced from the companion app in "same every day" mode) uses `daily`.
 static const PtDaySetting *day_slot(const PtSettings *s, int n)
 {
-    static const PtDaySetting zero;
-    for (int k = 0; k < 7; k++)
-        if (memcmp(&s->weekly[k], &zero, sizeof(zero)) != 0) return &s->weekly[n];
-    return &s->daily;
+    return s->week_used ? &s->weekly[n] : &s->daily;
 }
 
 static void decode_bedtime(const PtDaySetting *d, PtBedtime *out)
@@ -267,18 +268,18 @@ static void decode_bedtime(const PtDaySetting *d, PtBedtime *out)
 }
 
 // Builds a complete PlayTimerSettings from per-day limits + one bedtime alarm
-// applied to every day. Header values are the ones seen in the companion-app dump.
-static void compose_settings(PtSettings *s, const u16 days_min[7], const PtBedtime *bed)
+// applied to every day, always in EACH_DAY_OF_THE_WEEK mode.
+static void compose_settings(PtSettings *s, const u16 days_min[7], const PtBedtime *bed, u8 mode)
 {
     memset(s, 0, sizeof(*s));
     bool any = bed->enabled;
     for (int n = 0; n < 7; n++) if (days_min[n] != PT_DAY_NOLIMIT) any = true;
     if (!any) return;   // all-zero struct -> the play timer is turned off, IsPlayTimerEnabled becomes false
 
-    s->enabled = 1;
-    s->hdr1    = 1;
-    s->hdr2    = 1;
-    // s->daily stays all-zero, as in the dump (the per-day slots are used)
+    s->enabled          = 1;
+    s->restriction_mode = mode;
+    s->week_used        = 1;
+    // s->daily stays all-zero, as in the companion-app dump (the per-day slots are used)
     for (int n = 0; n < 7; n++) {
         PtDaySetting *d = &s->weekly[n];
         d->bedtime_enabled      = bed->enabled ? 1 : 0;
@@ -317,12 +318,14 @@ void pctl_play_timer_query(PtState *out)
             out->day_min[n] = d->limit_enabled ? d->limit_minutes : PT_DAY_NOLIMIT;
         }
         decode_bedtime(day_slot(&out->raw, 0), &out->bedtime);
+        out->restriction_mode = out->raw.restriction_mode;
     }
 }
 
-// Current per-day limits + bedtime (so one of them can be changed while keeping
-// the other). Fails if the settings can't be read — never write blind.
-static Result current_config(u16 days_min[7], PtBedtime *bed)
+// Current per-day limits + bedtime + mode (so one of them can be changed while
+// keeping the others). Fails if the settings can't be read — never write blind.
+// A console with no play timer yet defaults to suspending the software.
+static Result current_config(u16 days_min[7], PtBedtime *bed, u8 *mode)
 {
     PtSettings cur;
     Result rc = read_settings(&cur);
@@ -332,7 +335,9 @@ static Result current_config(u16 days_min[7], PtBedtime *bed)
         days_min[n] = d->limit_enabled ? d->limit_minutes : PT_DAY_NOLIMIT;
     }
     decode_bedtime(day_slot(&cur, 0), bed);
-    if (!cur.enabled) bed->enabled = false;
+    bool configured = bed->enabled;
+    for (int n = 0; n < 7; n++) if (days_min[n] != PT_DAY_NOLIMIT) configured = true;
+    *mode = configured ? cur.restriction_mode : PT_MODE_SUSPEND;
     return 0;
 }
 
@@ -340,11 +345,12 @@ Result pctl_play_timer_set_days(const u16 days_min[7])
 {
     u16 old_days[7];
     PtBedtime bed;
-    Result rc = current_config(old_days, &bed);
+    u8 mode;
+    Result rc = current_config(old_days, &bed, &mode);
     if (R_FAILED(rc)) return rc;
 
     PtSettings s;
-    compose_settings(&s, days_min, &bed);
+    compose_settings(&s, days_min, &bed, mode);
     return write_settings(&s);
 }
 
@@ -366,17 +372,26 @@ Result pctl_play_timer_set_bedtime(const PtBedtime *bed)
 {
     u16 days[7];
     PtBedtime old;
-    Result rc = current_config(days, &old);
+    u8 mode;
+    Result rc = current_config(days, &old, &mode);
     if (R_FAILED(rc)) return rc;
 
     PtSettings s;
-    compose_settings(&s, days, bed);
+    compose_settings(&s, days, bed, mode);
     return write_settings(&s);
 }
 
-Result pctl_play_timer_write_raw(const PtSettings *s)
+Result pctl_play_timer_set_mode(u8 restriction_mode)
 {
-    return write_settings(s);
+    u16 days[7];
+    PtBedtime bed;
+    u8 old_mode;
+    Result rc = current_config(days, &bed, &old_mode);
+    if (R_FAILED(rc)) return rc;
+
+    PtSettings s;
+    compose_settings(&s, days, &bed, restriction_mode ? PT_MODE_SUSPEND : PT_MODE_ALARM);
+    return write_settings(&s);
 }
 
 void pctl_bedtime_readback(PtBedtime *out, bool *ok)
@@ -478,7 +493,9 @@ void pctl_play_timer_dump(char *buf, size_t bufsz)
       if (R_SUCCEEDED(r)) {
           PtSettings s; memcpy(&s, b, sizeof(s));
           static const char *const dn[8] = { "daily", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
-          rep(&p, e, "header: enabled=%u hdr1=%u hdr2=%u hdr3=%u\n", s.enabled, s.hdr1, s.hdr2, s.hdr3);
+          rep(&p, e, "header: enabled=%u restrictionMode=%u (%s) timerMode=%u (%s) reserved=%u\n",
+              s.enabled, s.restriction_mode, s.restriction_mode ? "FORCED_TERMINATION" : "ALARM",
+              s.week_used, s.week_used ? "EACH_DAY_OF_THE_WEEK" : "DAILY", s.reserved);
           rep(&p, e, "slot   bed  time   reset  limit  minutes\n");
           for (int k = 0; k < 8; k++) {
               const PtDaySetting *d = (k == 0) ? &s.daily : &s.weekly[k - 1];
