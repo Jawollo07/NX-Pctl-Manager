@@ -20,10 +20,6 @@ set(PROJECT_AUTHOR "Taylor")
 set(PROJECT_ICON ${CMAKE_CURRENT_SOURCE_DIR}/icon.jpg)
 set(PROJECT_RESOURCES ${CMAKE_CURRENT_SOURCE_DIR}/resources)
 
-# Optional: include the read-only "Dump current config" diagnostic item
-# (mirrors the legacy `make PROBE=1`). Off by default; pass -DPCTL_PROBE=ON.
-option(PCTL_PROBE "Include the read-only diagnostic dump menu item" OFF)
-
 # Build borealis as a static library at <build>/borealis_library/.
 add_subdirectory(${BOREALIS_LIBRARY} ${CMAKE_BINARY_DIR}/borealis_library)
 
@@ -47,10 +43,6 @@ set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
 target_include_directories(${PROJECT_NAME} PRIVATE source ${APP_PLATFORM_INCLUDE})
 target_compile_options(${PROJECT_NAME} PRIVATE -ffunction-sections -fdata-sections ${APP_PLATFORM_OPTION})
 target_link_libraries(${PROJECT_NAME} PRIVATE borealis ${APP_PLATFORM_LIB})
-
-if (PCTL_PROBE)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE PCTL_PROBE=1)
-endif ()
 
 # .nro packaging — mirrors extern/borealis/CMakeLists.txt's Switch branch
 # (nacptool → assemble RomFS → elf2nro).
