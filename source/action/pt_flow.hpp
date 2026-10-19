@@ -6,7 +6,8 @@
 //      registered (the temporary unlock needs one);
 //   2. if the timer is active, cmd 1201 UnlockRestrictionTemporarily;
 //   3. write;
-//   4. cmd 1007 RevertRestrictionTemporaryUnlocked — v3.0.0 skipped this and
+//   4. cmd 1007 RevertRestrictionTemporaryUnlocked, after our own unlock and also
+//      when parental controls were already paused — v3.0.0 skipped this and
 //      left parental controls switched off until the user re-enabled them from
 //      the HOME menu, which is why limits "did nothing" (issues #3 / #6 / #7).
 // Copyright (C) 2026 Taylor.  GPLv3-or-later (see LICENSE).

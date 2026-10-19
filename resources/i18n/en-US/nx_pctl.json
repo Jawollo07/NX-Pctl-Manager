@@ -33,6 +33,10 @@
             "body":    "The network clock has never been set on this console (it is offline or can't reach Nintendo's time servers).\n\nThe play timer does not count down without it.\n\nSet the network clock from the system time now?",
             "later":   "Later",
             "confirm": "Set now"
+        },
+        "clock_overwrite": {
+            "body":    "The network clock is already set.\n\nOverwrite it with the system time? Only do this if the system time is correct: the play timer counts its days by the network clock.",
+            "confirm": "Overwrite"
         }
     },
 
@@ -87,6 +91,9 @@
             "turn_off":    "Turn off",
             "at":          "Bedtime: play is restricted from (HHMM)",
             "reset":       "…until the next morning at (HHMM)",
+            "invalid":     "Not a valid time. Enter HHMM, 0000–2359",
+            "varies":      "(varies by day)",
+            "varies_note": "The alarm differs from day to day (set in the companion app); shown above is the first day that has one. Set and Turn off apply to every day.",
             "ok_on":       "Bedtime alarm set: {} until {}.",
             "ok_off":      "Bedtime alarm turned off.",
             "mismatch":    "The bedtime alarm was written, but the system reads it back differently: {}, {} until {}.\n\nPlease save a diagnostic report (main menu) and attach it to a bug report."

@@ -78,9 +78,10 @@ void edit_bedtime()
         reset_seed = { pt.bedtime.reset_hour, pt.bedtime.reset_minute };
     }
 
-    auto at = numpad::prompt_hhmm("nx_pctl/play_timer/bedtime/at"_i18n, at_seed);
+    const std::string invalid = "nx_pctl/play_timer/bedtime/invalid"_i18n;
+    auto at = numpad::prompt_hhmm("nx_pctl/play_timer/bedtime/at"_i18n, invalid, at_seed);
     if (!at.has_value()) return;
-    auto reset = numpad::prompt_hhmm("nx_pctl/play_timer/bedtime/reset"_i18n, reset_seed);
+    auto reset = numpad::prompt_hhmm("nx_pctl/play_timer/bedtime/reset"_i18n, invalid, reset_seed);
     if (!reset.has_value()) return;
 
     PtBedtime bed = { true, at->hour, at->minute, reset->hour, reset->minute };
@@ -146,6 +147,7 @@ void PlayTimerActivity::onContentAvailable()
             ? trf("nx_pctl/play_timer/bedtime/current_on"_i18n, fmt_hm(pt.bedtime.hour, pt.bedtime.minute),
                   fmt_hm(pt.bedtime.reset_hour, pt.bedtime.reset_minute))
             : "nx_pctl/play_timer/bedtime/current_off"_i18n;
+        if (pt.bedtime_varies) current += "\n\n" + "nx_pctl/play_timer/bedtime/varies_note"_i18n;
 
         auto* dialog = new brls::Dialog(current);
         dialog->addButton("hints/cancel"_i18n, [] {});

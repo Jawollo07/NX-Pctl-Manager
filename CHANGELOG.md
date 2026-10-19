@@ -5,6 +5,12 @@
 ### Fixes
 
 - The launch PIN check no longer locks out a console with no PIN. If reading the PIN length (cmd 1206) failed at start-up, the app asked for a PIN that didn't exist, and every entry was rejected. It now asks pctl for the PIN itself (cmd 1208) first and goes straight to the main menu when none is registered.
+- **Bedtime alarms set per day in the companion app are kept.** Changing the limit or the "when time is up" mode, or removing the limit, rewrote every day with Sunday's bedtime, so a weekday-only alarm was wiped. Each write now changes only its own fields. The play-timer screen shows "(varies by day)" when the days differ.
+- **A new limit applies even if parental controls were already paused.** If they had been paused from the HOME menu, or left paused by v3.0.0, the new settings were written but nothing switched parental controls back on. They are now switched back on after the write.
+- If the app can't confirm that parental controls were switched back on (cmd 1006 fails), it now shows the manual steps instead of assuming they were.
+- An invalid bedtime (e.g. `2460`) reopens the keypad with an error message instead of silently doing nothing.
+- "Set network clock from system time" now asks before overwriting a network clock that is already set.
+- `sd:/switch/nx_pctl_borealis.log` no longer records every focus change, which wrote to the SD card on each button press.
 
 ## v3.1.0
 

@@ -104,14 +104,21 @@ void MainActivity::onContentAvailable()
     });
 
     // Seed the network clock from the system clock (issue #2: without a valid
-    // network clock the play timer never counts down).
+    // network clock the play timer never counts down). If it is already set,
+    // ask first: a hand-set system time would shift the play timer's days.
     this->item_clock->registerClickAction([this](brls::View*) {
-        Result rc = clock_seed_network_from_user();
-        this->status_panel->refresh();
-        if (R_SUCCEEDED(rc))
-            brls::Application::notify("nx_pctl/toast/clock_ok"_i18n);
-        else
-            brls::Application::notify(trf("nx_pctl/toast/clock_err"_i18n, (unsigned)rc));
+        ClockStatus cs;
+        clock_status(&cs);
+        if (!cs.network_ok) {
+            this->seed_network_clock();
+            return true;
+        }
+        auto* dialog = new brls::Dialog("nx_pctl/dialog/clock_overwrite/body"_i18n);
+        dialog->addButton("hints/cancel"_i18n, []() {});
+        dialog->addButton("nx_pctl/dialog/clock_overwrite/confirm"_i18n, [this]() {
+            this->seed_network_clock();
+        });
+        dialog->open();
         return true;
     });
 
@@ -142,15 +149,18 @@ void MainActivity::check_network_clock()
 
     auto* dialog = new brls::Dialog("nx_pctl/dialog/clock/body"_i18n);
     dialog->addButton("nx_pctl/dialog/clock/later"_i18n, []() {});
-    dialog->addButton("nx_pctl/dialog/clock/confirm"_i18n, [this]() {
-        Result rc = clock_seed_network_from_user();
-        this->status_panel->refresh();
-        if (R_SUCCEEDED(rc))
-            brls::Application::notify("nx_pctl/toast/clock_ok"_i18n);
-        else
-            brls::Application::notify(trf("nx_pctl/toast/clock_err"_i18n, (unsigned)rc));
-    });
+    dialog->addButton("nx_pctl/dialog/clock/confirm"_i18n, [this]() { this->seed_network_clock(); });
     dialog->open();
+}
+
+void MainActivity::seed_network_clock()
+{
+    Result rc = clock_seed_network_from_user();
+    this->status_panel->refresh();
+    if (R_SUCCEEDED(rc))
+        brls::Application::notify("nx_pctl/toast/clock_ok"_i18n);
+    else
+        brls::Application::notify(trf("nx_pctl/toast/clock_err"_i18n, (unsigned)rc));
 }
 
 void MainActivity::onResume()

@@ -37,7 +37,7 @@ bool guarded_write(const std::function<Result()>& write, const std::string& ok_t
 
     PtState pt;
     pctl_play_timer_query(&pt);
-    bool unlocked = false;
+    bool relock = false;
     if (pt.enabled || pt.restricted) {
         Result urc = pctl_unlock_restriction_temporarily();
         PtState after;
@@ -48,15 +48,21 @@ bool guarded_write(const std::function<Result()>& write, const std::string& ok_t
             if (R_SUCCEEDED(urc)) pctl_revert_temporary_unlock();
             return false;
         }
-        unlocked = true;
+        relock = true;
+    } else {
+        // Already paused (from the HOME menu, or left that way by v3.0.0): the
+        // new settings wouldn't apply until parental controls are back on.
+        bool paused = false;
+        relock = R_SUCCEEDED(pctl_is_temporarily_unlocked(&paused)) && paused;
     }
 
     Result rc = write();
 
     bool relocked = true;
-    if (unlocked) {
-        Result rrc = pctl_revert_temporary_unlock();
-        relocked = R_SUCCEEDED(rrc) && !pctl_is_temporarily_unlocked();
+    if (relock) {
+        Result rrc   = pctl_revert_temporary_unlock();
+        bool   still = true;   // a failed 1006 query counts as still paused
+        relocked = R_SUCCEEDED(rrc) && R_SUCCEEDED(pctl_is_temporarily_unlocked(&still)) && !still;
     }
 
     if (R_FAILED(rc))

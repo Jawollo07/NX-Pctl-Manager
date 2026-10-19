@@ -27,4 +27,5 @@ class MainActivity : public brls::Activity
     BRLS_BIND(brls::DetailCell,  item_diag,       "item_diag");
 
     void check_network_clock();   // one-time prompt when the network clock was never set
+    void seed_network_clock();    // NetworkSystemClock := UserSystemClock, then refresh + toast
 };

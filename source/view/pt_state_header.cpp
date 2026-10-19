@@ -6,6 +6,8 @@
 
 #include "util/pctl_ops_c.hpp"
 
+using namespace brls::literals;
+
 namespace
 {
 std::string fmt_remaining(const PtState& pt)
@@ -32,6 +34,7 @@ std::string fmt_configured(const PtState& pt)
         std::snprintf(buf, sizeof(buf), "; bedtime %02u:%02u-%02u:%02u",
                       pt.bedtime.hour, pt.bedtime.minute, pt.bedtime.reset_hour, pt.bedtime.reset_minute);
         out += buf;
+        if (pt.bedtime_varies) out += " " + "nx_pctl/play_timer/bedtime/varies"_i18n;
     }
     return out;
 }

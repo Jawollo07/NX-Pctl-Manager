@@ -15,10 +15,12 @@ namespace numpad
 // fails to open. Blocks while the applet is up (it overlays our window).
 std::optional<uint16_t> prompt_minutes(const std::string& header, uint16_t current);
 
-// Time of day as HHMM digits (e.g. "2100"). Returns {hour, minute} when the
-// input is a valid 00:00..23:59 time; std::nullopt on cancel or invalid input.
+// Time of day as HHMM digits (e.g. "2100"). Returns {hour, minute} once the
+// input is a valid 00:00..23:59 time; an invalid entry reopens the keypad with
+// `invalid_header` as its header. std::nullopt on cancel.
 struct HourMinute { uint8_t hour, minute; };
-std::optional<HourMinute> prompt_hhmm(const std::string& header, HourMinute current);
+std::optional<HourMinute> prompt_hhmm(const std::string& header, const std::string& invalid_header,
+                                      HourMinute current);
 
 // Masked NumPad entry for the launch-time PIN check. std::nullopt on cancel.
 std::optional<std::string> prompt_pin(const std::string& header);

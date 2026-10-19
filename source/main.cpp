@@ -75,7 +75,8 @@ int main(int argc, char* argv[])
     if (log) {
         std::setvbuf(log, nullptr, _IONBF, 0);   // unbuffered: survive a hard crash
         brls::Logger::setLogOutput(log);
-        brls::Logger::setLogLevel(brls::LogLevel::LOG_DEBUG);
+        // INFO, not DEBUG: DEBUG logs every focus change, each one a synchronous SD write.
+        brls::Logger::setLogLevel(brls::LogLevel::LOG_INFO);
     }
 
     int rc = EXIT_FAILURE;

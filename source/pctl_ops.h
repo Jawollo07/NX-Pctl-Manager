@@ -60,8 +60,9 @@ Result pctl_unlock_restriction_temporarily(void);
 // same thing as re-enabling parental controls from the HOME-menu banner.
 Result pctl_revert_temporary_unlock(void);
 
-// IsRestrictionTemporaryUnlocked (cmd 1006).
-bool pctl_is_temporarily_unlocked(void);
+// IsRestrictionTemporaryUnlocked (cmd 1006). *out is only meaningful when this
+// succeeds — callers must not read a failed query as "locked".
+Result pctl_is_temporarily_unlocked(bool *out);
 
 const char *pctl_safety_level_name(u32 level);
 
@@ -122,17 +123,22 @@ typedef struct {
     bool restricted;     // IsRestrictedByPlayTimer (1455) — true == today's limit reached
     u64  remaining_ns;   // GetPlayTimerRemainingTime (1454), ns; often 0 with no game running
     u16  day_min[7];     // per-day, Sun..Sat: minutes (0 == no play that day), or PT_DAY_NOLIMIT == no limit
-    PtBedtime bedtime;   // decoded from Sunday's slot (this tool writes the same bedtime to every day)
+    PtBedtime bedtime;   // the first day with a bedtime alarm (Sunday if none)
+    bool bedtime_varies; // the days' bedtime alarms differ (set per day in the companion app)
     u8   restriction_mode;   // PT_MODE_ALARM / PT_MODE_SUSPEND (as configured)
     PtSettings raw;      // the settings exactly as read
 } PtState;
 
 void pctl_play_timer_query(PtState *out);
 
+// The setters below read the stored settings, change only their own fields and
+// write them back (a failed read writes nothing). The result is always stored in
+// EACH_DAY_OF_THE_WEEK mode.
+//
 // Sets per-day play-time limits (days_min[0]=Sunday .. [6]=Saturday): each is minutes
 // (0 == that day is fully blocked), or PT_DAY_NOLIMIT to leave that day unrestricted.
-// The current bedtime alarm is preserved. If no day has a limit and the bedtime
-// alarm is off, the play timer is turned off entirely.
+// Each day's bedtime alarm is preserved. If no day has a limit or a bedtime
+// alarm, the play timer is turned off entirely.
 Result pctl_play_timer_set_days(const u16 days_min[7]);
 
 // Convenience: the same minute limit on every day (minutes == 0 blocks every day —
@@ -142,8 +148,8 @@ Result pctl_play_timer_set_uniform(u16 minutes);
 // Removes every daily limit (the bedtime alarm, if any, is kept).
 Result pctl_play_timer_clear(void);
 
-// Sets the bedtime alarm on every day (limits preserved). Pass enabled=false to
-// turn it off.
+// Sets the same bedtime alarm on every day, replacing any per-day alarms (limits
+// preserved). Pass enabled=false to turn it off.
 Result pctl_play_timer_set_bedtime(const PtBedtime *bed);
 
 // Reads the system's own view of the bedtime alarm back via 1954 / 1956-1959,
