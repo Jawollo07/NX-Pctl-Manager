@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- The launch PIN check no longer locks out a console with no PIN. If reading the PIN length (cmd 1206) failed at start-up, the app asked for a PIN that didn't exist, and every entry was rejected. It now asks pctl for the PIN itself (cmd 1208) first and goes straight to the main menu when none is registered.
+
 ## v3.1.0
 
 Fixes for every open issue, a bedtime alarm, and a PlayTimerSettings layout confirmed by reversing the fw 22.5.0 `pctl` sysmodule (see [`docs/pctl-reverse-engineering.md`](docs/pctl-reverse-engineering.md)).

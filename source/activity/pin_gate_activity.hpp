@@ -1,6 +1,7 @@
-// PinGateActivity — root Activity when a parental-control PIN is registered.
-// This tool can remove every restriction, so it asks for the console's own
-// PIN before showing the main menu. Wrong PIN 5 times, or B, exits the app.
+// PinGateActivity — root Activity when a parental-control PIN is registered
+// (or start-up couldn't tell). This tool can remove every restriction, so it
+// asks for the console's own PIN before showing the main menu. Wrong PIN 5
+// times, or B, exits the app. If 1208 reports no PIN, it lets the user through.
 // Copyright (C) 2026 Taylor.  GPLv3-or-later (see LICENSE).
 #pragma once
 

@@ -45,9 +45,9 @@ void PinGateActivity::prompt()
 {
     if (this->passed) return;
 
-    auto entered = numpad::prompt_pin("nx_pctl/pin_gate/title"_i18n);
-    if (!entered.has_value()) return;   // cancelled — stay on the gate (A retries, B exits)
-
+    // Read the PIN before opening the keypad. Start-up also sends us here when
+    // 1206 GetPinCodeLength fails, so the console may have no PIN at all:
+    // 1208 succeeding with len 0 confirms that. A failed 1208 keeps the gate shut.
     char pin[32];
     u32 len = 0;
     Result rc = pctl_get_pin(pin, sizeof(pin), &len);
@@ -55,9 +55,18 @@ void PinGateActivity::prompt()
         this->status->setText(trf("nx_pctl/pin_gate/read_failed"_i18n, (unsigned)rc));
         return;
     }
+    if (len == 0) {
+        pctl_logf("PIN gate: 1208 reports no PIN registered, skipping the gate");
+        this->passed = true;
+        brls::Application::pushActivity(new MainActivity());
+        return;
+    }
 
-    bool ok = len > 0 && *entered == std::string(pin, len);
+    auto entered = numpad::prompt_pin("nx_pctl/pin_gate/title"_i18n);
+    bool ok = entered.has_value() && *entered == std::string(pin, len);
     std::memset(pin, 0, sizeof(pin));
+    if (!entered.has_value()) return;   // cancelled — stay on the gate (A retries, B exits)
+
     if (ok) {
         this->passed = true;
         brls::Application::pushActivity(new MainActivity());
