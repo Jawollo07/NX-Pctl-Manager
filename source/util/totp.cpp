@@ -17,6 +17,7 @@ namespace
 {
 constexpr const char* SECRET_PATH = "/switch/nx_pctl_totp.key";
 constexpr const char* SECRET_TMP_PATH = "/switch/nx_pctl_totp.key.tmp";
+constexpr const char* SECRET_BACKUP_PATH = "/switch/nx_pctl_totp.key.bak";
 constexpr uint64_t PERIOD_SECONDS = 60;
 
 uint32_t rotr(uint32_t x, unsigned n) { return (x >> n) | (x << (32 - n)); }
@@ -108,10 +109,25 @@ bool write_secret(const std::array<uint8_t,SECRET_BYTES>& secret)
         std::remove(SECRET_TMP_PATH);
         return false;
     }
+    // Some SD/FAT implementations do not replace an existing destination on
+    // rename. Move the old key aside first and restore it if the commit fails.
+    std::FILE* existing = std::fopen(SECRET_PATH, "rb");
+    const bool had_old = existing != nullptr;
+    if (existing) std::fclose(existing);
+    if (had_old) {
+        std::remove(SECRET_BACKUP_PATH);
+        if (std::rename(SECRET_PATH, SECRET_BACKUP_PATH) != 0) {
+            std::remove(SECRET_TMP_PATH);
+            return false;
+        }
+    }
+
     if (std::rename(SECRET_TMP_PATH, SECRET_PATH) != 0) {
+        if (had_old) std::rename(SECRET_BACKUP_PATH, SECRET_PATH);
         std::remove(SECRET_TMP_PATH);
         return false;
     }
+    if (had_old) std::remove(SECRET_BACKUP_PATH);
     return true;
 }
 } // namespace
