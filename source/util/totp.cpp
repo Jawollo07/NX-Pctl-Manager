@@ -16,6 +16,7 @@ namespace totp
 namespace
 {
 constexpr const char* SECRET_PATH = "/switch/nx_pctl_totp.key";
+constexpr const char* SECRET_TMP_PATH = "/switch/nx_pctl_totp.key.tmp";
 constexpr uint64_t PERIOD_SECONDS = 60;
 
 uint32_t rotr(uint32_t x, unsigned n) { return (x >> n) | (x << (32 - n)); }
@@ -96,11 +97,22 @@ uint32_t code_for(const std::array<uint8_t,SECRET_BYTES>& secret, uint64_t step)
 
 bool write_secret(const std::array<uint8_t,SECRET_BYTES>& secret)
 {
-    std::FILE* f = std::fopen(SECRET_PATH, "wb");
+    // Write to a temporary file first so a power loss is less likely to leave
+    // a truncated key. rename() commits the complete key in one filesystem step.
+    std::FILE* f = std::fopen(SECRET_TMP_PATH, "wb");
     if (!f) return false;
     const bool ok = std::fwrite(secret.data(), 1, secret.size(), f) == secret.size();
+    const bool flushed = std::fflush(f) == 0;
     const bool closed = std::fclose(f) == 0;
-    return ok && closed;
+    if (!ok || !flushed || !closed) {
+        std::remove(SECRET_TMP_PATH);
+        return false;
+    }
+    if (std::rename(SECRET_TMP_PATH, SECRET_PATH) != 0) {
+        std::remove(SECRET_TMP_PATH);
+        return false;
+    }
+    return true;
 }
 } // namespace
 
@@ -122,6 +134,14 @@ bool load_or_create_secret(std::array<uint8_t, SECRET_BYTES>& secret)
     std::FILE* existing = std::fopen(SECRET_PATH, "rb");
     if (existing) { std::fclose(existing); return false; }
 
+    randomGet(secret.data(), secret.size());
+    if (write_secret(secret)) return true;
+    std::memset(secret.data(), 0, secret.size());
+    return false;
+}
+
+bool rotate_secret(std::array<uint8_t, SECRET_BYTES>& secret)
+{
     randomGet(secret.data(), secret.size());
     if (write_secret(secret)) return true;
     std::memset(secret.data(), 0, secret.size());
