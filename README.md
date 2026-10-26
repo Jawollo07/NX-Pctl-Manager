@@ -92,6 +92,14 @@ Main menu → *Play timer (daily limit / bedtime)*:
 
 Grab `nx_pctl_manager.nro` from the [**Releases**](../../releases) page, drop it in `/switch/` on the SD card, and run it from hbmenu. (Or download `nx_pctl_manager.zip` from the same release and unzip it onto the SD card root — it puts the `.nro` in `/switch/` for you.)
 
+
+
+### Manage the dynamic parent code
+
+The main menu now includes **Rotate dynamic parent code**. Rotation asks for the console's original parental-control PIN again, creates a replacement 160-bit secret, and invalidates the previous authenticator immediately. Add the new secret to your authenticator using TOTP / time-based, SHA-1, 6 digits, and a 60-second period. The new secret is shown only once.
+
+Secret writes use a temporary file before committing the replacement to reduce the chance of a truncated key if writing is interrupted. This is not encryption: anyone who can read or modify the SD card or run privileged homebrew can still copy or replace the secret. If you rotate, make sure the new secret is saved before dismissing the dialog.
+
 ## Build from source
 
 Needs [devkitPro](https://devkitpro.org/) and the `switch-dev` toolchain (libnx included):

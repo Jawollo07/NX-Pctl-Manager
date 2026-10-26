@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Dynamic parent code
+
+- Added a main-menu action to rotate the TOTP parent-code secret after re-entering the console's original parental-control PIN.
+- The replacement secret is displayed once with explicit authenticator settings; the old secret stops working immediately after rotation.
+- Secret writes use a temporary file and backup/rollback flow to reduce the chance of losing the active key if SD-card writes or renames fail.
+- Added English and Simplified Chinese strings for the rotation flow.
+
+
 ### Fixes
 
 - The launch PIN check no longer locks out a console with no PIN. If reading the PIN length (cmd 1206) failed at start-up, the app asked for a PIN that didn't exist, and every entry was rejected. It now asks pctl for the PIN itself (cmd 1208) first and goes straight to the main menu when none is registered.

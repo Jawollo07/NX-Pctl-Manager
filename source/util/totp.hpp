@@ -13,6 +13,8 @@ constexpr std::size_t SECRET_BYTES = 20;
 
 bool secret_file_exists();
 bool load_or_create_secret(std::array<uint8_t, SECRET_BYTES>& secret);
+// Generate and persist a replacement key. Call only after re-authenticating the console PIN.
+bool rotate_secret(std::array<uint8_t, SECRET_BYTES>& secret);
 bool load_secret(std::array<uint8_t, SECRET_BYTES>& secret);
 std::string base32(const uint8_t* data, std::size_t size);
 bool verify_code(const std::string& code);

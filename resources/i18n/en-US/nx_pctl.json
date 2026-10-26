@@ -1,140 +1,135 @@
 {
-    "title":   "Pctl Manager",
+    "title": "Pctl Manager",
     "actions": "Actions",
-
     "status": {
-        "firmware":      "Firmware",
-        "pin":           "PIN",
-        "restrictions":  "Restrictions enabled",
-        "pc_enabled":    "Parental control enabled",
+        "firmware": "Firmware",
+        "pin": "PIN",
+        "restrictions": "Restrictions enabled",
+        "pc_enabled": "Parental control enabled",
         "network_clock": "Network clock"
     },
-
     "items": {
-        "refresh":    "Refresh status",
+        "refresh": "Refresh status",
         "play_timer": "Play timer (daily limit / bedtime)",
-        "clock":      "Set network clock from system time",
-        "set_pin":    "Set / change parental control PIN",
-        "delete_pc":  "Delete all parental controls",
-        "unlink":     "Unlink companion app",
-        "diag":       "Save diagnostic report → sd:/switch/nx_pctl_dump.txt"
+        "clock": "Set network clock from system time",
+        "set_pin": "Set / change parental control PIN",
+        "delete_pc": "Delete all parental controls",
+        "unlink": "Unlink companion app",
+        "diag": "Save diagnostic report → sd:/switch/nx_pctl_dump.txt",
+        "totp": "Rotate dynamic parent code…"
     },
-
     "dialog": {
         "delete_pc": {
-            "body":    "Delete all parental controls?\n\nThis wipes the PIN and every restriction, and cannot be undone.",
+            "body": "Delete all parental controls?\n\nThis wipes the PIN and every restriction, and cannot be undone.",
             "confirm": "Delete"
         },
         "unlink": {
-            "body":    "Unlink the companion app (Nintendo Switch Parental Controls) from this console?",
+            "body": "Unlink the companion app (Nintendo Switch Parental Controls) from this console?",
             "confirm": "Unlink"
         },
         "clock": {
-            "body":    "The network clock has never been set on this console (it is offline or can't reach Nintendo's time servers).\n\nThe play timer does not count down without it.\n\nSet the network clock from the system time now?",
-            "later":   "Later",
+            "body": "The network clock has never been set on this console (it is offline or can't reach Nintendo's time servers).\n\nThe play timer does not count down without it.\n\nSet the network clock from the system time now?",
+            "later": "Later",
             "confirm": "Set now"
         },
         "clock_overwrite": {
-            "body":    "The network clock is already set.\n\nOverwrite it with the system time? Only do this if the system time is correct: the play timer counts its days by the network clock.",
+            "body": "The network clock is already set.\n\nOverwrite it with the system time? Only do this if the system time is correct: the play timer counts its days by the network clock.",
             "confirm": "Overwrite"
         }
     },
-
     "play_timer": {
         "title": "Play timer",
-
         "state": {
             "restricted": "Limit reached today",
-            "remaining":  "Today's remaining",
+            "remaining": "Today's remaining",
             "configured": "Configured"
         },
-
         "items": {
-            "set_all":  "Set daily limit (all days)…",
-            "per_day":  "Per-day limits…",
-            "bedtime":  "Bedtime alarm…",
-            "remove":   "Remove play-time limit",
-            "mode":     "When time is up"
+            "set_all": "Set daily limit (all days)…",
+            "per_day": "Per-day limits…",
+            "bedtime": "Bedtime alarm…",
+            "remove": "Remove play-time limit",
+            "mode": "When time is up"
         },
-
         "dialog": {
             "remove": {
-                "body":    "Remove the daily play-time limit (all days)?\n\nA bedtime alarm, if set, is kept.",
+                "body": "Remove the daily play-time limit (all days)?\n\nA bedtime alarm, if set, is kept.",
                 "confirm": "Remove"
             }
         },
-
-        "numpad_all":   "Daily play-time limit for ALL days  (0 = block every day)",
-        "ok_all":       "Play-time limit written: {} minute(s)/day.",
-        "ok_all_zero":  "Play-time limit written: 0 minutes/day — no play allowed any day. (Use 'Remove play-time limit' to turn the limit off instead.)",
-        "ok_removed":   "Daily play-time limit removed.",
-
+        "numpad_all": "Daily play-time limit for ALL days  (0 = block every day)",
+        "ok_all": "Play-time limit written: {} minute(s)/day.",
+        "ok_all_zero": "Play-time limit written: 0 minutes/day — no play allowed any day. (Use 'Remove play-time limit' to turn the limit off instead.)",
+        "ok_removed": "Daily play-time limit removed.",
         "fw_unsupported": "This console runs firmware {}.{}.{}.\n\nSetting the play timer needs firmware 21.0.0 or newer (tested on 22.1.0). Nothing was written.",
-        "need_pin":       "Set a parental-control PIN first (main menu → Set / change parental control PIN).\n\nWithout a PIN the system silently discards play-timer settings.",
-        "unlock_failed":  "Could not pause parental controls for the write (error 0x{:08X}). Nothing was written.",
-        "write_failed":   "Failed to write the play timer (error 0x{:08X}).",
-        "relock_failed":  "The new settings were written, but parental controls could not be switched back on automatically.\n\nOn the HOME menu, select the parental-controls banner and turn parental controls back on.",
-
+        "need_pin": "Set a parental-control PIN first (main menu → Set / change parental control PIN).\n\nWithout a PIN the system silently discards play-timer settings.",
+        "unlock_failed": "Could not pause parental controls for the write (error 0x{:08X}). Nothing was written.",
+        "write_failed": "Failed to write the play timer (error 0x{:08X}).",
+        "relock_failed": "The new settings were written, but parental controls could not be switched back on automatically.\n\nOn the HOME menu, select the parental-controls banner and turn parental controls back on.",
         "mode": {
-            "body":       "When the daily limit (or bedtime) is reached:",
-            "suspend":    "Suspend software",
-            "alarm":      "Notify only",
+            "body": "When the daily limit (or bedtime) is reached:",
+            "suspend": "Suspend software",
+            "alarm": "Notify only",
             "ok_suspend": "When time is up, the software will be suspended.",
-            "ok_alarm":   "When time is up, only a notification will be shown.",
+            "ok_alarm": "When time is up, only a notification will be shown.",
             "need_limit": "Set a daily limit or bedtime alarm first."
         },
-
         "bedtime": {
-            "current_on":  "Bedtime alarm: on, {} until {}.",
+            "current_on": "Bedtime alarm: on, {} until {}.",
             "current_off": "Bedtime alarm: off.",
-            "set":         "Set…",
-            "turn_off":    "Turn off",
-            "at":          "Bedtime: play is restricted from (HHMM)",
-            "reset":       "…until the next morning at (HHMM)",
-            "invalid":     "Not a valid time. Enter HHMM, 0000–2359",
-            "varies":      "(varies by day)",
+            "set": "Set…",
+            "turn_off": "Turn off",
+            "at": "Bedtime: play is restricted from (HHMM)",
+            "reset": "…until the next morning at (HHMM)",
+            "invalid": "Not a valid time. Enter HHMM, 0000–2359",
+            "varies": "(varies by day)",
             "varies_note": "The alarm differs from day to day (set in the companion app); shown above is the first day that has one. Set and Turn off apply to every day.",
-            "ok_on":       "Bedtime alarm set: {} until {}.",
-            "ok_off":      "Bedtime alarm turned off.",
-            "mismatch":    "The bedtime alarm was written, but the system reads it back differently: {}, {} until {}.\n\nPlease save a diagnostic report (main menu) and attach it to a bug report."
+            "ok_on": "Bedtime alarm set: {} until {}.",
+            "ok_off": "Bedtime alarm turned off.",
+            "mismatch": "The bedtime alarm was written, but the system reads it back differently: {}, {} until {}.\n\nPlease save a diagnostic report (main menu) and attach it to a bug report."
         },
-
         "perday": {
-            "title":         "Per-day play-time limits",
-            "section_days":  "Per-day limits (A to edit; (*) marks staged changes)",
-            "section_save":  "Save",
-            "save":          "Save per-day limits",
-            "no_limit":      "No limit",
-            "set_minutes":   "Set minutes…"
+            "title": "Per-day play-time limits",
+            "section_days": "Per-day limits (A to edit; (*) marks staged changes)",
+            "section_save": "Save",
+            "save": "Save per-day limits",
+            "no_limit": "No limit",
+            "set_minutes": "Set minutes…"
         }
     },
-
     "pin_gate": {
-        "title":       "Enter the parental-control PIN",
-        "headline":    "Enter the parental-control PIN to continue.",
-        "hint":        "(A) enter PIN    (B) exit",
-        "enter":       "Enter PIN",
-        "wrong":       "Wrong PIN. {} attempt(s) left.",
+        "title": "Enter the parental-control PIN",
+        "headline": "Enter the parental-control PIN to continue.",
+        "hint": "(A) enter PIN    (B) exit",
+        "enter": "Enter PIN",
+        "wrong": "Wrong PIN. {} attempt(s) left.",
         "read_failed": "Could not read the console's PIN (error 0x{:08X})."
     },
-
     "init_error": {
-        "title":    "Pctl Manager",
+        "title": "Pctl Manager",
         "headline": "Could not open the parental-control service.",
-        "body":     "This homebrew only works on a console running CFW (Atmosphère); a stock retail console can't open the pctl service."
+        "body": "This homebrew only works on a console running CFW (Atmosphère); a stock retail console can't open the pctl service."
     },
-
     "toast": {
         "status_refreshed": "Status refreshed.",
-        "delete_pc_ok":     "Parental controls deleted.",
-        "delete_pc_err":    "Could not delete parental controls",
-        "unlink_ok":        "Companion app unlinked.",
-        "unlink_err":       "Could not unlink the companion app",
-        "set_pin_ok":       "Parental control PIN updated.",
-        "set_pin_err":      "Could not update the PIN",
-        "clock_ok":         "Network clock set from the system time.",
-        "clock_err":        "Could not set the network clock (error 0x{:08X}).",
-        "diag_saved":       "Report saved to sd:/switch/nx_pctl_dump.txt",
-        "diag_err":         "Could not write sd:/switch/nx_pctl_dump.txt"
+        "delete_pc_ok": "Parental controls deleted.",
+        "delete_pc_err": "Could not delete parental controls",
+        "unlink_ok": "Companion app unlinked.",
+        "unlink_err": "Could not unlink the companion app",
+        "set_pin_ok": "Parental control PIN updated.",
+        "set_pin_err": "Could not update the PIN",
+        "clock_ok": "Network clock set from the system time.",
+        "clock_err": "Could not set the network clock (error 0x{:08X}).",
+        "diag_saved": "Report saved to sd:/switch/nx_pctl_dump.txt",
+        "diag_err": "Could not write sd:/switch/nx_pctl_dump.txt"
+    },
+    "totp": {
+        "not_configured": "The dynamic parent code is not configured.",
+        "pin_read_failed": "Could not read the console PIN. Rotation was cancelled.",
+        "wrong_pin": "Wrong console PIN. The parent code was not changed.",
+        "rotate_failed": "Could not safely save the new parent-code secret. The old secret should remain active.",
+        "new_secret_body": "The old authenticator code is now invalid. Add this new secret to your authenticator as TOTP / time-based, SHA-1, 6 digits, period 60 seconds:",
+        "new_secret_footer": "Save this secret now. It is shown only once. Anyone with the secret can generate parent codes.",
+        "ack": "I saved the new secret"
     }
 }

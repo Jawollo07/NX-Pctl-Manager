@@ -21,6 +21,7 @@ class MainActivity : public brls::Activity
     BRLS_BIND(brls::DetailCell,  item_refresh,    "item_refresh");
     BRLS_BIND(brls::DetailCell,  item_play_timer, "item_play_timer");
     BRLS_BIND(brls::DetailCell,  item_set_pin,    "item_set_pin");
+    BRLS_BIND(brls::DetailCell,  item_totp,       "item_totp");
     BRLS_BIND(brls::DetailCell,  item_delete_pc,  "item_delete_pc");
     BRLS_BIND(brls::DetailCell,  item_unlink,     "item_unlink");
     BRLS_BIND(brls::DetailCell,  item_clock,      "item_clock");
