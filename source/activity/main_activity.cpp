@@ -1,18 +1,29 @@
 // Copyright (C) 2026 Taylor.  GPLv3-or-later (see LICENSE).
 #include "activity/main_activity.hpp"
 
+#include <array>
 #include <cstdio>
+#include <cstring>
+#include <string>
 #include <fmt/format.h>
 
 #include "activity/play_timer_activity.hpp"
 #include "app.hpp"
+#include "util/numpad.hpp"
 #include "util/pctl_ops_c.hpp"
+#include "util/totp.hpp"
 #include "util/trf.hpp"
 
 using namespace brls::literals;   // for "key"_i18n
 
 namespace
 {
+void wipe_totp_secret(std::array<uint8_t, totp::SECRET_BYTES>& secret)
+{
+    volatile uint8_t* p = secret.data();
+    for (std::size_t i = 0; i < secret.size(); ++i) p[i] = 0;
+}
+
 // Common shape for the two destructive cells (delete-all / unlink):
 //   show a confirm Dialog → on confirm run `action` → toast result → refresh the panel.
 // `error_prefix` is the lead text for failure ("Could not X"); the Result code is appended.
@@ -44,6 +55,49 @@ void MainActivity::onContentAvailable()
     this->item_refresh->registerClickAction([this](brls::View*) {
         this->status_panel->refresh();
         brls::Application::notify("nx_pctl/toast/status_refreshed"_i18n);
+        return true;
+    });
+
+    // Rotate the dynamic parent code. Require the real console PIN again before
+    // invalidating the old authenticator secret.
+    this->item_totp->registerClickAction([this](brls::View*) {
+        if (!totp::secret_file_exists()) {
+            brls::Application::notify("nx_pctl/totp/not_configured"_i18n);
+            return true;
+        }
+
+        char pin[32] = {};
+        u32 len = 0;
+        Result rc = pctl_get_pin(pin, sizeof(pin), &len);
+        if (R_FAILED(rc) || len == 0 || len > sizeof(pin)) {
+            std::memset(pin, 0, sizeof(pin));
+            brls::Application::notify("nx_pctl/totp/pin_read_failed"_i18n);
+            return true;
+        }
+
+        auto entered = numpad::prompt_pin("Re-enter console parental-control PIN to rotate parent code");
+        const bool ok = entered.has_value() && *entered == std::string(pin, len);
+        std::memset(pin, 0, sizeof(pin));
+        if (!entered.has_value()) return true;
+        if (!ok) {
+            brls::Application::notify("nx_pctl/totp/wrong_pin"_i18n);
+            return true;
+        }
+
+        std::array<uint8_t, totp::SECRET_BYTES> secret{};
+        if (!totp::rotate_secret(secret)) {
+            wipe_totp_secret(secret);
+            brls::Application::notify("nx_pctl/totp/rotate_failed"_i18n);
+            return true;
+        }
+        const std::string encoded = totp::base32(secret.data(), secret.size());
+        wipe_totp_secret(secret);
+
+        auto* dialog = new brls::Dialog(
+            "nx_pctl/totp/new_secret_body"_i18n + "\\n\\n" + encoded +
+            "\\n\\n" + "nx_pctl/totp/new_secret_footer"_i18n);
+        dialog->addButton("nx_pctl/totp/ack"_i18n, []() {});
+        dialog->open();
         return true;
     });
 
