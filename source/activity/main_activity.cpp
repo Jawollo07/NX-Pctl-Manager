@@ -94,8 +94,8 @@ void MainActivity::onContentAvailable()
         wipe_totp_secret(secret);
 
         auto* dialog = new brls::Dialog(
-            "nx_pctl/totp/new_secret_body"_i18n + "\\n\\n" + encoded +
-            "\\n\\n" + "nx_pctl/totp/new_secret_footer"_i18n);
+            "nx_pctl/totp/new_secret_body"_i18n + "\n\n" + encoded +
+            "\n\n" + "nx_pctl/totp/new_secret_footer"_i18n);
         dialog->addButton("nx_pctl/totp/ack"_i18n, []() {});
         dialog->open();
         return true;
