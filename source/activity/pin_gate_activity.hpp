@@ -1,8 +1,7 @@
-// PinGateActivity — root Activity when a parental-control PIN is registered
-// (or start-up couldn't tell). This tool can remove every restriction, so it
-// asks for the console's own PIN before showing the main menu. Wrong PIN 5
-// times, or B, exits the app. If 1208 reports no PIN, it lets the user through.
-// Copyright (C) 2026 Taylor.  GPLv3-or-later (see LICENSE).
+// PinGateActivity — root Activity for the console PIN enrollment and TOTP gate.
+// Wrong codes 5 times, or B, exits. The TOTP secret is stored on SD and is
+// not protected from someone who can read the SD card or run homebrew.
+// Copyright (C) 2026 Taylor. GPLv3-or-later (see LICENSE).
 #pragma once
 
 #include <borealis.hpp>
@@ -19,7 +18,8 @@ class PinGateActivity : public brls::Activity
     void prompt();
 
     int  attempts = 0;
-    bool passed   = false;   // MainActivity was pushed on top of us
+    bool passed = false;
+    bool setup_pending = false;
 
     BRLS_BIND(brls::Label, status, "status");
 };

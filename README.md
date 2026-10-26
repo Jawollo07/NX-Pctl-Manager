@@ -44,6 +44,14 @@ Notes: `0` minutes means that day is **fully blocked** (not "no limit"); a singl
 
 When a PIN is registered, the app asks for it before showing the menu. Five wrong attempts, or B, exits. This stops a child from using the tool to lift the limit. As a result, the tool can no longer recover a forgotten PIN. Use Nintendo's own master-key reset instead (System Settings → Parental Controls → Forgot PIN).
 
+### Dynamic parent code (TOTP, 60 seconds)
+
+On the first launch after this feature is installed, the app asks for the existing console PIN and creates a random 160-bit TOTP secret. Add it to an authenticator app as a time-based token with **SHA-1, 6 digits, and a 60-second period**. The secret is shown only during enrollment. Press A after saving it in the authenticator. Future launches require the current six-digit TOTP code instead of the console PIN.
+
+The verifier accepts the current 60-second step and one adjacent step in either direction to tolerate small clock drift. The Switch clock and the authenticator clock must be reasonably synchronized. If the secret is lost or the authenticator is unavailable, exit the app, remove `/switch/nx_pctl_totp.key` from the SD card, and relaunch to enroll again with the console PIN.
+
+**Security limitation:** this is an additional gate inside homebrew, not a replacement for Nintendo's system PIN. The shared secret is stored on the SD card in `/switch/nx_pctl_totp.key`; anyone who can read the SD card or run privileged homebrew can copy the secret or modify the app. Do not treat it as protection against someone with physical access to the console/SD card or CFW-level control. Keep a backup of the secret in a password manager and use the console's PIN for system-level protection.
+
 ## How to use
 
 Controls: ↑ / ↓ move the cursor, (A) confirms, (B) goes back one level / (on the main menu) exits. Destructive actions (delete all parental controls, unlink companion app, remove the limit) show a confirmation screen first.

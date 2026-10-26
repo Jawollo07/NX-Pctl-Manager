@@ -11,6 +11,7 @@
 #include "activity/main_activity.hpp"
 #include "activity/pin_gate_activity.hpp"
 #include "util/pctl_ops_c.hpp"
+#include "util/totp.hpp"
 #include "view/pt_state_header.hpp"
 #include "view/status_panel.hpp"
 
@@ -47,7 +48,7 @@ int run()
         // A registered PIN guards the whole tool (it can lift every restriction).
         PctlStatus st;
         pctl_status_fetch(&st);
-        if (st.pin_length_ok && st.pin_length == 0)
+        if (st.pin_length_ok && st.pin_length == 0 && !totp::secret_file_exists())
             brls::Application::pushActivity(new MainActivity());
         else
             brls::Application::pushActivity(new PinGateActivity());
