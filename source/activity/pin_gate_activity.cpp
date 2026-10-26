@@ -51,6 +51,11 @@ void PinGateActivity::onResume()
 void PinGateActivity::prompt()
 {
     if (this->passed) return;
+    if (this->setup_pending) {
+        this->passed = true;
+        brls::Application::pushActivity(new MainActivity());
+        return;
+    }
 
     // First-run enrollment: authenticate with the console PIN, then show a
     // one-time TOTP secret for manual entry into a compatible authenticator.
