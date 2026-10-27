@@ -210,6 +210,14 @@ def enroll(body: EnrollRequest) -> EnrollResponse:
                           policy_version=1, policy=default_policy)
 
 
+@app.get("/api/v1/auth/check")
+def check_authentication(device: sqlite3.Row = Depends(device_from_token)) -> dict[str, Any]:
+    with db() as conn:
+        conn.execute("UPDATE devices SET last_seen=? WHERE device_id=?",
+                     (int(time.time()), device["device_id"]))
+    return {"authenticated": True, "device_id": device["device_id"]}
+
+
 @app.get("/api/v1/policy")
 def get_policy(device: sqlite3.Row = Depends(device_from_token)) -> dict[str, Any]:
     with db() as conn:
