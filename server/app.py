@@ -268,6 +268,20 @@ def update_policy(device_id: str, body: PolicyUpdate) -> dict[str, Any]:
     return {"device_id": device_id, "version": row["version"], "updated_at": now, "policy": payload}
 
 
+@app.post("/api/v1/admin/enrollment-code", dependencies=[Depends(require_admin)])
+def rotate_enrollment_code() -> dict[str, str]:
+    # The new code is returned once; only its hash is persisted.
+    code = secrets.token_urlsafe(24)
+    code_hash = hashlib.sha256(code.encode()).hexdigest()
+    with db() as conn:
+        conn.execute(
+            "INSERT INTO enrollment(singleton,code_hash,consumed) VALUES(1,?,0) "
+            "ON CONFLICT(singleton) DO UPDATE SET code_hash=excluded.code_hash,consumed=0",
+            (code_hash,),
+        )
+    return {"enrollment_code": code, "warning": "Store securely; this code is shown only once."}
+
+
 @app.post("/api/v1/admin/devices/{device_id}/disable", dependencies=[Depends(require_admin)])
 def disable_device(device_id: str) -> dict[str, str]:
     with db() as conn:
