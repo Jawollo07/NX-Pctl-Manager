@@ -78,7 +78,7 @@ void PinGateActivity::prompt()
         }
     }
 
-    // This is the replacement for TOTP: the server validates the per-device
+    // The server validates the per-device
     // bearer credential over verified HTTPS. Fail closed when unavailable.
     std::string message;
     if (!remote_control::authenticate(message)) {
