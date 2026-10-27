@@ -38,7 +38,6 @@
             <brls:DetailCell id="item_play_timer" title="@i18n/nx_pctl/items/play_timer"/>
             <brls:DetailCell id="item_clock"      title="@i18n/nx_pctl/items/clock"/>
             <brls:DetailCell id="item_set_pin"    title="@i18n/nx_pctl/items/set_pin"/>
-            <brls:DetailCell id="item_totp"       title="@i18n/nx_pctl/items/totp"/>
             <brls:DetailCell id="item_delete_pc"  title="@i18n/nx_pctl/items/delete_pc"/>
             <brls:DetailCell id="item_unlink"     title="@i18n/nx_pctl/items/unlink"/>
             <brls:DetailCell id="item_diag"       title="@i18n/nx_pctl/items/diag"/>
