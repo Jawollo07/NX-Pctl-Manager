@@ -63,6 +63,7 @@ Set `apply_policy=1` only after testing. The token is a bearer credential; anyon
 - `GET /api/v1/admin/devices` — admin-only device list.
 - `PUT /api/v1/admin/devices/{device_id}/policy` — admin-only policy update.
 - `POST /api/v1/admin/devices/{device_id}/disable` — revoke a device token.
+- `POST /api/v1/admin/enrollment-code` — admin-only, generate a new one-time enrollment code (returned once).
 
 Admin requests use `Authorization: Bearer $CONTROL_ADMIN_TOKEN`.
 
