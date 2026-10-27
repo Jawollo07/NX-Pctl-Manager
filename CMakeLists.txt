@@ -30,8 +30,11 @@ list(APPEND APP_PLATFORM_LIB ${CMAKE_THREAD_LIBS_INIT})
 # extra networking dependencies; enable only when Switch libcurl is installed.
 option(NX_PCTL_REMOTE_CONTROL "Enable HTTPS central-control client (requires Switch libcurl)" OFF)
 if (NX_PCTL_REMOTE_CONTROL)
-    find_path(NX_PCTL_CURL_INCLUDE_DIR curl/curl.h REQUIRED)
-    find_library(NX_PCTL_CURL_LIBRARY NAMES curl REQUIRED)
+    find_path(NX_PCTL_CURL_INCLUDE_DIR curl/curl.h)
+    find_library(NX_PCTL_CURL_LIBRARY NAMES curl)
+    if (NOT NX_PCTL_CURL_INCLUDE_DIR OR NOT NX_PCTL_CURL_LIBRARY)
+        message(FATAL_ERROR "NX_PCTL_REMOTE_CONTROL=ON requires Switch libcurl headers and library")
+    endif ()
     list(APPEND APP_PLATFORM_LIB ${NX_PCTL_CURL_LIBRARY})
 endif ()
 
