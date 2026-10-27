@@ -11,7 +11,6 @@
 #include "activity/main_activity.hpp"
 #include "activity/pin_gate_activity.hpp"
 #include "util/pctl_ops_c.hpp"
-#include "util/totp.hpp"
 #include "view/pt_state_header.hpp"
 #include "view/status_panel.hpp"
 
@@ -48,10 +47,16 @@ int run()
         // A registered PIN guards the whole tool (it can lift every restriction).
         PctlStatus st;
         pctl_status_fetch(&st);
-        if (st.pin_length_ok && st.pin_length == 0 && !totp::secret_file_exists())
+#ifdef NX_PCTL_REMOTE_CONTROL
+        // With central control enabled, every launch must authenticate the device.
+        brls::Application::pushActivity(new PinGateActivity());
+#else
+        // Local-only builds keep the original console-PIN gate, with no TOTP code.
+        if (st.pin_length_ok && st.pin_length == 0)
             brls::Application::pushActivity(new MainActivity());
         else
             brls::Application::pushActivity(new PinGateActivity());
+#endif
     } else {
         brls::Logger::error("pctl_ops_init failed (0x{:08X}) — pushing InitErrorActivity",
                             app::pctl_init_result());
