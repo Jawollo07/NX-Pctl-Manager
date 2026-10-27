@@ -34,6 +34,7 @@
                 marginBottom="8"/>
 
             <brls:DetailCell id="item_refresh"    title="@i18n/nx_pctl/items/refresh"/>
+            <brls:DetailCell id="item_remote_control" title="@i18n/nx_pctl/items/remote_control"/>
             <brls:DetailCell id="item_play_timer" title="@i18n/nx_pctl/items/play_timer"/>
             <brls:DetailCell id="item_clock"      title="@i18n/nx_pctl/items/clock"/>
             <brls:DetailCell id="item_set_pin"    title="@i18n/nx_pctl/items/set_pin"/>
