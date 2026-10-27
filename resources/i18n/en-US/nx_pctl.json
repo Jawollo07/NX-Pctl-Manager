@@ -10,6 +10,7 @@
     },
     "items": {
         "refresh": "Refresh status",
+        "remote_control": "Synchronize central control server",
         "play_timer": "Play timer (daily limit / bedtime)",
         "clock": "Set network clock from system time",
         "set_pin": "Set / change parental control PIN",
