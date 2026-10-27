@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Taylor.  GPLv3-or-later (see LICENSE).
 #include "activity/main_activity.hpp"
+#include "remote_control.hpp"
 
 #include <array>
 #include <cstdio>
