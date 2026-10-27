@@ -59,6 +59,14 @@ void MainActivity::onContentAvailable()
         return true;
     });
 
+    // Synchronize with the central control server. Network failures are reported
+    // without changing local settings; remote policy application is separately opt-in.
+    this->item_remote_control->registerClickAction([](brls::View*) {
+        const auto result = remote_control::synchronize();
+        brls::Application::notify(result.message);
+        return true;
+    });
+
     // Rotate the dynamic parent code. Require the real console PIN again before
     // invalidating the old authenticator secret.
     this->item_totp->registerClickAction([this](brls::View*) {
