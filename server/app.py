@@ -2,7 +2,7 @@
 
 Deploy behind a TLS-terminating reverse proxy. Device credentials are random
 bearer tokens; only SHA-256 hashes are stored. The enrollment code is one-time.
-No PIN, TOTP secret, or Nintendo account credential is accepted by this API.
+No console PIN or Nintendo account credential is accepted by this API.
 """
 from __future__ import annotations
 
