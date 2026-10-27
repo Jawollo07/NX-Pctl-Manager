@@ -50,7 +50,11 @@ void PinGateActivity::prompt()
     // is registered. The PIN is never sent to the central server.
     PctlStatus state{};
     pctl_status_fetch(&state);
-    if (state.pin_length_ok && state.pin_length > 0) {
+    if (!state.pin_length_ok) {
+        this->status->setText("Cannot determine the console PIN state. Authentication was stopped.");
+        return;
+    }
+    if (state.pin_length > 0) {
         char pin[32] = {};
         u32 len = 0;
         const Result rc = pctl_get_pin(pin, sizeof(pin), &len);
