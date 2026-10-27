@@ -122,8 +122,8 @@ namespace remote_control
 bool authenticate(std::string& message)
 {
 #ifndef NX_PCTL_REMOTE_CONTROL
-    message = "Central control requires a build with NX_PCTL_REMOTE_CONTROL=ON.";
-    return false;
+    message = "Central control is disabled in this build; local console-PIN check only.";
+    return true;
 #else
     Config c;
     if (!read_config(c)) {
