@@ -19,6 +19,7 @@ class MainActivity : public brls::Activity
   private:
     BRLS_BIND(StatusPanel,       status_panel,    "status_panel");
     BRLS_BIND(brls::DetailCell,  item_refresh,    "item_refresh");
+    BRLS_BIND(brls::DetailCell,  item_remote_control, "item_remote_control");
     BRLS_BIND(brls::DetailCell,  item_play_timer, "item_play_timer");
     BRLS_BIND(brls::DetailCell,  item_set_pin,    "item_set_pin");
     BRLS_BIND(brls::DetailCell,  item_totp,       "item_totp");
