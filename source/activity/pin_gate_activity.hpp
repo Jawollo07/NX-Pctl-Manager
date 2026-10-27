@@ -1,6 +1,4 @@
-// PinGateActivity — root Activity for the console PIN enrollment and TOTP gate.
-// Wrong codes 5 times, or B, exits. The TOTP secret is stored on SD and is
-// not protected from someone who can read the SD card or run homebrew.
+// Launch gate: optional local console PIN check followed by central-server auth.
 // Copyright (C) 2026 Taylor. GPLv3-or-later (see LICENSE).
 #pragma once
 
@@ -17,9 +15,8 @@ class PinGateActivity : public brls::Activity
   private:
     void prompt();
 
-    int  attempts = 0;
+    int attempts = 0;
     bool passed = false;
-    bool setup_pending = false;
 
     BRLS_BIND(brls::Label, status, "status");
 };
