@@ -36,6 +36,14 @@ if (NX_PCTL_REMOTE_CONTROL)
         message(FATAL_ERROR "NX_PCTL_REMOTE_CONTROL=ON requires Switch libcurl headers and library")
     endif ()
     list(APPEND APP_PLATFORM_LIB ${NX_PCTL_CURL_LIBRARY})
+    # Some Switch libcurl builds are static and need their TLS/compression libs
+    # listed explicitly. Append any available libraries after curl for link order.
+    foreach (dep mbedtls mbedx509 mbedcrypto z)
+        find_library(NX_PCTL_DEP_${dep} NAMES ${dep})
+        if (NX_PCTL_DEP_${dep})
+            list(APPEND APP_PLATFORM_LIB ${NX_PCTL_DEP_${dep}})
+        endif ()
+    endforeach ()
 endif ()
 
 # Our sources — both C++ (UI / glue) and C (pctl_ops.c service layer, unchanged
