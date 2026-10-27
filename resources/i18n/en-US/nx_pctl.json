@@ -98,9 +98,9 @@
         }
     },
     "pin_gate": {
-        "title": "Enter the parental-control PIN",
-        "headline": "Enter the parental-control PIN to continue.",
-        "hint": "(A) enter PIN    (B) exit",
+        "title": "Central control authentication",
+        "headline": "Authenticate with the central server to continue.",
+        "hint": "Enter the console PIN if configured, then verify the server connection. (B) exit",
         "enter": "Enter PIN",
         "wrong": "Wrong PIN. {} attempt(s) left.",
         "read_failed": "Could not read the console's PIN (error 0x{:08X})."
@@ -123,13 +123,5 @@
         "diag_saved": "Report saved to sd:/switch/nx_pctl_dump.txt",
         "diag_err": "Could not write sd:/switch/nx_pctl_dump.txt"
     },
-    "totp": {
-        "not_configured": "The dynamic parent code is not configured.",
-        "pin_read_failed": "Could not read the console PIN. Rotation was cancelled.",
-        "wrong_pin": "Wrong console PIN. The parent code was not changed.",
-        "rotate_failed": "Could not safely save the new parent-code secret. The old secret should remain active.",
-        "new_secret_body": "The old authenticator code is now invalid. Add this new secret to your authenticator as TOTP / time-based, SHA-1, 6 digits, period 60 seconds:",
-        "new_secret_footer": "Save this secret now. It is shown only once. Anyone with the secret can generate parent codes.",
-        "ack": "I saved the new secret"
-    }
+
 }
