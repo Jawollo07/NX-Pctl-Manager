@@ -17,7 +17,7 @@ namespace
 {
 struct Config
 {
-    std::string base_url, device_id, token;
+    std::string base_url, device_id, token, ca_file = "/switch/nx_pctl_ca.pem";
     bool apply_policy = false;
 };
 
@@ -34,11 +34,14 @@ bool read_config(Config& c)
         if (key == "base_url") c.base_url = value;
         else if (key == "device_id") c.device_id = value;
         else if (key == "device_token") c.token = value;
+        else if (key == "ca_file") c.ca_file = value;
         else if (key == "apply_policy") c.apply_policy = (value == "1");
     }
     while (!c.base_url.empty() && c.base_url.back() == '/') c.base_url.pop_back();
+    std::ifstream ca(c.ca_file);
     return c.base_url.rfind("https://", 0) == 0 &&
-           !c.device_id.empty() && !c.token.empty();
+           c.base_url.find_first_of("?#") == std::string::npos &&
+           !c.device_id.empty() && !c.token.empty() && ca.good();
 }
 
 size_t write_body(char* ptr, size_t size, size_t nmemb, void* userdata)
@@ -61,6 +64,7 @@ bool request(const Config& c, const char* path, const char* method,
     headers = curl_slist_append(headers, auth.c_str());
     headers = curl_slist_append(headers, "Content-Type: application/json");
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_CAINFO, c.ca_file.c_str());
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_body);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
