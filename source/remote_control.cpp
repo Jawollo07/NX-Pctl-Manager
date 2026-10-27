@@ -17,7 +17,7 @@ namespace
 {
 struct Config
 {
-    std::string base_url, device_id, token, ca_file = "/switch/nx_pctl_ca.pem";
+    std::string base_url, device_id, token;
     bool apply_policy = false;
 };
 
@@ -34,14 +34,13 @@ bool read_config(Config& c)
         if (key == "base_url") c.base_url = value;
         else if (key == "device_id") c.device_id = value;
         else if (key == "device_token") c.token = value;
-        else if (key == "ca_file") c.ca_file = value;
         else if (key == "apply_policy") c.apply_policy = (value == "1");
     }
     while (!c.base_url.empty() && c.base_url.back() == '/') c.base_url.pop_back();
-    std::ifstream ca(c.ca_file);
-    return c.base_url.rfind("https://", 0) == 0 &&
+    // This feature is intentionally LAN-only HTTP. Reject HTTPS and other schemes.
+    return c.base_url.rfind("http://", 0) == 0 &&
            c.base_url.find_first_of("?#") == std::string::npos &&
-           !c.device_id.empty() && !c.token.empty() && ca.good();
+           !c.device_id.empty() && !c.token.empty();
 }
 
 size_t write_body(char* ptr, size_t size, size_t nmemb, void* userdata)
@@ -64,16 +63,13 @@ bool request(const Config& c, const char* path, const char* method,
     headers = curl_slist_append(headers, auth.c_str());
     headers = curl_slist_append(headers, "Content-Type: application/json");
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CURLOPT_CAINFO, c.ca_file.c_str());
+    curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTP);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_body);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
     curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
-    // libcurl verifies the certificate chain and hostname by default. Never disable either.
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
     if (std::strcmp(method, "POST") == 0) {
         curl_easy_setopt(curl, CURLOPT_POST, 1L);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
@@ -127,11 +123,11 @@ bool authenticate(std::string& message)
 #else
     Config c;
     if (!read_config(c)) {
-        message = "Configure the HTTPS server URL and device credentials in /switch/nx_pctl_server.conf.";
+        message = "Configure the HTTP server URL and device credentials in /switch/nx_pctl_server.conf.";
         return false;
     }
     if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) {
-        message = "Could not initialize HTTPS transport.";
+        message = "Could not initialize HTTP transport.";
         return false;
     }
     std::string response;
@@ -139,7 +135,7 @@ bool authenticate(std::string& message)
     const bool ok = request(c, "/api/v1/auth/check", "GET", "", response, status) && status == 200;
     curl_global_cleanup();
     if (!ok) {
-        message = "Central server authentication failed or the server is unreachable. Check HTTPS, credentials, and network.";
+        message = "Central server authentication failed or the server is unreachable. Check HTTP, credentials, and network.";
         return false;
     }
     message = "Central server authenticated.";
@@ -156,12 +152,12 @@ SyncResult synchronize()
 #else
     Config c;
     if (!read_config(c)) {
-        result.message = "Configure /switch/nx_pctl_server.conf with the HTTPS URL and device credentials.";
+        result.message = "Configure /switch/nx_pctl_server.conf with the HTTP URL and device credentials.";
         return result;
     }
     result.configured = true;
     if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) {
-        result.message = "Could not initialize HTTPS transport.";
+        result.message = "Could not initialize HTTP transport.";
         return result;
     }
 
@@ -182,8 +178,6 @@ SyncResult synchronize()
     const bool has_limit = json_optional_int(policy_json, "daily_limit_minutes", limit);
     std::string applied = "[]";
     if (c.apply_policy && enabled && has_limit) {
-        // Do not write remote policy unless the console has a PIN and this firmware
-        // supports the documented play-timer structure.
         PctlStatus state{};
         pctl_status_fetch(&state);
         if (pctl_fw_play_timer_supported() && state.pin_length_ok && state.pin_length > 0) {
