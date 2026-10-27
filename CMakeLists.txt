@@ -26,6 +26,15 @@ add_subdirectory(${BOREALIS_LIBRARY} ${CMAKE_BINARY_DIR}/borealis_library)
 find_package(Threads REQUIRED)
 list(APPEND APP_PLATFORM_LIB ${CMAKE_THREAD_LIBS_INIT})
 
+# Optional central-control HTTPS transport. The default build remains free of
+# extra networking dependencies; enable only when Switch libcurl is installed.
+option(NX_PCTL_REMOTE_CONTROL "Enable HTTPS central-control client (requires Switch libcurl)" OFF)
+if (NX_PCTL_REMOTE_CONTROL)
+    find_path(NX_PCTL_CURL_INCLUDE_DIR curl/curl.h REQUIRED)
+    find_library(NX_PCTL_CURL_LIBRARY NAMES curl REQUIRED)
+    list(APPEND APP_PLATFORM_LIB ${NX_PCTL_CURL_LIBRARY})
+endif ()
+
 # Our sources — both C++ (UI / glue) and C (pctl_ops.c service layer, unchanged
 # from the v2.0.0 text-console build). CONFIGURE_DEPENDS makes CMake re-glob on
 # every build so newly added source files don't need an explicit reconfigure.
