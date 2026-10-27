@@ -50,6 +50,10 @@ program_target(${PROJECT_NAME} "${NX_PCTL_SRC}")
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
 
 target_include_directories(${PROJECT_NAME} PRIVATE source ${APP_PLATFORM_INCLUDE})
+if (NX_PCTL_REMOTE_CONTROL)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${NX_PCTL_CURL_INCLUDE_DIR})
+    target_compile_definitions(${PROJECT_NAME} PRIVATE NX_PCTL_REMOTE_CONTROL=1)
+endif ()
 target_compile_options(${PROJECT_NAME} PRIVATE -ffunction-sections -fdata-sections ${APP_PLATFORM_OPTION})
 target_link_libraries(${PROJECT_NAME} PRIVATE borealis ${APP_PLATFORM_LIB})
 
