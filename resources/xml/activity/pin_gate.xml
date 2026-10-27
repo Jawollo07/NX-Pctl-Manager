@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <!--
-    Launch-time PIN check (root Activity when a PIN is registered). A opens the
-    keypad, B exits; the status label shows wrong-PIN / error feedback.
+    Launch-time gate: checks the local console PIN if set, then authenticates with the central HTTPS server. A retries; B exits.
 -->
 
 <brls:AppletFrame
