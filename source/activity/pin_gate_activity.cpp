@@ -6,6 +6,7 @@
 
 #include "activity/main_activity.hpp"
 #include "remote_control.hpp"
+#include "util/pctl_ops_c.hpp"
 
 using namespace brls::literals;
 
