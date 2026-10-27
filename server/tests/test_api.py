@@ -35,6 +35,10 @@ def test_enroll_policy_status_and_revoke():
         })
         assert again.status_code == 403
 
+        checked = client.get("/api/v1/auth/check", headers=device_auth)
+        assert checked.status_code == 200
+        assert checked.json()["authenticated"] is True
+
         policy = client.get("/api/v1/policy", headers=device_auth)
         assert policy.status_code == 200
         assert policy.json()["policy"]["daily_limit_minutes"] is None
