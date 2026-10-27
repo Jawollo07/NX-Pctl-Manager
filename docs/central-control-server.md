@@ -49,6 +49,7 @@ Create `sd:/switch/nx_pctl_server.conf` as plain key/value text:
 base_url=https://YOUR_DOMAIN
 device_id=DEVICE_ID_FROM_ENROLLMENT
 device_token=DEVICE_TOKEN_FROM_ENROLLMENT
+ca_file=/switch/nx_pctl_ca.pem
 apply_policy=0
 ```
 
