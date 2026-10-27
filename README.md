@@ -46,7 +46,7 @@ When a PIN is registered, the app asks for it before showing the menu. Five wron
 
 ### Central-server launch authentication
 
-On builds compiled with `-DNX_PCTL_REMOTE_CONTROL=ON`, every launch authenticates the registered device against the central control server over HTTPS. If a console parental-control PIN is configured, the app also checks that PIN locally; the PIN is never transmitted to the server. The server uses the device token from `sd:/switch/nx_pctl_server.conf`. The old authenticator-based gate has been removed.
+On builds compiled with `-DNX_PCTL_REMOTE_CONTROL=ON`, every launch authenticates the registered device against the central control server over HTTPS. The server check uses the registered device token; the console PIN is not read or transmitted by the launch gate and remains managed by Nintendo's system UI. The server uses the device token from `sd:/switch/nx_pctl_server.conf`. The old authenticator-based gate has been removed.
 
 The remote-enabled build fails closed when the server cannot be reached or the device token is rejected. There is currently no offline grace period. Builds without the remote-control option retain the local console-PIN gate and do not perform server authentication.
 
