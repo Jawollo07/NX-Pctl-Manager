@@ -1,4 +1,4 @@
-// Launch gate: optional local console PIN check followed by central-server auth.
+// Launch gate: central-server authentication.
 // Copyright (C) 2026 Taylor. GPLv3-or-later (see LICENSE).
 #pragma once
 
@@ -17,7 +17,6 @@ class PinGateActivity : public brls::Activity
 
     bool checking = false;
 
-    int attempts = 0;
     bool passed = false;
 
     BRLS_BIND(brls::Label, status, "status");
