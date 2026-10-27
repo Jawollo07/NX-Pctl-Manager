@@ -17,6 +17,7 @@ from contextlib import contextmanager
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, ConfigDict
 
 DB_PATH = os.getenv("CONTROL_DB_PATH", "/data/control.db")
@@ -137,6 +138,40 @@ def device_from_token(authorization: str | None = Header(default=None)) -> sqlit
     if row is None:
         raise HTTPException(status_code=401, detail="Invalid device credentials")
     return row
+
+
+@app.get("/", response_class=HTMLResponse)
+def dashboard() -> str:
+    # Token is kept in page memory only; this page deliberately has no cookie login.
+    # Always serve this page behind HTTPS and never put the admin token in a URL.
+    return """<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NX-Pctl Control</title>
+<style>
+body{font:16px system-ui;max-width:920px;margin:2rem auto;padding:0 1rem;background:#111827;color:#f3f4f6}
+input,button,select{font:inherit;padding:.55rem;margin:.25rem;border-radius:.4rem;border:1px solid #6b7280}
+input,select{background:#1f2937;color:#fff}button{cursor:pointer;background:#2563eb;color:#fff}
+section{border:1px solid #4b5563;border-radius:.7rem;padding:1rem;margin:1rem 0}
+.row{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}pre{white-space:pre-wrap;overflow-wrap:anywhere}
+small{color:#cbd5e1}
+</style>
+<h1>NX-Pctl Central Control</h1>
+<p><small>Use only over HTTPS. The admin token stays in this page's memory and is not stored in browser storage.</small></p>
+<section><h2>Admin authentication</h2><div class="row"><input id="token" type="password" autocomplete="off" placeholder="Admin bearer token" style="flex:1"><button id="load">Load devices</button></div><p id="message" role="status"></p></section>
+<section><h2>Devices</h2><select id="device" style="min-width:20rem"><option value="">Load devices first</option></select><pre id="details"></pre></section>
+<section><h2>Desired policy</h2><div class="row"><label><input id="enabled" type="checkbox" checked> Policy enabled</label><label>Daily limit minutes <input id="limit" type="number" min="0" max="1440" placeholder="blank = unchanged"></label></div><label>Admin note <input id="note" maxlength="500" style="width:60%" placeholder="Optional note"></label><p><button id="save">Save policy for selected device</button></p><small>The current Switch client applies only daily_limit_minutes, and only when its local apply_policy=1 setting is enabled. Bedtime values are not yet applied by the client.</small></section>
+<script>
+let devices=[];
+const $=id=>document.getElementById(id);
+function auth(){return {Authorization:'Bearer '+$('token').value.trim(),'Content-Type':'application/json'}}
+async function api(path,opts={}){const r=await fetch(path,{...opts,headers:{...auth(),...(opts.headers||{})}});if(!r.ok)throw new Error('HTTP '+r.status+': '+(await r.text()));if(r.status===204)return null;return r.json()}
+function show(msg){$('message').textContent=msg}
+function selected(){return devices.find(d=>d.device_id===$('device').value)}
+async function load(){try{devices=await api('/api/v1/admin/devices');const sel=$('device');sel.replaceChildren();for(const d of devices){const o=document.createElement('option');o.value=d.device_id;o.textContent=d.name+' ('+d.device_id.slice(0,8)+')';sel.append(o)}render();show('Loaded '+devices.length+' device(s).')}catch(e){show(e.message)}}
+function render(){const d=selected();$('details').textContent=d?JSON.stringify(d,null,2):'No device selected.'}
+$('load').addEventListener('click',load);$('device').addEventListener('change',render);
+$('save').addEventListener('click',async()=>{const d=selected();if(!d){show('Select a device first.');return}const raw=$('limit').value;const payload={enabled:$('enabled').checked,daily_limit_minutes:raw===''?null:Number(raw),note:$('note').value};try{const out=await api('/api/v1/admin/devices/'+encodeURIComponent(d.device_id)+'/policy',{method:'PUT',body:JSON.stringify(payload)});show('Saved policy version '+out.version+'.');await load()}catch(e){show(e.message)}});
+</script></html>"""
 
 
 @app.get("/health")
