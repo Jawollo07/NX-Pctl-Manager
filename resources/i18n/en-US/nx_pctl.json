@@ -122,6 +122,5 @@
         "clock_err": "Could not set the network clock (error 0x{:08X}).",
         "diag_saved": "Report saved to sd:/switch/nx_pctl_dump.txt",
         "diag_err": "Could not write sd:/switch/nx_pctl_dump.txt"
-    },
-
+    }
 }
