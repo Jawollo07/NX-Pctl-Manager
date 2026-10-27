@@ -16,7 +16,7 @@
         "set_pin": "Set / change parental control PIN",
         "delete_pc": "Delete all parental controls",
         "unlink": "Unlink companion app",
-        "diag": "Save diagnostic report → sd:/switch/nx_pctl_dump.txt",
+        "diag": "Save diagnostic report → sd:/switch/nx_pctl_dump.txt"
     },
     "dialog": {
         "delete_pc": {
