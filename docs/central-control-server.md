@@ -8,8 +8,8 @@ This feature lives on `feature/central-control-server`; `main` is unchanged.
 - Device tokens are random and only SHA-256 hashes are stored server-side. A token is returned once at enrollment.
 - The enrollment code is one-use. Rotate it by replacing the server database or adding a future admin rotation endpoint; do not reuse it.
 - Admin API requires a separate long random bearer token.
-- Never upload the console PIN, TOTP secret, SD-card contents, or Nintendo credentials.
-- Offline/unreachable server: the client leaves local settings unchanged.
+- Never upload the console PIN, SD-card contents, or Nintendo credentials. TOTP has been removed from this branch.
+- If the server is unreachable during launch, the remote-enabled build denies entry (fail closed). There is no offline grace period yet. During a later in-app sync failure, existing local settings remain unchanged.
 - A server policy is not an arbitrary command. The current Switch client only recognizes the optional daily limit.
 - Automatic policy application is opt-in per console via `apply_policy=1`; default is off. It only attempts a daily-limit write when a PIN exists and the firmware supports the known play-timer API.
 
