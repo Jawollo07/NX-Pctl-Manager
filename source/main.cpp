@@ -51,7 +51,7 @@ int run()
         // With central control enabled, every launch must authenticate the device.
         brls::Application::pushActivity(new PinGateActivity());
 #else
-        // Local-only builds keep the original console-PIN gate, with no TOTP code.
+        // Local-only builds keep the original console-PIN gate.
         if (st.pin_length_ok && st.pin_length == 0)
             brls::Application::pushActivity(new MainActivity());
         else
