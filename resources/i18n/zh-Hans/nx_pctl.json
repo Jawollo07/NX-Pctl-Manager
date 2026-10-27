@@ -10,6 +10,7 @@
     },
     "items": {
         "refresh": "刷新状态",
+        "remote_control": "同步中央控制服务器",
         "play_timer": "游玩时间（每日限时 / 就寝闹钟）",
         "clock": "用系统时间设置网络时钟",
         "set_pin": "设置 / 修改家长控制 PIN 码",
