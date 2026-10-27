@@ -52,6 +52,14 @@ The verifier accepts the current 60-second step and one adjacent step in either 
 
 **Security limitation:** this is an additional gate inside homebrew, not a replacement for Nintendo's system PIN. The shared secret is stored on the SD card in `/switch/nx_pctl_totp.key`; anyone who can read the SD card or run privileged homebrew can copy the secret or modify the app. Do not treat it as protection against someone with physical access to the console/SD card or CFW-level control. Keep a backup of the secret in a password manager and use the console's PIN for system-level protection.
 
+## Central Control Server (experimental)
+
+A separate implementation branch, `feature/central-control-server`, adds an optional FastAPI control server and an opt-in HTTPS Switch client. The default build and `main` branch remain unchanged. The server supports one-time device enrollment, per-device bearer credentials, policy versioning, status reports, an admin API, and a small browser dashboard.
+
+Start with [docs/central-control-server.md](docs/central-control-server.md). The Switch HTTPS client requires a Switch libcurl build and is enabled with `-DNX_PCTL_REMOTE_CONTROL=ON`. Create `sd:/switch/nx_pctl_server.conf` with the HTTPS URL and the credentials returned at enrollment. The default `apply_policy=0` fetches policy without changing the console; only `daily_limit_minutes` is currently supported for opt-in application. Bedtime policies are not yet applied by the Switch client. Network failures leave existing local settings unchanged.
+
+**Security:** serve the API behind a public HTTPS reverse proxy; use separate long random admin and enrollment credentials; never send console PIN/TOTP secrets to the server. A device token stored on the SD card can be copied by anyone with SD access.
+
 ## How to use
 
 Controls: ↑ / ↓ move the cursor, (A) confirms, (B) goes back one level / (on the main menu) exits. Destructive actions (delete all parental controls, unlink companion app, remove the limit) show a confirmation screen first.
