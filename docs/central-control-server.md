@@ -59,6 +59,7 @@ Set `apply_policy=1` only after testing. The token is a bearer credential; anyon
 
 - `GET /health` — health check.
 - `POST /api/v1/enroll` — one-time device enrollment.
+- `GET /api/v1/auth/check` — authenticated gate check for the Switch client.
 - `GET /api/v1/policy` — authenticated policy fetch.
 - `POST /api/v1/status` — authenticated status report.
 - `GET /api/v1/admin/devices` — admin-only device list.
