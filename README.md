@@ -44,13 +44,11 @@ Notes: `0` minutes means that day is **fully blocked** (not "no limit"); a singl
 
 When a PIN is registered, the app asks for it before showing the menu. Five wrong attempts, or B, exits. This stops a child from using the tool to lift the limit. As a result, the tool can no longer recover a forgotten PIN. Use Nintendo's own master-key reset instead (System Settings → Parental Controls → Forgot PIN).
 
-### Dynamic parent code (TOTP, 60 seconds)
+### Central-server launch authentication
 
-On the first launch after this feature is installed, the app asks for the existing console PIN and creates a random 160-bit TOTP secret. Add it to an authenticator app as a time-based token with **SHA-1, 6 digits, and a 60-second period**. The secret is shown only during enrollment. Press A after saving it in the authenticator. Future launches require the current six-digit TOTP code instead of the console PIN.
+On builds compiled with `-DNX_PCTL_REMOTE_CONTROL=ON`, every launch authenticates the registered device against the central control server over HTTPS. If a console parental-control PIN is configured, the app also checks that PIN locally; the PIN is never transmitted to the server. The server uses the device token from `sd:/switch/nx_pctl_server.conf`. TOTP and authenticator apps are no longer used.
 
-The verifier accepts the current 60-second step and one adjacent step in either direction to tolerate small clock drift. The Switch clock and the authenticator clock must be reasonably synchronized. If the secret is lost or the authenticator is unavailable, exit the app, remove `/switch/nx_pctl_totp.key` from the SD card, and relaunch to enroll again with the console PIN.
-
-**Security limitation:** this is an additional gate inside homebrew, not a replacement for Nintendo's system PIN. The shared secret is stored on the SD card in `/switch/nx_pctl_totp.key`; anyone who can read the SD card or run privileged homebrew can copy the secret or modify the app. Do not treat it as protection against someone with physical access to the console/SD card or CFW-level control. Keep a backup of the secret in a password manager and use the console's PIN for system-level protection.
+The remote-enabled build fails closed when the server cannot be reached or the device token is rejected. There is currently no offline grace period. Builds without the remote-control option retain the local console-PIN gate and do not perform server authentication.
 
 ## Central Control Server (experimental)
 
@@ -58,7 +56,7 @@ A separate implementation branch, `feature/central-control-server`, adds an opti
 
 Start with [docs/central-control-server.md](docs/central-control-server.md). The Switch HTTPS client requires a Switch libcurl build and is enabled with `-DNX_PCTL_REMOTE_CONTROL=ON`. Create `sd:/switch/nx_pctl_server.conf` with the HTTPS URL and the credentials returned at enrollment, and place a trusted PEM CA bundle at `sd:/switch/nx_pctl_ca.pem`. The default `apply_policy=0` fetches policy without changing the console; only `daily_limit_minutes` is currently supported for opt-in application. Bedtime policies are not yet applied by the Switch client. Network failures leave existing local settings unchanged.
 
-**Security:** serve the API behind a public HTTPS reverse proxy; use separate long random admin and enrollment credentials; never send console PIN/TOTP secrets to the server. A device token stored on the SD card can be copied by anyone with SD access.
+**Security:** serve the API behind a public HTTPS reverse proxy; use separate long random admin and enrollment credentials; never send the console PIN to the server. A device token stored on the SD card can be copied by anyone with SD access.
 
 ## How to use
 
@@ -101,8 +99,6 @@ Main menu → *Play timer (daily limit / bedtime)*:
 Grab `nx_pctl_manager.nro` from the [**Releases**](../../releases) page, drop it in `/switch/` on the SD card, and run it from hbmenu. (Or download `nx_pctl_manager.zip` from the same release and unzip it onto the SD card root — it puts the `.nro` in `/switch/` for you.)
 
 
-
-### Manage the dynamic parent code
 
 The main menu now includes **Rotate dynamic parent code**. Rotation asks for the console's original parental-control PIN again, creates a replacement 160-bit secret, and invalidates the previous authenticator immediately. Add the new secret to your authenticator using TOTP / time-based, SHA-1, 6 digits, and a 60-second period. The new secret is shown only once.
 
