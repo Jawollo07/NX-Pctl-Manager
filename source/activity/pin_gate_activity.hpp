@@ -13,7 +13,9 @@ class PinGateActivity : public brls::Activity
     void onResume() override;
 
   private:
-    void prompt();
+    void authenticate();
+
+    bool checking = false;
 
     int attempts = 0;
     bool passed = false;
