@@ -100,7 +100,7 @@
     "pin_gate": {
         "title": "Central control authentication",
         "headline": "Authenticate with the central server to continue.",
-        "hint": "Enter the console PIN if configured, then verify the server connection. (B) exit",
+        "hint": "Contact the central server to authenticate this device. (A) retry, (B) exit",
         "enter": "Enter PIN",
         "wrong": "Wrong PIN. {} attempt(s) left.",
         "read_failed": "Could not read the console's PIN (error 0x{:08X})."
