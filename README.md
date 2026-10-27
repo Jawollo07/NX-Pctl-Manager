@@ -46,7 +46,7 @@ When a PIN is registered, the app asks for it before showing the menu. Five wron
 
 ### Central-server launch authentication
 
-On builds compiled with `-DNX_PCTL_REMOTE_CONTROL=ON`, every launch authenticates the registered device against the central control server over HTTPS. If a console parental-control PIN is configured, the app also checks that PIN locally; the PIN is never transmitted to the server. The server uses the device token from `sd:/switch/nx_pctl_server.conf`. TOTP and authenticator apps are no longer used.
+On builds compiled with `-DNX_PCTL_REMOTE_CONTROL=ON`, every launch authenticates the registered device against the central control server over HTTPS. If a console parental-control PIN is configured, the app also checks that PIN locally; the PIN is never transmitted to the server. The server uses the device token from `sd:/switch/nx_pctl_server.conf`. The old authenticator-based gate has been removed.
 
 The remote-enabled build fails closed when the server cannot be reached or the device token is rejected. There is currently no offline grace period. Builds without the remote-control option retain the local console-PIN gate and do not perform server authentication.
 
@@ -100,9 +100,7 @@ Grab `nx_pctl_manager.nro` from the [**Releases**](../../releases) page, drop it
 
 
 
-The main menu now includes **Rotate dynamic parent code**. Rotation asks for the console's original parental-control PIN again, creates a replacement 160-bit secret, and invalidates the previous authenticator immediately. Add the new secret to your authenticator using TOTP / time-based, SHA-1, 6 digits, and a 60-second period. The new secret is shown only once.
-
-Secret writes use a temporary file before committing the replacement to reduce the chance of a truncated key if writing is interrupted. This is not encryption: anyone who can read or modify the SD card or run privileged homebrew can still copy or replace the secret. If you rotate, make sure the new secret is saved before dismissing the dialog.
+The old SD-card key file `/switch/nx_pctl_totp.key`, if present from an earlier build, is no longer read by this version and can be deleted manually after upgrading.
 
 ## Build from source
 
