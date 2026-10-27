@@ -15,12 +15,16 @@ import sqlite3
 import time
 from contextlib import contextmanager
 from typing import Any
+import dotenv
+import os
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, ConfigDict
 
-DB_PATH = os.getenv("CONTROL_DB_PATH", "/data/control.db")
+dotenv.load_dotenv()
+
+DB_PATH = os.getenv("CONTROL_DB_PATH")
 ADMIN_TOKEN = os.getenv("CONTROL_ADMIN_TOKEN", "")
 INITIAL_ENROLLMENT_CODE = os.getenv("CONTROL_ENROLLMENT_CODE", "")
 

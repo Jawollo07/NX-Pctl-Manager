@@ -6,7 +6,7 @@
 TARGET := nx_pctl_manager
 BUILD  := build
 
-CMAKE_FLAGS := -DPLATFORM_SWITCH=ON
+CMAKE_FLAGS := -DPLATFORM_SWITCH=ON -DNX_PCTL_REMOTE_CONTROL=ON
 
 .PHONY: all clean dist nxlink
 
