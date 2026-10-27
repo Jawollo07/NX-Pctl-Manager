@@ -60,7 +60,7 @@ void MainActivity::onContentAvailable()
         return true;
     });
 
-    // The launch gate now uses central-server authentication; there is no local TOTP setup or rotation.
+    // Launch authentication is handled by the root gate; no setup action is needed here.
 
     // Delete all parental controls (cmd 1043) — step (d), destructive, confirm-gated.
     this->item_delete_pc->registerClickAction([this](brls::View*) {
