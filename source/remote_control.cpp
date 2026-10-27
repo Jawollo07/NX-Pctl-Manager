@@ -119,6 +119,34 @@ bool json_optional_int(const std::string& json, const char* key, int& value)
 
 namespace remote_control
 {
+bool authenticate(std::string& message)
+{
+#ifndef NX_PCTL_REMOTE_CONTROL
+    message = "Central control requires a build with NX_PCTL_REMOTE_CONTROL=ON.";
+    return false;
+#else
+    Config c;
+    if (!read_config(c)) {
+        message = "Configure the HTTPS server URL and device credentials in /switch/nx_pctl_server.conf.";
+        return false;
+    }
+    if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) {
+        message = "Could not initialize HTTPS transport.";
+        return false;
+    }
+    std::string response;
+    long status = 0;
+    const bool ok = request(c, "/api/v1/auth/check", "GET", "", response, status) && status == 200;
+    curl_global_cleanup();
+    if (!ok) {
+        message = "Central server authentication failed or the server is unreachable. Check HTTPS, credentials, and network.";
+        return false;
+    }
+    message = "Central server authenticated.";
+    return true;
+#endif
+}
+
 SyncResult synchronize()
 {
     SyncResult result;
