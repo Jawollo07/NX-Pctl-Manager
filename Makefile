@@ -69,6 +69,12 @@ dist: all
 	@cd out && zip -r ../$(TARGET).zip .
 	@rm -rf out
 else
+# This branch is parsed by the recursive make running inside $(BUILD).
+# Recreate include flags here because the parent branch's additions are not
+# part of this makefile's conditional path.
+INCLUDE := $(foreach dir,$(INCLUDES),-I$(TOPDIR)/$(dir)) $(foreach dir,$(LIBDIRS),-I$(dir)/include) -I$(DEVKITPRO)/libnx/include -I$(TOPDIR)/$(BUILD)
+CFLAGS += $(INCLUDE)
+CXXFLAGS += $(INCLUDE)
 .PHONY: all
 DEPENDS := $(OFILES:.o=.d)
 all: $(OUTPUT).nro
