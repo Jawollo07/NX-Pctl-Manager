@@ -8,18 +8,18 @@ endif
 TOPDIR ?= $(CURDIR)
 include $(DEVKITPRO)/libnx/switch_rules
 
-TARGET      := nx_pctl_manager
-BUILD       := build
-SOURCES     := source
-DATA        := data
-INCLUDES    := include
-ARCH        := -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
-CFLAGS      := -g -Wall -Wextra -O2 -ffunction-sections $(ARCH) -D__SWITCH__
-CXXFLAGS    := $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++17
-LDFLAGS     = -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*).map
-PLUTONIUM   := $(CURDIR)/extern/plutonium/Plutonium
-LIBDIRS     := $(PORTLIBS) $(LIBNX) $(PLUTONIUM)
-LIBS        := -lpu -lSDL2_mixer -lopusfile -lopus -lmodplug -lmpg123 -lvorbisidec -logg -lSDL2_ttf -lSDL2_gfx -lSDL2_image -lSDL2 -lEGL -lGLESv2 -lglapi -ldrm_nouveau -lwebp -lpng -ljpeg -lfreetype -lharfbuzz -lz -lbz2 -lnx
+TARGET  := nx_pctl_manager
+BUILD   := build
+SOURCES := source
+DATA    := data
+INCLUDES := include
+ARCH    := -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
+CFLAGS  := -g -Wall -Wextra -O2 -ffunction-sections $(ARCH) -D__SWITCH__
+CXXFLAGS := $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++17
+LDFLAGS = -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*).map
+PLUTONIUM := $(CURDIR)/extern/plutonium/Plutonium
+LIBDIRS := $(PORTLIBS) $(LIBNX) $(PLUTONIUM)
+LIBS := -lpu -lSDL2_mixer -lopusfile -lopus -lmodplug -lmpg123 -lvorbisidec -logg -lSDL2_ttf -lSDL2_gfx -lSDL2_image -lSDL2 -lEGL -lGLESv2 -lglapi -ldrm_nouveau -lwebp -lpng -ljpeg -lfreetype -lharfbuzz -lz -lbz2 -lnx
 
 REMOTE_CONTROL ?= 0
 ifeq ($(REMOTE_CONTROL),1)
@@ -45,12 +45,40 @@ dist: all
 else
 .PHONY: all
 DEPENDS := $(OFILES:.o=.d)
-all: $(OUTPUT).nro
-ifeq ($(strip $(NO_NACP)),)
-$(OUTPUT).nro: $(OUTPUT).elf $(OUTPUT).nacp
+
+export OUTPUT := $(CURDIR)/$(TARGET)
+export TOPDIR := $(CURDIR)
+export VPATH := $(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) $(foreach dir,$(DATA),$(CURDIR)/$(dir))
+export DEPSDIR := $(CURDIR)/$(BUILD)
+
+CFILES := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
+CPPFILES := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
+SFILES := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
+BINFILES := $(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
+
+ifeq ($(strip $(CPPFILES)),)
+export LD := $(CC)
 else
-$(OUTPUT).nro: $(OUTPUT).elf
+export LD := $(CXX)
 endif
+
+export OFILES_BIN := $(addsuffix .o,$(BINFILES))
+export OFILES_SRC := $(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
+export OFILES := $(OFILES_BIN) $(OFILES_SRC)
+export HFILES_BIN := $(addsuffix .h,$(subst .,_,$(BINFILES)))
+export INCLUDE := $(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) $(foreach dir,$(LIBDIRS),-I$(dir)/include) -I$(CURDIR)/$(BUILD)
+CFLAGS += $(INCLUDE)
+CXXFLAGS += $(INCLUDE)
+export LIBPATHS := $(foreach dir,$(LIBDIRS),-L$(dir)/lib)
+
+export APP_TITLE := Pctl Manager
+export APP_AUTHOR := Taylor
+export APP_VERSION := 3.2.0
+export APP_ICON := $(CURDIR)/icon.jpg
+export NROFLAGS += --romfsdir=$(CURDIR)/resources
+
+all: $(OUTPUT).nro
+$(OUTPUT).nro: $(OUTPUT).elf $(OUTPUT).nacp
 $(OUTPUT).elf: $(OFILES)
 $(OFILES_SRC): $(HFILES_BIN)
 -include $(DEPENDS)
