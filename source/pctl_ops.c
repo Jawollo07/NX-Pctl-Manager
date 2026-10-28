@@ -49,8 +49,20 @@
  * pctl_ops_init() itself fails and the app never gets this far.
  */
 
-Result pctl_ops_init(void) { return pctlInitialize(); }
-void   pctl_ops_exit(void) { pctlExit(); }
+Result pctl_ops_init(void)
+{
+    pctl_logf("PCTL INIT: calling pctlInitialize()");
+    Result rc = pctlInitialize();
+    pctl_logf("PCTL INIT: pctlInitialize rc=0x%08X", (unsigned)rc);
+    return rc;
+}
+
+void pctl_ops_exit(void)
+{
+    pctl_logf("PCTL EXIT: calling pctlExit()");
+    pctlExit();
+    pctl_logf("PCTL EXIT: pctlExit returned");
+}
 
 bool pctl_fw_play_timer_supported(void) { return hosversionAtLeast(21, 0, 0); }
 
@@ -74,32 +86,51 @@ Result pctl_ops_reinit(void)
 {
     // main() holds exactly one pctl reference, so one exit drops the refcount to
     // zero and actually closes the (possibly dead) session; init reopens a fresh one.
+    pctl_logf("PCTL REINIT: calling pctlExit()");
     pctlExit();
-    return pctlInitialize();
+    pctl_logf("PCTL REINIT: pctlExit returned; calling pctlInitialize()");
+    Result rc = pctlInitialize();
+    pctl_logf("PCTL REINIT: pctlInitialize rc=0x%08X", (unsigned)rc);
+    return rc;
 }
 
 void pctl_status_fetch(PctlStatus *out)
 {
+    pctl_logf("PCTL STATUS: entered");
     memset(out, 0, sizeof(*out));
     Service *srv = pctlGetServiceSession_Service();
+    pctl_logf("PCTL STATUS: service session pointer=%p", (void *)srv);
 
     u32 level = 0;
-    if (R_SUCCEEDED(serviceDispatchOut(srv, 1032, level))) {
+    Result level_rc = serviceDispatchOut(srv, 1032, level);
+    pctl_logf("PCTL STATUS: command 1032 GetSafetyLevel rc=0x%08X value=%u",
+              (unsigned)level_rc, (unsigned)level);
+    if (R_SUCCEEDED(level_rc)) {
         out->safety_level = level;
         out->safety_level_ok = true;
     }
 
     u32 pin_len = 0;
-    if (R_SUCCEEDED(serviceDispatchOut(srv, 1206, pin_len))) {
+    pctl_logf("PCTL STATUS: dispatching command 1206 GetPinCodeLength");
+    Result pin_rc = serviceDispatchOut(srv, 1206, pin_len);
+    pctl_logf("PCTL STATUS: command 1206 rc=0x%08X pin_length=%u",
+              (unsigned)pin_rc, (unsigned)pin_len);
+    if (R_SUCCEEDED(pin_rc)) {
         out->pin_length = pin_len;
         out->pin_length_ok = true;
     }
 
     bool enabled = false;
-    if (R_SUCCEEDED(serviceDispatchOut(srv, 1031, enabled))) {
+    pctl_logf("PCTL STATUS: dispatching command 1031 IsRestrictionEnabled");
+    Result enabled_rc = serviceDispatchOut(srv, 1031, enabled);
+    pctl_logf("PCTL STATUS: command 1031 rc=0x%08X enabled=%d",
+              (unsigned)enabled_rc, enabled);
+    if (R_SUCCEEDED(enabled_rc)) {
         out->restriction_enabled = enabled;
         out->restriction_enabled_ok = true;
     }
+    pctl_logf("PCTL STATUS: completed safety_ok=%d pin_ok=%d restriction_ok=%d",
+              out->safety_level_ok, out->pin_length_ok, out->restriction_enabled_ok);
 }
 
 Result pctl_set_pin(void)
@@ -236,10 +267,18 @@ static void rep(char **p, char *end, const char *fmt, ...)
 
 static Result read_settings(PtSettings *out)
 {
+    pctl_logf("PLAY TIMER: read_settings entered");
     memset(out, 0, sizeof(*out));
-    if (!pctl_fw_play_timer_supported()) return PT_UNSUPPORTED;
-    pctl_ops_reinit();
-    return serviceDispatchOut(pctlGetServiceSession_Service(), 145601, *out);   // GetPlayTimerSettings
+    if (!pctl_fw_play_timer_supported()) {
+        pctl_logf("PLAY TIMER: read_settings skipped; firmware unsupported");
+        return PT_UNSUPPORTED;
+    }
+    Result init_rc = pctl_ops_reinit();
+    pctl_logf("PLAY TIMER: read_settings reinit rc=0x%08X", (unsigned)init_rc);
+    pctl_logf("PLAY TIMER: dispatching 145601 GetPlayTimerSettings");
+    Result rc = serviceDispatchOut(pctlGetServiceSession_Service(), 145601, *out);
+    pctl_logf("PLAY TIMER: 145601 GetPlayTimerSettings rc=0x%08X", (unsigned)rc);
+    return rc;
 }
 
 static Result write_settings(const PtSettings *s)
@@ -323,22 +362,45 @@ static Result finish_patch(PtSettings *s)
 
 void pctl_play_timer_query(PtState *out)
 {
+    pctl_logf("PLAY TIMER QUERY: entered");
     memset(out, 0, sizeof(*out));
     for (int n = 0; n < 7; n++) out->day_min[n] = PT_DAY_NOLIMIT;
     out->supported = pctl_fw_play_timer_supported();
-    if (!out->supported) return;
+    pctl_logf("PLAY TIMER QUERY: firmware supported=%d hosversion=0x%08X",
+              out->supported, (unsigned)hosversionGet());
+    if (!out->supported) {
+        pctl_logf("PLAY TIMER QUERY: returning early; firmware unsupported");
+        return;
+    }
 
-    pctl_ops_reinit();
+    Result reinit_rc = pctl_ops_reinit();
+    pctl_logf("PLAY TIMER QUERY: pctl_ops_reinit rc=0x%08X", (unsigned)reinit_rc);
     Service *srv = pctlGetServiceSession_Service();
+    pctl_logf("PLAY TIMER QUERY: service session pointer=%p", (void *)srv);
 
     bool b = false;
-    if (R_SUCCEEDED(serviceDispatchOut(srv, 1453, b))) out->enabled    = b;   // IsPlayTimerEnabled
-    b = false;
-    if (R_SUCCEEDED(serviceDispatchOut(srv, 1455, b))) out->restricted = b;   // IsRestrictedByPlayTimer
-    u64 rem = 0;
-    if (R_SUCCEEDED(serviceDispatchOut(srv, 1454, rem))) out->remaining_ns = rem;   // GetPlayTimerRemainingTime (ns)
+    pctl_logf("PLAY TIMER QUERY: dispatching 1453 IsPlayTimerEnabled");
+    Result enabled_rc = serviceDispatchOut(srv, 1453, b);
+    pctl_logf("PLAY TIMER QUERY: 1453 rc=0x%08X value=%d", (unsigned)enabled_rc, b);
+    if (R_SUCCEEDED(enabled_rc)) out->enabled = b;
 
-    if (R_SUCCEEDED(read_settings(&out->raw))) {
+    b = false;
+    pctl_logf("PLAY TIMER QUERY: dispatching 1455 IsRestrictedByPlayTimer");
+    Result restricted_rc = serviceDispatchOut(srv, 1455, b);
+    pctl_logf("PLAY TIMER QUERY: 1455 rc=0x%08X value=%d", (unsigned)restricted_rc, b);
+    if (R_SUCCEEDED(restricted_rc)) out->restricted = b;
+
+    u64 rem = 0;
+    pctl_logf("PLAY TIMER QUERY: dispatching 1454 GetPlayTimerRemainingTime");
+    Result remaining_rc = serviceDispatchOut(srv, 1454, rem);
+    pctl_logf("PLAY TIMER QUERY: 1454 rc=0x%08X remaining_ns=%llu",
+              (unsigned)remaining_rc, (unsigned long long)rem);
+    if (R_SUCCEEDED(remaining_rc)) out->remaining_ns = rem;
+
+    pctl_logf("PLAY TIMER QUERY: calling read_settings()");
+    Result settings_rc = read_settings(&out->raw);
+    pctl_logf("PLAY TIMER QUERY: read_settings rc=0x%08X", (unsigned)settings_rc);
+    if (R_SUCCEEDED(settings_rc)) {
         out->valid = true;
         int bed_day = 0;   // the first day with a bedtime alarm (Sunday if none)
         for (int n = 6; n >= 0; n--) {
@@ -351,7 +413,14 @@ void pctl_play_timer_query(PtState *out)
             if (!same_bedtime(day_slot(&out->raw, n), day_slot(&out->raw, bed_day)))
                 out->bedtime_varies = true;
         out->restriction_mode = out->raw.restriction_mode;
+        pctl_logf("PLAY TIMER QUERY: decoded settings enabled=%d week_used=%d restriction_mode=%u bedtime_enabled=%d",
+                  out->raw.enabled, out->raw.week_used, (unsigned)out->restriction_mode,
+                  out->bedtime.enabled);
+    } else {
+        pctl_logf("PLAY TIMER QUERY: settings unavailable; leaving valid=false");
     }
+    pctl_logf("PLAY TIMER QUERY: completed enabled=%d restricted=%d valid=%d",
+              out->enabled, out->restricted, out->valid);
 }
 
 Result pctl_play_timer_set_days(const u16 days_min[7])
