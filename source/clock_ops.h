@@ -9,6 +9,10 @@
 #pragma once
 #include <switch.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct {
     bool user_ok;      // UserSystemClock readable
     u64  user;         // POSIX seconds
@@ -21,3 +25,7 @@ void clock_status(ClockStatus *out);
 // NetworkSystemClock := UserSystemClock. Needs a time:s session, which the
 // __nx_time_service_type override in clock_ops.c provides under Atmosphère.
 Result clock_seed_network_from_user(void);
+
+#ifdef __cplusplus
+}
+#endif
