@@ -58,28 +58,17 @@ void MainActivity::onContentAvailable()
         return true;
     });
 
-    // Rotate the dynamic parent code. Require the real console PIN again before
-    // invalidating the old authenticator secret.
+    // Rotate the dynamic parent code only after validating the current TOTP.
+    // Do not ask for or read the static console PIN for this operation.
     this->item_totp->registerClickAction([this](brls::View*) {
         if (!totp::secret_file_exists()) {
             brls::Application::notify("nx_pctl/totp/not_configured"_i18n);
             return true;
         }
 
-        char pin[32] = {};
-        u32 len = 0;
-        Result rc = pctl_get_pin(pin, sizeof(pin), &len);
-        if (R_FAILED(rc) || len == 0 || len > sizeof(pin)) {
-            std::memset(pin, 0, sizeof(pin));
-            brls::Application::notify("nx_pctl/totp/pin_read_failed"_i18n);
-            return true;
-        }
-
-        auto entered = numpad::prompt_pin("Re-enter console parental-control PIN to rotate parent code");
-        const bool ok = entered.has_value() && *entered == std::string(pin, len);
-        std::memset(pin, 0, sizeof(pin));
+        auto entered = numpad::prompt_pin("Enter current 6-digit TOTP parent code to rotate");
         if (!entered.has_value()) return true;
-        if (!ok) {
+        if (!totp::verify_code(*entered)) {
             brls::Application::notify("nx_pctl/totp/wrong_pin"_i18n);
             return true;
         }
@@ -131,14 +120,9 @@ void MainActivity::onContentAvailable()
         return true;
     });
 
-    // Set / change PIN — step (f). pctl_set_pin() pops the pctlauth applet
-    // (it's already wrapped in pctlExit/pctlauthRegisterPasscode/pctlInitialize
-    // inside pctl_ops.c — that bracket is required on some firmware versions).
-    // Synchronous: blocks until the applet returns.
-    //
-    // The notify() is deferred to the next mainLoop tick via brls::sync —
-    // calling it immediately on applet return raced with the focus-state
-    // event and the toast was getting silently dropped (observed on fw 22.1.0).
+    // Set / change PIN — the Nintendo system applet still enforces Nintendo's
+    // own PIN rules. The TOTP code gates access to this homebrew, not Horizon's
+    // native System Settings PIN prompt.
     this->item_set_pin->registerClickAction([this](brls::View*) {
         Result rc = pctl_set_pin();
         brls::Logger::info("pctl_set_pin returned 0x{:08X}", (unsigned)rc);
