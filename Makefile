@@ -44,6 +44,9 @@ export HFILES_BIN := $(addsuffix .h,$(subst .,_,$(BINFILES)))
 export INCLUDE := $(foreach dir,$(INCLUDES),-I$(TOPDIR)/$(dir)) $(foreach dir,$(LIBDIRS),-I$(dir)/include) -I$(DEVKITPRO)/libnx/include -I$(TOPDIR)/$(BUILD)
 CFLAGS += $(INCLUDE)
 CXXFLAGS += $(INCLUDE)
+# The app is compiled by a second make process in $(BUILD). Explicitly export
+# the augmented flags so libnx and project headers remain visible there.
+export CFLAGS CXXFLAGS
 export LIBPATHS := $(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 export APP_TITLE := Pctl Manager
 export APP_AUTHOR := Taylor
