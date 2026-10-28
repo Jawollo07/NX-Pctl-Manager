@@ -1,5 +1,4 @@
-# Plutonium/libnx build. Requires devkitPro and the Plutonium submodule.
-# Central-server transport stays opt-in, matching the previous Makefile default.
+# NX-Pctl-Manager: devkitPro + libnx + Plutonium build.
 .SUFFIXES:
 ifeq ($(strip $(DEVKITPRO)),)
 $(error "Please set DEVKITPRO in your environment. export DEVKITPRO=<path to>/devkitpro")
@@ -8,18 +7,20 @@ endif
 TOPDIR ?= $(CURDIR)
 include $(DEVKITPRO)/libnx/switch_rules
 
-TARGET  := nx_pctl_manager
-BUILD   := build
-SOURCES := source
-DATA    := data
+TARGET   := nx_pctl_manager
+BUILD    := build
+SOURCES  := source
+DATA     := data
 INCLUDES := include
-ARCH    := -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
-CFLAGS  := -g -Wall -Wextra -O2 -ffunction-sections $(ARCH) -D__SWITCH__
+ARCH     := -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
+CFLAGS   := -g -Wall -Wextra -O2 -ffunction-sections $(ARCH) -D__SWITCH__
 CXXFLAGS := $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++17
-LDFLAGS = -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*).map
-PLUTONIUM := $(CURDIR)/extern/plutonium/Plutonium
-LIBDIRS := $(PORTLIBS) $(LIBNX) $(PLUTONIUM)
-LIBS := -lpu -lSDL2_mixer -lopusfile -lopus -lmodplug -lmpg123 -lvorbisidec -logg -lSDL2_ttf -lSDL2_gfx -lSDL2_image -lSDL2 -lEGL -lGLESv2 -lglapi -ldrm_nouveau -lwebp -lpng -ljpeg -lfreetype -lharfbuzz -lz -lbz2 -lnx
+LDFLAGS  = -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*).map
+
+PLUTONIUM_DIR := $(CURDIR)/extern/plutonium
+PLUTONIUM_LIBDIR := $(PLUTONIUM_DIR)/Plutonium
+LIBDIRS := $(PORTLIBS) $(LIBNX) $(PLUTONIUM_LIBDIR)
+LIBS := -lpu -lSDL2_mixer -lopusfile -lopus -lmodplug -lmpg123 -lvorbisidec -logg -lSDL2_ttf -lSDL2_gfx -lSDL2_image -lSDL2 -lEGL -lGLESv2 -lglapi -ldrm_nouveau -lwebp -lpng -ljpeg `sdl2-config --libs` -lfreetype `$(PREFIX)pkg-config --cflags freetype2` -lharfbuzz -lz -lbz2 -lnx
 
 REMOTE_CONTROL ?= 0
 ifeq ($(REMOTE_CONTROL),1)
@@ -27,33 +28,15 @@ CXXFLAGS += -DNX_PCTL_REMOTE_CONTROL=1
 LIBS += -lcurl -lmbedtls -lmbedx509 -lmbedcrypto
 endif
 
-.PHONY: all clean dist
-all: $(BUILD)
-$(BUILD):
-	@[ -d $@ ] || mkdir -p $@
-	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
-
-clean:
-	@rm -rf $(BUILD) $(TARGET).nro $(TARGET).nacp $(TARGET).elf
-
-dist: all
-	@rm -rf out && mkdir -p out/switch
-	@cp $(TARGET).nro out/switch/
-	@cd out && zip -r ../$(TARGET).zip .
-	@rm -rf out
-
-else
-.PHONY: all
-DEPENDS := $(OFILES:.o=.d)
-
+ifneq ($(BUILD),$(notdir $(CURDIR)))
 export OUTPUT := $(CURDIR)/$(TARGET)
 export TOPDIR := $(CURDIR)
 export VPATH := $(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) $(foreach dir,$(DATA),$(CURDIR)/$(dir))
 export DEPSDIR := $(CURDIR)/$(BUILD)
 
-CFILES := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
+CFILES   := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
 CPPFILES := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
-SFILES := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
+SFILES   := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
 BINFILES := $(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
 
 ifeq ($(strip $(CPPFILES)),)
@@ -76,6 +59,30 @@ export APP_AUTHOR := Taylor
 export APP_VERSION := 3.2.0
 export APP_ICON := $(CURDIR)/icon.jpg
 export NROFLAGS += --romfsdir=$(CURDIR)/resources
+
+.PHONY: all clean dist plutonium
+all: $(BUILD)
+
+plutonium:
+	@$(MAKE) --no-print-directory -C $(PLUTONIUM_DIR)
+
+$(BUILD): plutonium
+	@[ -d $@ ] || mkdir -p $@
+	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
+
+clean:
+	@$(MAKE) --no-print-directory -C $(PLUTONIUM_DIR) clean
+	@rm -rf $(BUILD) $(TARGET).nro $(TARGET).nacp $(TARGET).elf $(TARGET).zip
+
+dist: all
+	@rm -rf out && mkdir -p out/switch
+	@cp $(TARGET).nro out/switch/
+	@cd out && zip -r ../$(TARGET).zip .
+	@rm -rf out
+
+else
+.PHONY: all
+DEPENDS := $(OFILES:.o=.d)
 
 all: $(OUTPUT).nro
 $(OUTPUT).nro: $(OUTPUT).elf $(OUTPUT).nacp
