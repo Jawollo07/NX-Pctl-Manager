@@ -1,78 +1,72 @@
-// Copyright (C) 2026 Taylor.  GPLv3-or-later (see LICENSE).
+// Copyright (C) 2026 Taylor. GPLv3-or-later (see LICENSE).
 #include "action/pt_flow.hpp"
 
-#include <borealis.hpp>
-#include "util/trf.hpp"
-
-using namespace brls::literals;
+#include "util/pctl_ops_c.hpp"
 
 namespace pt_flow
 {
 
-namespace
-{
-void show_dialog(const std::string& text)
-{
-    auto* d = new brls::Dialog(text);
-    d->addButton("hints/ok"_i18n, [] {});
-    d->open();
-}
-}   // namespace
-
 bool guarded_write(const std::function<Result()>& write, const std::string& ok_text)
 {
+    (void)ok_text; // UI feedback belongs to the active frontend, not this service layer.
+
     if (!pctl_fw_play_timer_supported()) {
-        u32 hv = hosversionGet();
-        show_dialog(trf("nx_pctl/play_timer/fw_unsupported"_i18n,
-                        HOSVER_MAJOR(hv), HOSVER_MINOR(hv), HOSVER_MICRO(hv)));
+        const u32 hv = hosversionGet();
+        pctl_logf("PLAY TIMER WRITE: refused; firmware %u.%u.%u lacks required commands",
+                  HOSVER_MAJOR(hv), HOSVER_MINOR(hv), HOSVER_MICRO(hv));
         return false;
     }
 
-    PctlStatus st;
+    PctlStatus st{};
     pctl_status_fetch(&st);
     if (!st.pin_length_ok || st.pin_length == 0) {
-        show_dialog("nx_pctl/play_timer/need_pin"_i18n);
+        pctl_logf("PLAY TIMER WRITE: refused; no parental-control PIN is registered");
         return false;
     }
 
-    PtState pt;
+    PtState pt{};
     pctl_play_timer_query(&pt);
     bool relock = false;
     if (pt.enabled || pt.restricted) {
         Result urc = pctl_unlock_restriction_temporarily();
-        PtState after;
+        PtState after{};
         pctl_play_timer_query(&after);
         if (R_FAILED(urc) || after.enabled) {
             // Don't risk writing while the timer is still live.
-            brls::Application::notify(trf("nx_pctl/play_timer/unlock_failed"_i18n, (unsigned)urc));
+            pctl_logf("PLAY TIMER WRITE: temporary unlock failed rc=0x%08X enabled_after=%d",
+                      (unsigned)urc, after.enabled);
             if (R_SUCCEEDED(urc)) pctl_revert_temporary_unlock();
             return false;
         }
         relock = true;
     } else {
-        // Already paused (from the HOME menu, or left that way by v3.0.0): the
-        // new settings wouldn't apply until parental controls are back on.
+        // Also restore parental controls if they were already temporarily paused.
         bool paused = false;
         relock = R_SUCCEEDED(pctl_is_temporarily_unlocked(&paused)) && paused;
     }
 
-    Result rc = write();
+    const Result rc = write();
 
     bool relocked = true;
     if (relock) {
-        Result rrc   = pctl_revert_temporary_unlock();
-        bool   still = true;   // a failed 1006 query counts as still paused
-        relocked = R_SUCCEEDED(rrc) && R_SUCCEEDED(pctl_is_temporarily_unlocked(&still)) && !still;
+        const Result rrc = pctl_revert_temporary_unlock();
+        bool still = true; // A failed query counts as still paused.
+        relocked = R_SUCCEEDED(rrc)
+            && R_SUCCEEDED(pctl_is_temporarily_unlocked(&still)) && !still;
+        if (!relocked)
+            pctl_logf("PLAY TIMER WRITE: failed to restore parental controls rc=0x%08X",
+                      (unsigned)rrc);
     }
 
     if (R_FAILED(rc))
-        brls::Application::notify(trf("nx_pctl/play_timer/write_failed"_i18n, (unsigned)rc));
+        pctl_logf("PLAY TIMER WRITE: operation failed rc=0x%08X", (unsigned)rc);
     else
-        brls::Application::notify(ok_text);
+        pctl_logf("PLAY TIMER WRITE: operation succeeded");
 
-    // Fallback to the v3.0.0 instructions if the automatic re-enable didn't stick.
-    if (!relocked) show_dialog("nx_pctl/play_timer/relock_failed"_i18n);
+    if (!relocked)
+        pctl_logf("PLAY TIMER WRITE: parental controls may remain temporarily disabled");
+
     return R_SUCCEEDED(rc);
 }
 
-}   // namespace pt_flow
+} // namespace pt_flow
