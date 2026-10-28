@@ -94,7 +94,7 @@ void PinGateActivity::prompt()
         this->status->setText(
             "ONE-TIME SETUP — add an account in your authenticator app using this secret:\n\n" +
             encoded +
-            "\n\nChoose TOTP / time-based, SHA-1, 6 digits, period 60 seconds. "
+            "\n\nChoose TOTP / time-based, SHA-1, 6 digits, period 30 seconds. "
             "Keep this secret private. Press A only after saving it; it will not be shown again.");
         return;
     }

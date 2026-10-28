@@ -4,9 +4,9 @@
 # the v2.0.0 tag if you ever need it.
 
 TARGET := nx_pctl_manager
-BUILD  := build
+BUILD  := build/switch
 
-CMAKE_FLAGS := -DPLATFORM_SWITCH=ON
+CMAKE_FLAGS := -DPLATFORM_SWITCH=ON -DUSE_SDL2=ON
 
 .PHONY: all clean dist nxlink
 

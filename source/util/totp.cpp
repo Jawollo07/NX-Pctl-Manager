@@ -1,4 +1,4 @@
-// TOTP parent-code helper (RFC 6238, HMAC-SHA1, 6 digits, 60-second period).
+// TOTP parent-code helper (RFC 6238, HMAC-SHA1, 6 digits).
 // Copyright (C) 2026 Taylor. GPLv3-or-later (see LICENSE).
 #include "util/totp.hpp"
 
@@ -18,7 +18,8 @@ namespace
 constexpr const char* SECRET_PATH = "/switch/nx_pctl_totp.key";
 constexpr const char* SECRET_TMP_PATH = "/switch/nx_pctl_totp.key.tmp";
 constexpr const char* SECRET_BACKUP_PATH = "/switch/nx_pctl_totp.key.bak";
-constexpr uint64_t PERIOD_SECONDS = 60;
+constexpr uint64_t PERIOD_SECONDS[] = {30, 60};
+constexpr int MAX_DRIFT_STEPS = 2;
 
 uint32_t rotr(uint32_t x, unsigned n) { return (x >> n) | (x << (32 - n)); }
 
@@ -195,18 +196,20 @@ bool verify_code(const std::string& code)
     if (!load_secret(secret)) return false;
     const std::time_t now = std::time(nullptr);
     if (now < 0) { std::memset(secret.data(),0,secret.size()); return false; }
-    const uint64_t step = static_cast<uint64_t>(now) / PERIOD_SECONDS;
-    // Small clock-drift window: current period and one adjacent period each way.
     bool match = false;
-    for (int delta=-1; delta<=1; ++delta) {
-        if (delta < 0 && step == 0) continue;
-        const uint64_t candidate = delta < 0 ? step-1 : step+static_cast<uint64_t>(delta);
-        const uint32_t expected = code_for(secret, candidate);
-        // Constant-time equality for the fixed-width integer code.
-        uint32_t diff = expected ^ supplied;
-        diff |= diff >> 16; diff |= diff >> 8; diff |= diff >> 4;
-        diff |= diff >> 2; diff |= diff >> 1;
-        match |= (diff & 1u) == 0;
+    for (uint64_t period : PERIOD_SECONDS) {
+        const uint64_t step = static_cast<uint64_t>(now) / period;
+        // Allow up to one minute of clock skew for 30-second authenticators.
+        for (int delta=-MAX_DRIFT_STEPS; delta<=MAX_DRIFT_STEPS; ++delta) {
+            const uint64_t offset = static_cast<uint64_t>(delta < 0 ? -delta : delta);
+            if (delta < 0 && step < offset) continue;
+            const uint64_t candidate = delta < 0 ? step-offset : step+offset;
+            const uint32_t expected = code_for(secret, candidate);
+            uint32_t diff = expected ^ supplied;
+            diff |= diff >> 16; diff |= diff >> 8; diff |= diff >> 4;
+            diff |= diff >> 2; diff |= diff >> 1;
+            match |= (diff & 1u) == 0;
+        }
     }
     std::memset(secret.data(),0,secret.size());
     return match;
