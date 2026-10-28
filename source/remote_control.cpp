@@ -23,8 +23,12 @@ struct Config
 
 bool read_config(Config& c)
 {
+    pctl_logf("REMOTE CONFIG: opening /switch/nx_pctl_server.conf");
     std::ifstream in("/switch/nx_pctl_server.conf");
-    if (!in) return false;
+    if (!in) {
+        pctl_logf("REMOTE CONFIG: failed to open config file");
+        return false;
+    }
     std::string line;
     while (std::getline(in, line)) {
         auto pos = line.find('=');
@@ -37,10 +41,16 @@ bool read_config(Config& c)
         else if (key == "apply_policy") c.apply_policy = (value == "1");
     }
     while (!c.base_url.empty() && c.base_url.back() == '/') c.base_url.pop_back();
+    // Never log the bearer token; only log whether credentials are present.
+    pctl_logf("REMOTE CONFIG: base_url='%s' device_id_present=%d token_present=%d token_length=%u apply_policy=%d",
+              c.base_url.c_str(), !c.device_id.empty(), !c.token.empty(),
+              (unsigned)c.token.size(), c.apply_policy);
     // This feature is intentionally LAN-only HTTP. Reject HTTPS and other schemes.
-    return c.base_url.rfind("http://", 0) == 0 &&
+    const bool valid = c.base_url.rfind("http://", 0) == 0 &&
            c.base_url.find_first_of("?#") == std::string::npos &&
            !c.device_id.empty() && !c.token.empty();
+    pctl_logf("REMOTE CONFIG: validation result=%d", valid);
+    return valid;
 }
 
 size_t write_body(char* ptr, size_t size, size_t nmemb, void* userdata)
@@ -55,9 +65,15 @@ size_t write_body(char* ptr, size_t size, size_t nmemb, void* userdata)
 bool request(const Config& c, const char* path, const char* method,
              const std::string& body, std::string& response, long& status)
 {
+    pctl_logf("HTTP: request starting method=%s path=%s body_length=%u",
+              method, path, (unsigned)body.size());
     CURL* curl = curl_easy_init();
-    if (!curl) return false;
+    if (!curl) {
+        pctl_logf("HTTP: curl_easy_init failed");
+        return false;
+    }
     const std::string url = c.base_url + path;
+    pctl_logf("HTTP: URL=%s", url.c_str());
     const std::string auth = "Authorization: Bearer " + c.token;
     struct curl_slist* headers = nullptr;
     headers = curl_slist_append(headers, auth.c_str());
@@ -75,10 +91,19 @@ bool request(const Config& c, const char* path, const char* method,
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
         curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)body.size());
     }
+    pctl_logf("HTTP: calling curl_easy_perform");
     const CURLcode rc = curl_easy_perform(curl);
-    if (rc == CURLE_OK) curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+    if (rc == CURLE_OK) {
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+        pctl_logf("HTTP: request completed curl_rc=%d http_status=%ld response_length=%u",
+                  (int)rc, status, (unsigned)response.size());
+    } else {
+        pctl_logf("HTTP: request failed curl_rc=%d error='%s' response_length=%u",
+                  (int)rc, curl_easy_strerror(rc), (unsigned)response.size());
+    }
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
+    pctl_logf("HTTP: curl resources cleaned up");
     return rc == CURLE_OK;
 }
 
@@ -121,23 +146,35 @@ bool authenticate(std::string& message)
     message = "Central control is disabled in this build; local console-PIN check only.";
     return true;
 #else
+    pctl_logf("REMOTE AUTH: authenticate entered");
     Config c;
     if (!read_config(c)) {
+        pctl_logf("REMOTE AUTH: config validation failed");
         message = "Configure the HTTP server URL and device credentials in /switch/nx_pctl_server.conf.";
         return false;
     }
-    if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) {
+    pctl_logf("REMOTE AUTH: initializing libcurl");
+    const CURLcode global_rc = curl_global_init(CURL_GLOBAL_DEFAULT);
+    pctl_logf("REMOTE AUTH: curl_global_init rc=%d", (int)global_rc);
+    if (global_rc != CURLE_OK) {
         message = "Could not initialize HTTP transport.";
         return false;
     }
     std::string response;
     long status = 0;
-    const bool ok = request(c, "/api/v1/auth/check", "GET", "", response, status) && status == 200;
+    pctl_logf("REMOTE AUTH: requesting /api/v1/auth/check");
+    const bool request_ok = request(c, "/api/v1/auth/check", "GET", "", response, status);
+    const bool ok = request_ok && status == 200;
+    pctl_logf("REMOTE AUTH: request_ok=%d http_status=%ld authenticated=%d response_length=%u",
+              request_ok, status, ok, (unsigned)response.size());
     curl_global_cleanup();
+    pctl_logf("REMOTE AUTH: curl_global_cleanup completed");
     if (!ok) {
+        pctl_logf("REMOTE AUTH: denied; request_ok=%d http_status=%ld", request_ok, status);
         message = "Central server authentication failed or the server is unreachable. Check HTTP, credentials, and network.";
         return false;
     }
+    pctl_logf("REMOTE AUTH: success");
     message = "Central server authenticated.";
     return true;
 #endif
