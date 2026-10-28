@@ -72,35 +72,61 @@ std::string fmt_play_timer(const PtState& pt)
 
 StatusPanel::StatusPanel()
 {
+    pctl_logf("STATUS PANEL: constructor entered; inflating xml/view/status_panel.xml");
     this->inflateFromXMLRes("xml/view/status_panel.xml");
+    pctl_logf("STATUS PANEL: XML inflation returned");
 }
 
 void StatusPanel::refresh()
 {
-    this->firmware_value->setText(fmt_firmware());
-    this->clock_value->setText(fmt_clock());
+    pctl_logf("STATUS PANEL: refresh entered");
+    pctl_logf("STATUS PANEL: formatting firmware value");
+    const std::string firmware = fmt_firmware();
+    pctl_logf("STATUS PANEL: setting firmware label (length=%u)", (unsigned)firmware.size());
+    this->firmware_value->setText(firmware);
+    pctl_logf("STATUS PANEL: firmware label updated");
 
+    pctl_logf("STATUS PANEL: formatting clock value");
+    const std::string clock = fmt_clock();
+    pctl_logf("STATUS PANEL: setting clock label (length=%u)", (unsigned)clock.size());
+    this->clock_value->setText(clock);
+    pctl_logf("STATUS PANEL: clock label updated");
+
+    pctl_logf("STATUS PANEL: pctl_available=%d", app::pctl_available());
     if (!app::pctl_available()) {
+        pctl_logf("STATUS PANEL: pctl service unavailable; setting fallback labels");
         this->pin_value->setText(UNAVAILABLE);
         this->restrictions_value->setText(UNAVAILABLE);
         this->play_timer_value->setText(UNAVAILABLE);
         return;
     }
 
-    PctlStatus s;
-    pctl_logf("Status panel: fetching parental-control status");
+    PctlStatus s{};
+    pctl_logf("STATUS PANEL: calling pctl_status_fetch");
     pctl_status_fetch(&s);
-    this->pin_value->setText(fmt_pin(s));
+    pctl_logf("STATUS PANEL: status fetched pin_ok=%d pin_length=%u restriction_ok=%d restriction_enabled=%d",
+              s.pin_length_ok, s.pin_length, s.restriction_enabled_ok, s.restriction_enabled);
+    const std::string pin_text = fmt_pin(s);
+    pctl_logf("STATUS PANEL: setting PIN label");
+    this->pin_value->setText(pin_text);
+    pctl_logf("STATUS PANEL: PIN label updated");
+    pctl_logf("STATUS PANEL: setting restrictions label");
     this->restrictions_value->setText(
         s.restriction_enabled_ok
             ? (s.restriction_enabled ? "yes" : "no")
             : UNAVAILABLE);
+    pctl_logf("STATUS PANEL: restrictions label updated");
 
-    PtState pt;
-    pctl_logf("Status panel: querying play-timer state");
+    PtState pt{};
+    pctl_logf("STATUS PANEL: calling pctl_play_timer_query");
     pctl_play_timer_query(&pt);
-    pctl_logf("Status panel: play-timer query completed");
-    this->play_timer_value->setText(fmt_play_timer(pt));
+    pctl_logf("STATUS PANEL: play timer result supported=%d valid=%d enabled=%d restricted=%d remaining_ns=%llu",
+              pt.supported, pt.valid, pt.enabled, pt.restricted,
+              (unsigned long long)pt.remaining_ns);
+    const std::string timer_text = fmt_play_timer(pt);
+    pctl_logf("STATUS PANEL: setting play timer label (length=%u)", (unsigned)timer_text.size());
+    this->play_timer_value->setText(timer_text);
+    pctl_logf("STATUS PANEL: refresh completed");
 }
 
 brls::View* StatusPanel::create() { return new StatusPanel(); }
