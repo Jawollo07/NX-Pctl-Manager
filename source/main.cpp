@@ -123,8 +123,16 @@ int main(int argc, char* argv[])
         brls::Logger::setLogLevel(brls::LogLevel::LOG_INFO);
     }
 
-    pctl_logf("PROCESS: main() entered; borealis log opened=%d", log != nullptr);
+    // Start each run with a fresh manager log so the final lines identify this launch.
+    std::FILE* manager_log = std::fopen("/switch/nx_pctl_manager.log", "w");
+    if (manager_log) {
+        std::fprintf(manager_log, "=== NX-Pctl-Manager diagnostic session start ===\n");
+        std::fclose(manager_log);
+    }
+    pctl_logf("PROCESS: main() entered; borealis log opened=%d manager log reset=%d",
+              log != nullptr, manager_log != nullptr);
     pctl_logf("PROCESS: manager diagnostic log path=/switch/nx_pctl_manager.log");
+    pctl_logf("PROCESS: system firmware version raw=0x%08X", (unsigned)hosversionGet());
     int rc = EXIT_FAILURE;
     try {
         rc = run();
