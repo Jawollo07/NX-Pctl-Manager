@@ -70,14 +70,15 @@ int run()
         pctl_logf("BOOT: pushActivity(PinGateActivity) returned");
 #else
         // Local-only builds keep the original console-PIN gate.
-        if (st.pin_length_ok && st.pin_length == 0)
+        if (st.pin_length_ok && st.pin_length == 0) {
             pctl_logf("BOOT: pushing MainActivity (local build)");
             brls::Application::pushActivity(new MainActivity());
             pctl_logf("BOOT: pushActivity(MainActivity) returned");
-        else
-            pctl_logf("BOOT: pushing PinGateActivity");
-        brls::Application::pushActivity(new PinGateActivity());
-        pctl_logf("BOOT: pushActivity(PinGateActivity) returned");
+        } else {
+            pctl_logf("BOOT: pushing PinGateActivity (local build)");
+            brls::Application::pushActivity(new PinGateActivity());
+            pctl_logf("BOOT: pushActivity(PinGateActivity) returned");
+        }
 #endif
     } else {
         brls::Logger::error("pctl_ops_init failed (0x{:08X}) — pushing InitErrorActivity",
