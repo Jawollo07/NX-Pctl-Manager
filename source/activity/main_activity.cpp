@@ -43,6 +43,8 @@ void run_destructive(const std::string& body, const std::string& confirm_label,
 
 void MainActivity::onContentAvailable()
 {
+    pctl_logf("Main activity content is available");
+
     // Refresh status — step (c): re-read pctl state and update the panel.
     // The status panel already refreshes on onResume; this lets the user force
     // a re-read without leaving the screen.
@@ -150,22 +152,33 @@ void MainActivity::onContentAvailable()
 
     // First read of the status panel — onResume runs it again on every entry,
     // but a freshly created Activity doesn't get an onResume call.
+    pctl_logf("Refreshing main activity status panel");
     this->status_panel->refresh();
+    pctl_logf("Main activity status panel refresh completed");
 
     brls::sync([this]() { this->check_network_clock(); });
 }
 
 void MainActivity::check_network_clock()
 {
-    if (!pctl_fw_play_timer_supported()) return;
+    pctl_logf("Network clock check started");
+    if (!pctl_fw_play_timer_supported()) {
+        pctl_logf("Network clock check skipped: unsupported firmware");
+        return;
+    }
     ClockStatus cs;
     clock_status(&cs);
-    if (cs.network_ok || !cs.user_ok) return;
+    pctl_logf("Network clock status: user_ok=%d network_ok=%d", cs.user_ok, cs.network_ok);
+    if (cs.network_ok || !cs.user_ok) {
+        pctl_logf("Network clock check completed without prompt");
+        return;
+    }
 
     auto* dialog = new brls::Dialog("nx_pctl/dialog/clock/body"_i18n);
     dialog->addButton("nx_pctl/dialog/clock/later"_i18n, []() {});
     dialog->addButton("nx_pctl/dialog/clock/confirm"_i18n, [this]() { this->seed_network_clock(); });
     dialog->open();
+    pctl_logf("Network clock prompt opened");
 }
 
 void MainActivity::seed_network_clock()
@@ -180,6 +193,8 @@ void MainActivity::seed_network_clock()
 
 void MainActivity::onResume()
 {
+    pctl_logf("Main activity resumed; refreshing status panel");
     brls::Activity::onResume();
     this->status_panel->refresh();
+    pctl_logf("Main activity resume refresh completed");
 }

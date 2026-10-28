@@ -88,6 +88,7 @@ void StatusPanel::refresh()
     }
 
     PctlStatus s;
+    pctl_logf("Status panel: fetching parental-control status");
     pctl_status_fetch(&s);
     this->pin_value->setText(fmt_pin(s));
     this->restrictions_value->setText(
@@ -96,7 +97,9 @@ void StatusPanel::refresh()
             : UNAVAILABLE);
 
     PtState pt;
+    pctl_logf("Status panel: querying play-timer state");
     pctl_play_timer_query(&pt);
+    pctl_logf("Status panel: play-timer query completed");
     this->play_timer_value->setText(fmt_play_timer(pt));
 }
 

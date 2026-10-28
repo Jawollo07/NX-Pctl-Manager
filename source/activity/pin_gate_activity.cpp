@@ -53,5 +53,8 @@ void PinGateActivity::authenticate()
     pctl_logf("Central-control authentication succeeded");
     if (this->passed) return;
     this->passed = true;
-    brls::Application::pushActivity(new MainActivity());
+    pctl_logf("Opening main activity after central-control authentication");
+    brls::Application::pushActivity(
+        new MainActivity(), brls::TransitionAnimation::NONE);
+    pctl_logf("Main activity push completed");
 }

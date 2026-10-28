@@ -63,8 +63,18 @@ int run()
         brls::Application::pushActivity(new InitErrorActivity());
     }
 
-    while (brls::Application::mainLoop())
-        ;
+    pctl_logf("Entering application main loop");
+    unsigned completed_frames = 0;
+    while (true) {
+        if (completed_frames < 3)
+            pctl_logf("Application frame %u starting", completed_frames + 1);
+        const bool running = brls::Application::mainLoop();
+        if (completed_frames < 3)
+            pctl_logf("Application frame %u returned (running=%d)",
+                      completed_frames + 1, running);
+        ++completed_frames;
+        if (!running) break;
+    }
 
     app::shutdown();
     return EXIT_SUCCESS;
