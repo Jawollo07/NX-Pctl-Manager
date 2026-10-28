@@ -69,3 +69,4 @@ HB_APPSTORE_SUBMISSION.md
 *.zip
 .DS_Store
 nx_pctl_probe.txt
+nx_pctl_server.conf
