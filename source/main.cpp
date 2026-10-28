@@ -4,6 +4,7 @@
 #include <switch.h>
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 #include "app.hpp"
@@ -58,11 +59,66 @@ public:
    else if (down & HidNpadButton_A) Run();
   });
   ready=app::init();
-  ui->status->SetText(ready?status_text():"pctl initialization failed. Press A to retry.");
+  if (!ready) {
+   ui->status->SetText("pctl initialization failed. Press A to retry.");
+   DrawMenu();
+   return;
+  }
+  if (!AuthorizeLaunch()) {
+   app::shutdown();
+   ready=false;
+   Close(true);
+   return;
+  }
+  ui->status->SetText(status_text());
   DrawMenu();
  }
 private:
  void ExitApp(){ if(ready) app::shutdown(); Close(true); }
+ bool AuthorizeLaunch() {
+#ifdef NX_PCTL_REMOTE_CONTROL
+  std::string message;
+  authenticated=remote_control::authenticate(message);
+  if (!authenticated) {
+   Dialog("Central-control authentication",message,{"Exit"});
+   return false;
+  }
+  return true;
+#else
+  char expected[32]={0}; u32 expected_len=0;
+  Result rc=pctl_get_pin(expected,sizeof(expected),&expected_len);
+  if (R_FAILED(rc) || expected_len==0) {
+   std::memset(expected,0,sizeof(expected));
+   return true;
+  }
+  for (int attempt=0; attempt<5; ++attempt) {
+   SwkbdConfig keyboard;
+   char entered[32]={0};
+   if (R_FAILED(swkbdCreate(&keyboard,0))) {
+    std::memset(expected,0,sizeof(expected));
+    return false;
+   }
+   swkbdConfigMakePresetDefault(&keyboard);
+   swkbdConfigSetType(&keyboard,SwkbdType_NumPad);
+   swkbdConfigSetStringLenMax(&keyboard,8);
+   swkbdConfigSetHeaderText(&keyboard,"Enter the parental-control PIN");
+   rc=swkbdShow(&keyboard,entered,sizeof(entered));
+   swkbdClose(&keyboard);
+   const bool match=R_SUCCEEDED(rc) && std::strlen(entered)==expected_len
+       && std::memcmp(entered,expected,expected_len)==0;
+   std::memset(entered,0,sizeof(entered));
+   if (match) {
+    std::memset(expected,0,sizeof(expected));
+    return true;
+   }
+   if (R_FAILED(rc)) break;
+   if (attempt<4) Dialog("Incorrect PIN","The PIN did not match. Attempts remaining: "+std::to_string(4-attempt),{"Try again"});
+  }
+  std::memset(expected,0,sizeof(expected));
+  Dialog("Access denied","The PIN was not accepted. The application will close.",{"OK"});
+  return false;
+#endif
+ }
  void DrawMenu(){
   std::string text; const std::size_t first=selected>7?selected-7:0;
   for(std::size_t i=first;i<std::min(Items.size(),first+10);++i)
