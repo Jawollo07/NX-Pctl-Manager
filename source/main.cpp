@@ -1,168 +1,137 @@
-// NX-Pctl-Manager — borealis entry point. Registers the custom StatusPanel
-// XML view, opens the pctl service, and pushes MainActivity onto the stack.
-// Copyright (C) 2026 Taylor.  This program is free software under the GNU
-// General Public License v3 or later; it comes with NO WARRANTY. See the
-// LICENSE file or <https://www.gnu.org/licenses/gpl-3.0.html> for details.
-#include <borealis.hpp>
-#include <cstdlib>
+// NX-Pctl-Manager — Plutonium UI entry point.
+// Copyright (C) 2026 Taylor. GPLv3-or-later; see LICENSE.
+#include <pu/Plutonium>
+#include <string>
 
 #include "app.hpp"
-#include "activity/init_error_activity.hpp"
-#include "activity/main_activity.hpp"
-#include "activity/pin_gate_activity.hpp"
+#include "remote_control.hpp"
 #include "util/pctl_ops_c.hpp"
-#include "view/pt_state_header.hpp"
-#include "view/status_panel.hpp"
-
-using namespace brls::literals;   // enables the "key"_i18n suffix
 
 namespace
 {
-bool g_window_created = false;
-
-int run()
+class ManagerLayout final : public pu::ui::Layout
 {
-    pctl_logf("BOOT 01: entering run(); libnx process start");
-    pctl_logf("BOOT 02: calling brls::Application::init()");
-    if (!brls::Application::init()) {
-        pctl_logf("BOOT FATAL: brls::Application::init() returned false");
-        brls::Logger::error("Unable to init borealis Application");
-        return EXIT_FAILURE;
+public:
+    pu::ui::elm::TextBlock::Ref title;
+    pu::ui::elm::TextBlock::Ref status;
+    pu::ui::elm::TextBlock::Ref help;
+
+    ManagerLayout()
+    {
+        title = pu::ui::elm::TextBlock::New(40, 30, "NX-Pctl-Manager");
+        status = pu::ui::elm::TextBlock::New(40, 105, "Initializing parental-control service...");
+        help = pu::ui::elm::TextBlock::New(
+            40, 400,
+            "A: Authenticate / retry   X: Sync server   Y: Refresh status   +: Exit");
+        this->Add(title);
+        this->Add(status);
+        this->Add(help);
     }
 
-    pctl_logf("BOOT 03: Application::init succeeded; creating window");
-    brls::Application::createWindow("nx_pctl/title"_i18n);
-    g_window_created = true;
-    pctl_logf("BOOT 04: window created");
+    PU_SMART_CTOR(ManagerLayout)
+};
 
-    // Auto-follow system theme; user can override in dev settings if they want.
-    pctl_logf("BOOT 05: setting dark theme");
-    brls::Application::getPlatform()->setThemeVariant(brls::ThemeVariant::DARK);
-    pctl_logf("BOOT 06: theme set");
-
-    // We own our own quit path (B on the root activity); no global Start-quit.
-    brls::Application::setGlobalQuit(false);
-
-    // Register custom views referenced from XML by their unprefixed tag name.
-    pctl_logf("BOOT 07: registering XML view StatusPanel");
-    brls::Application::registerXMLView("StatusPanel", StatusPanel::create);
-    pctl_logf("BOOT 08: registering XML view PtStateHeader");
-    brls::Application::registerXMLView("PtStateHeader", PtStateHeader::create);
-    pctl_logf("BOOT 09: custom XML views registered");
-
-    // Open the pctl service. On a non-CFW console this returns an error and
-    // we show a dedicated InitErrorActivity (the only thing the user can do
-    // is press B to exit).
-    pctl_logf("BOOT 10: calling app::init() / pctl_ops_init()");
-    if (app::init()) {
-        pctl_logf("BOOT 11: app::init succeeded");
-        // A registered PIN guards the whole tool (it can lift every restriction).
-        PctlStatus st{};
-        pctl_logf("BOOT 12: fetching initial parental-control status");
-        pctl_status_fetch(&st);
-        pctl_logf("BOOT 13: initial status: pin_ok=%d pin_length=%u restriction_ok=%d restriction_enabled=%d safety_ok=%d",
-                  st.pin_length_ok, st.pin_length, st.restriction_enabled_ok,
-                  st.restriction_enabled, st.safety_level_ok);
-#ifdef NX_PCTL_REMOTE_CONTROL
-        // With central control enabled, every launch must authenticate the device.
-        pctl_logf("BOOT: pushing PinGateActivity");
-        brls::Application::pushActivity(new PinGateActivity());
-        pctl_logf("BOOT: pushActivity(PinGateActivity) returned");
-#else
-        // Local-only builds keep the original console-PIN gate.
-        if (st.pin_length_ok && st.pin_length == 0) {
-            pctl_logf("BOOT: pushing MainActivity (local build)");
-            brls::Application::pushActivity(new MainActivity());
-            pctl_logf("BOOT: pushActivity(MainActivity) returned");
-        } else {
-            pctl_logf("BOOT: pushing PinGateActivity (local build)");
-            brls::Application::pushActivity(new PinGateActivity());
-            pctl_logf("BOOT: pushActivity(PinGateActivity) returned");
-        }
-#endif
-    } else {
-        brls::Logger::error("pctl_ops_init failed (0x{:08X}) — pushing InitErrorActivity",
-                            app::pctl_init_result());
-        pctl_logf("BOOT ERROR: pushing InitErrorActivity");
-        brls::Application::pushActivity(new InitErrorActivity());
-        pctl_logf("BOOT ERROR: InitErrorActivity push returned");
-    }
-
-    pctl_logf("Entering application main loop");
-    unsigned completed_frames = 0;
-    pctl_logf("BOOT 16: entering main loop");
-    while (true) {
-        if (completed_frames < 3)
-            pctl_logf("Application frame %u starting", completed_frames + 1);
-        const bool running = brls::Application::mainLoop();
-        if (completed_frames < 3)
-            pctl_logf("Application frame %u returned (running=%d)",
-                      completed_frames + 1, running);
-        ++completed_frames;
-        if (!running) break;
-    }
-
-    pctl_logf("BOOT 17: main loop ended; shutting down pctl service");
-    app::shutdown();
-    pctl_logf("BOOT 18: app::shutdown returned");
-    return EXIT_SUCCESS;
-}
-}   // namespace
-
-int main(int argc, char* argv[])
+class ManagerApplication final : public pu::ui::Application
 {
-    (void)argc; (void)argv;
+    ManagerLayout::Ref layout;
+    bool service_ready = false;
+    bool authenticated = false;
 
-    // borealis only logs to stdout (nxlink); keep a copy on the SD card so
-    // start-up failures can be diagnosed without a debugger.
-    std::FILE* log = std::fopen("/switch/nx_pctl_borealis.log", "w");
-    if (log) {
-        std::setvbuf(log, nullptr, _IONBF, 0);   // unbuffered: survive a hard crash
-        brls::Logger::setLogOutput(log);
-        // INFO, not DEBUG: DEBUG logs every focus change, each one a synchronous SD write.
-        brls::Logger::setLogLevel(brls::LogLevel::LOG_INFO);
-    }
+public:
+    using Application::Application;
+    PU_SMART_CTOR(ManagerApplication)
 
-    // Start each run with a fresh manager log so the final lines identify this launch.
-    std::FILE* manager_log = std::fopen("/switch/nx_pctl_manager.log", "w");
-    if (manager_log) {
-        std::fprintf(manager_log, "=== NX-Pctl-Manager diagnostic session start ===\n");
-        std::fclose(manager_log);
-    }
-    pctl_logf("PROCESS: main() entered; borealis log opened=%d manager log reset=%d",
-              log != nullptr, manager_log != nullptr);
-    pctl_logf("PROCESS: manager diagnostic log path=/switch/nx_pctl_manager.log");
-    pctl_logf("PROCESS: system firmware version raw=0x%08X", (unsigned)hosversionGet());
-    int rc = EXIT_FAILURE;
-    try {
-        rc = run();
-    } catch (const std::exception& e) {
-        pctl_logf("EXCEPTION: std::exception caught in main(): %s", e.what());
-        // brls::fatal() throws. Left uncaught it reaches abort(), which under
-        // hbloader returns straight to the loader while borealis's task thread
-        // is still alive — that thread then runs unmapped code (2168-0001).
-        brls::Logger::error("Uncaught exception: {}", e.what());
-        if (g_window_created) {
-            // One more loop iteration with quit requested runs Application::exit():
-            // stops the task thread and tears down the window / GPU context, so
-            // hbmenu can start cleanly afterwards.
-            brls::Application::quit();
-            try {
-                brls::Application::mainLoop();
-            } catch (const std::exception& e2) {
-                brls::Logger::error("Exception during shutdown: {}", e2.what());
-                brls::Threading::stop();
+    void OnLoad() override
+    {
+        layout = ManagerLayout::New();
+        this->LoadLayout(layout);
+        this->SetOnInput([this](const u64 down, const u64, const u64, const pu::ui::TouchPoint) {
+            if (down & HidNpadButton_Plus) {
+                if (service_ready) app::shutdown();
+                this->Close();
+            } else if (down & HidNpadButton_A) {
+                this->Authenticate();
+            } else if (down & HidNpadButton_X) {
+                this->Synchronize();
+            } else if (down & HidNpadButton_Y) {
+                this->RefreshStatus();
             }
-        } else {
-            brls::Threading::stop();
+        });
+
+        service_ready = app::init();
+        if (!service_ready) {
+            layout->status->SetText("Could not initialize pctl service. Press A to retry.");
+            return;
         }
-        app::shutdown();
+        layout->status->SetText("pctl ready. Press A to authenticate with central server.");
     }
 
-    pctl_logf("PROCESS: main() exiting rc=%d", rc);
-    if (log) {
-        brls::Logger::setLogOutput(stdout);
-        std::fclose(log);
+private:
+    void Authenticate()
+    {
+        if (!service_ready) {
+            service_ready = app::init();
+            if (!service_ready) {
+                layout->status->SetText("pctl initialization failed. Check nx_pctl_manager.log.");
+                return;
+            }
+        }
+        std::string message;
+        authenticated = remote_control::authenticate(message);
+        layout->status->SetText(message);
+        if (authenticated)
+            this->CreateShowDialog("Authentication", message, {"OK"}, true);
     }
-    return rc;
+
+    void Synchronize()
+    {
+        if (!authenticated) {
+            layout->status->SetText("Authenticate first with A.");
+            return;
+        }
+        const auto result = remote_control::synchronize();
+        layout->status->SetText(result.message);
+        this->CreateShowDialog("Central control", result.message, {"OK"}, true);
+    }
+
+    void RefreshStatus()
+    {
+        if (!service_ready) {
+            layout->status->SetText("pctl service is not available.");
+            return;
+        }
+        PctlStatus st{};
+        pctl_status_fetch(&st);
+        std::string text = "Parental-control status: ";
+        text += st.restriction_enabled_ok
+            ? (st.restriction_enabled ? "restrictions enabled" : "restrictions disabled")
+            : "restriction state unavailable";
+        text += " | Safety: ";
+        text += st.safety_level_ok ? pctl_safety_level_name(st.safety_level) : "unavailable";
+        text += " | PIN digits: ";
+        text += st.pin_length_ok ? std::to_string(st.pin_length) : "unavailable";
+        layout->status->SetText(text);
+    }
+};
+}
+
+int main()
+{
+    auto options = pu::ui::render::RendererInitOptions(
+        SDL_INIT_EVERYTHING, pu::ui::render::RendererHardwareFlags);
+    options.UseImage(pu::ui::render::ImgAllFlags);
+    options.SetPlServiceType(PlServiceType_User);
+    options.AddDefaultAllSharedFonts();
+    options.SetInputPlayerCount(1);
+    options.AddInputNpadStyleTag(HidNpadStyleSet_NpadStandard);
+    options.AddInputNpadIdType(HidNpadIdType_Handheld);
+    options.AddInputNpadIdType(HidNpadIdType_No1);
+
+    auto renderer = pu::ui::render::Renderer::New(options);
+    auto app = ManagerApplication::New(renderer);
+    const auto rc = app->Load();
+    if (R_FAILED(rc))
+        diagAbortWithResult(rc);
+    app->Show();
+    return 0;
 }

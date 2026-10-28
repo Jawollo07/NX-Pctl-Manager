@@ -2,3 +2,7 @@
 	path = extern/borealis
 	url = https://github.com/xfangfang/borealis.git
 	branch = wiliwili
+[submodule "extern/plutonium"]
+	path = extern/plutonium
+	url = https://github.com/XorTroll/Plutonium.git
+	branch = master
