@@ -1,0 +1,42 @@
+name: sysmodule-build
+
+on:
+  push:
+    branches: [ feature/headless-sysmodule-migration ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-sysmodule:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout NX-Pctl-Manager
+        uses: actions/checkout@v4
+        with:
+          path: project
+
+      - name: Checkout pinned Atmosphere source
+        uses: actions/checkout@v4
+        with:
+          repository: Atmosphere-NX/Atmosphere
+          ref: 6b0c077b4c608a3a2ee712b8dc35fee87ceb62e8
+          path: atmosphere
+
+      - name: Build experimental Stratosphere module
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/work" \
+            -w /work/project \
+            devkitpro/devkita64 \
+            bash -lc 'dkp-pacman -S --noconfirm switch-tools && make -C sysmodule ATMOSPHERE_ROOT=/work/atmosphere nx_release'
+
+      - name: Upload experimental sysmodule artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nx-pctl-manager-sysmodule-experimental
+          path: project/atmosphere/out/nintendo_nx_arm64_armv8a/release/nx_pctl_manager.nsp
+          if-no-files-found: error
