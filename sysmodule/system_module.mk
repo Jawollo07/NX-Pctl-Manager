@@ -1,10 +1,7 @@
-/*
- * NX-Pctl-Manager Stratosphere build rules.
- * Adapted from Atmosphere-NX/Atmosphere stratosphere/TioServer/system_module.mk.
- * Copyright (c) Atmosphere-NX contributors.
- *
- * This file is distributed under GPL-2.0-or-later.
- */
+# NX-Pctl-Manager Stratosphere build rules.
+# Adapted from Atmosphere-NX/Atmosphere stratosphere/TioServer/system_module.mk.
+# Copyright (c) Atmosphere-NX contributors.
+# Distributed under GPL-2.0-or-later.
 # Stratosphere sysmodule rules; upstream build configuration is pinned externally.
 ifndef ATMOSPHERE_ROOT
 $(error ATMOSPHERE_ROOT must point to a complete Atmosphere checkout)
