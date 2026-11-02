@@ -3,23 +3,40 @@
 This directory is the first independent, headless Stratosphere sysmodule target.
 It does not replace the legacy Borealis NRO build.
 
-## Pinned build dependency
+## Pinned build dependencies
 
-The initial build is tied to Atmosphere commit:
+The initial build is tied to these exact source revisions:
 
-`6b0c077b4c608a3a2ee712b8dc35fee87ceb62e8`
+- Atmosphere: `6b0c077b4c608a3a2ee712b8dc35fee87ceb62e8`
+- libnx: `b156b4774fb2df7b93402169509266da7547fc4c` (the `deps/libnx` submodule)
+- switch-tools: `22756068dd0ed6ff9734c59cb4f99ebd3f62555b` (CI host tools)
 
-Use a complete source checkout at that exact revision. Do not build against
+Atmosphere is pinned as the `Atmosphere` submodule. Do not build against
 Atmosphere `master` or an arbitrary release and assume compatibility.
 
+## Local build
+
+Initialize the submodules and build against the pinned libnx:
+
 ```sh
-git clone https://github.com/Atmosphere-NX/Atmosphere.git
-git -C Atmosphere checkout 6b0c077b4c608a3a2ee712b8dc35fee87ceb62e8
+git submodule update --init --recursive
+
+export DEVKITPRO=/opt/devkitpro
+export PATH="$DEVKITPRO/devkitA64/bin:$DEVKITPRO/tools/bin:$PATH"
+
+make -C deps/libnx -j"$(nproc)"
+make -C deps/libnx install
+
 make -C sysmodule ATMOSPHERE_ROOT="$PWD/Atmosphere" nx_release
 ```
 
+Install the `switch-tools` host utilities separately if they are not already
+available in your PATH. The full reproducible build instructions are in
+[`docs/sysmodule-build.md`](../docs/sysmodule-build.md).
+
 The output is written under the Atmosphere-derived `sysmodule/out/` directory.
-The expected first artifact is `nx_pctl_manager.nsp`.
+The expected release package is
+`sysmodule/out/nintendo_nx_arm64_armv8a/release/nx_pctl_manager.nsp`.
 
 ## Development-only metadata
 
@@ -31,13 +48,6 @@ firmware compatibility and boot/recovery procedure have been reviewed.
 The current module only initializes the service-manager client and remains
 resident in an idle loop. It has no network access, no local IPC service, no
 PCTL mutation, no filesystem permissions and no system-wide enforcement.
-
-## Build requirements
-
-- devkitA64 and libnx from devkitPro;
-- the Atmosphere source tree at the pinned revision;
-- Atmosphere's libstratosphere sources and build tools, including `npdmtool`;
-- GNU Make and the compiler versions supported by that Atmosphere revision.
 
 A successful host-side compile is not evidence that the module is safe to load.
 Hardware installation/testing is intentionally not part of this phase.
