@@ -32,7 +32,7 @@ jobs:
             -v "$GITHUB_WORKSPACE:/work" \
             -w /work/project \
             devkitpro/devkita64 \
-            bash -lc 'dkp-pacman -S --noconfirm switch-tools && make -C sysmodule ATMOSPHERE_ROOT=/work/atmosphere nx_release'
+            bash -lc 'dkp-pacman -Syu --noconfirm && dkp-pacman -S --noconfirm switch-tools && git config --global --add safe.directory /work/project && git config --global --add safe.directory /work/atmosphere && make -C sysmodule ATMOSPHERE_ROOT=/work/atmosphere nx_release'
 
       - name: Upload experimental sysmodule artifact
         uses: actions/upload-artifact@v4
