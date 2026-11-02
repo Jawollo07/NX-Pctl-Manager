@@ -37,8 +37,7 @@ jobs:
             devkitpro/devkita64 \
             bash -lc '
               set -euo pipefail
-              dkp-pacman -Syu --noconfirm
-              dkp-pacman -S --noconfirm switch-tools
+              dkp-pacman -S --noconfirm --needed switch-tools
               git config --global --add safe.directory /work/project
               git config --global --add safe.directory /work/atmosphere
 
