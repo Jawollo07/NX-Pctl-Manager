@@ -29,15 +29,33 @@ jobs:
           ref: 6b0c077b4c608a3a2ee712b8dc35fee87ceb62e8
           path: atmosphere
 
+      - name: Checkout pinned switch-tools
+        uses: actions/checkout@v4
+        with:
+          repository: switchbrew/switch-tools
+          ref: 22756068dd0ed6ff9734c59cb4f99ebd3f62555b
+          path: switch-tools
+
+      - name: Build host-side Switch packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes autoconf automake liblz4-dev zlib1g-dev pkg-config
+          cd switch-tools
+          ./autogen.sh
+          ./configure --prefix="$RUNNER_TEMP/switch-tools-install"
+          make -j"$(nproc)"
+          make install
+
       - name: Build experimental Stratosphere module
         run: |
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/work" \
+            -v "$RUNNER_TEMP/switch-tools-install/bin:/host-switch-tools:ro" \
             -w /work/project \
             devkitpro/devkita64 \
             bash -lc '
               set -euo pipefail
-              dkp-pacman -S --noconfirm --needed switch-tools
+              export PATH="/host-switch-tools:$PATH"
               git config --global --add safe.directory /work/project
               git config --global --add safe.directory /work/atmosphere
 
@@ -45,6 +63,13 @@ jobs:
                 echo "DEVKITPRO is not set in the devkitPro container" >&2
                 exit 1
               }
+
+              for tool in npdmtool elf2nso build_pfs0; do
+                command -v "$tool" >/dev/null || {
+                  echo "Missing required Switch packaging tool: $tool" >&2
+                  exit 1
+                }
+              done
 
               make -C deps/libnx -j"$(nproc)"
               make -C deps/libnx install
