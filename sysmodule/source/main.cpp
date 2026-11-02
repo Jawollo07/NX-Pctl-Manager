@@ -31,7 +31,7 @@ namespace ams {
 
     void Main() {
         os::SetThreadNamePointer(os::GetCurrentThread(),
-                                 AMS_GET_SYSTEM_THREAD_NAME(NxPctlManager, Main));
+                         "ams.NxPctlManager.Main");
 
         /*
          * Resident idle loop. Later phases replace this with bounded workers

@@ -6,3 +6,6 @@
 	path = Atmosphere
 	url = https://github.com/Atmosphere-NX/Atmosphere.git
 	branch = master
+[submodule "deps/libnx"]
+	path = deps/libnx
+	url = https://github.com/switchbrew/libnx.git

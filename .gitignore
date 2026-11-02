@@ -72,3 +72,9 @@ nx_pctl_probe.txt
 *.nsp
 *.npdm
 nx_pctl_probe.txt
+# Local development toolchain
+/toolchain/
+
+# Sysmodule build artifacts
+/sysmodule/build/
+/sysmodule/out/
