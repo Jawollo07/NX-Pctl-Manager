@@ -2,3 +2,7 @@
 	path = extern/borealis
 	url = https://github.com/xfangfang/borealis.git
 	branch = wiliwili
+[submodule "Atmosphere"]
+	path = Atmosphere
+	url = https://github.com/Atmosphere-NX/Atmosphere.git
+	branch = master

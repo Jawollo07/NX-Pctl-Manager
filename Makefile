@@ -8,7 +8,7 @@ BUILD  := build/switch
 
 CMAKE_FLAGS := -DPLATFORM_SWITCH=ON -DUSE_SDL2=ON
 
-.PHONY: all clean dist nxlink
+.PHONY: all clean dist nxlink probe
 
 all:
 	@cmake -B $(BUILD) -S . $(CMAKE_FLAGS)
@@ -30,3 +30,5 @@ dist: all
 
 nxlink: all
 	nxlink $(BUILD)/$(TARGET).nro
+probe:
+	$(MAKE) -C feasibility/nx_pctl_lock_probe

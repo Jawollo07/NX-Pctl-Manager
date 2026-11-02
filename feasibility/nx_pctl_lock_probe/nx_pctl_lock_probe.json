@@ -1,0 +1,48 @@
+{
+  "name": "nx_pctl_lock_probe",
+  "title_id": "0x01000000000001F0",
+  "title_id_range_min": "0x01000000000001F0",
+  "title_id_range_max": "0x01000000000001F0",
+  "main_thread_stack_size": "0x00004000",
+  "main_thread_priority": 44,
+  "default_cpu_id": 3,
+  "process_category": 0,
+  "is_retail": true,
+  "pool_partition": 2,
+  "is_64_bit": true,
+  "address_space_type": 1,
+  "filesystem_access": {
+    "permissions": "0xC000000000200000"
+  },
+  "service_access": ["fsp-srv"],
+  "service_host": [],
+  "kernel_capabilities": [
+    {
+      "type": "kernel_flags",
+      "value": {
+        "highest_thread_priority": 63,
+        "lowest_thread_priority": 24,
+        "lowest_cpu_id": 3,
+        "highest_cpu_id": 3
+      }
+    },
+    {
+      "type": "syscalls",
+      "value": {
+        "svcSetHeapSize": "0x01",
+        "svcSleepThread": "0x0b",
+        "svcCloseHandle": "0x16",
+        "svcConnectToNamedPort": "0x1f",
+        "svcSendSyncRequest": "0x21"
+      }
+    },
+    {
+      "type": "min_kernel_version",
+      "value": "0x0030"
+    },
+    {
+      "type": "handle_table_size",
+      "value": 64
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # MVP: Require local TOTP before using the Nintendo Switch
 
-Status: **implementation plan only**. This document narrows the immediate project scope to one goal: require a valid local TOTP code before the console can be used. It does not claim that a system-wide lock has already been implemented.
+Status: **Milestone 1 diagnostic probe prepared; system-wide lock remains unimplemented.** This document narrows the immediate project scope to one goal: require a valid local TOTP code before the console can be used. It does not claim that a system-wide lock has been implemented.
 
 ## Goal and acceptance criteria
 
@@ -18,6 +18,7 @@ The current C++/libnx/Borealis NRO asks for TOTP when opening the homebrew app. 
 
 The current project already has TOTP enrollment/verification and a pctl adapter for parental-control settings. Neither of those provides a persistent system-wide lock. A Tesla overlay or ordinary homebrew app is also not enough because it can be dismissed or exited.
 
+The first feasibility artifact is `feasibility/nx_pctl_lock_probe`. It is a non-enforcing, two-minute resident-process probe that writes a heartbeat to the SD-card root. It has no HOME/qlaunch hooks, does not inspect or change parental-control state, and does not include an Atmosphere boot flag. Its only purpose is to verify that an Atmosphere sysmodule can start and continue running after the NRO closes.
 ## Minimal target architecture
 
 1. **Lock-screen UI** — C++/Borealis presentation and numeric TOTP entry. Reuse the current TOTP verifier where appropriate, but separate the lock UI from the parent settings UI.
