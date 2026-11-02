@@ -1,6 +1,6 @@
 # Headless Atmosphere Sysmodule Migration Plan
 
-Status: approved target architecture; implementation is not yet complete.
+Status: Phase 0 reference pinned; Phase 1 bootstrap scaffold committed. Build and hardware validation are still pending.
 
 ## 1. Accepted decisions
 
@@ -23,15 +23,30 @@ The default branch is an NRO application:
 - extern/borealis is a build dependency.
 - source/pctl_ops.c/.h is a useful PCTL adapter with firmware checks and documented command behaviour. Audit it and wrap it; do not blindly reuse every operation in a resident module.
 - source/util/totp.* is homebrew-local TOTP code. Its SD-card secret handling must not be reused unchanged.
-- CMakeLists.txt, Makefile and the GitHub Actions workflow package an NRO/ZIP, not an Atmosphere sysmodule.
+- CMakeLists.txt, Makefile and the original GitHub Actions workflow package an NRO/ZIP, not an Atmosphere sysmodule.
 
 Do not relabel the NRO as a sysmodule. A Stratosphere module needs its own entry point, module metadata, package layout, lifecycle, service registration, resource limits and installation method.
 
-## 3. Target repository layout
+## 3. Pinned Atmosphere reference
+
+The initial build glue is aligned to the official Atmosphere source at:
+
+- Repository: https://github.com/Atmosphere-NX/Atmosphere
+- Commit: `6b0c077b4c608a3a2ee712b8dc35fee87ceb62e8`
+- Official sysmodule reference: `stratosphere/TioServer`
+- Official build rules: `stratosphere/TioServer/system_module.mk` and `libraries/config/templates/stratosphere.mk`
+- The repository is GPL-2.0; the Atmosphere/libstratosphere build system is GPL-2.0, so the project license is compatible.
+
+The commit is pinned in `sysmodule/README.md` and the dedicated CI workflow. It is a build reference, not yet a claim that every Switch firmware version is supported. The target console's firmware and Atmosphere release still need to be declared before device testing.
+
+## 4. Target repository layout
 
 Migrate additively. Keep the existing NRO build working on main until the sysmodule is independently buildable.
 
     sysmodule/
+      Makefile
+      system_module.mk
+      nx_pctl_manager.json
       source/
         main.cpp
         lifecycle/       startup, shutdown, suspend/resume
@@ -44,7 +59,7 @@ Migrate additively. Keep the existing NRO build working on main until the sysmod
         accounting/      monotonic play-time accounting
         telemetry/       bounded RAM event queue and redaction
       include/
-      CMakeLists.txt
+      README.md
     common/
       protocol/
       model/
@@ -56,11 +71,10 @@ Migrate additively. Keep the existing NRO build working on main until the sysmod
       policy-schema.md
       security-model.md
       firmware-compatibility.md
-    atmosphere/          installable module metadata/package layout
 
-The exact Stratosphere template, title ID, metadata and packaging must come from a pinned compatible Atmosphere source revision. Never guess title IDs, service names, kernel hooks or metadata fields.
+The current NPDM title ID `0x010000000000D7A1` is a development placeholder only. It is not registered or hardware-validated. Do not install the artifact until title ID allocation, permissions and boot recovery have been reviewed. Never guess kernel hooks or service names.
 
-## 4. Runtime design
+## 5. Runtime design
 
 1. Initialise required Horizon services, register the local IPC endpoint and start bounded workers.
 2. Load the provisioned device identity. Missing/invalid credentials mean provisioning-required, never a shared default key.
@@ -78,7 +92,7 @@ Network loss rules:
 - Do not add a local policy DB, usage DB or persistent event log.
 - On restart/power loss, RAM policy is gone; stay in the documented restricted bootstrap state until server authentication succeeds.
 
-## 5. Proposed server protocol
+## 6. Proposed server protocol
 
 These are proposed endpoints, not existing server routes. Freeze them only after the server implementation agrees.
 
@@ -98,7 +112,7 @@ WebSocket events:
 
 Every message carries a protocol version. Each policy has a monotonically increasing revision, device binding, issue/expiry times and server time. Events have unique IDs and per-device sequence numbers so the server can deduplicate retries.
 
-## 6. Policy and security rules
+## 7. Policy and security rules
 
 A policy needs at minimum:
 - schema version, device ID, monotonically increasing revision;
@@ -111,7 +125,7 @@ A policy needs at minimum:
 
 Reject unknown critical schema versions, invalid bounds, stale revisions, cross-device replay and malformed input. Use monotonic time for elapsed playtime; use server time only for wall-clock schedules, with explicit clock uncertainty handling. TLS validation is mandatory. Never log credentials, tokens, PINs, TOTP secrets or authentication payloads.
 
-## 7. Full system integration: feasibility gate
+## 8. Full system integration: feasibility gate
 
 A resident sysmodule alone does not prove that users cannot close, bypass or kill the enforcement surface. Full scope requires supported mechanisms for:
 - foreground title/process observation;
@@ -124,19 +138,21 @@ The current PCTL adapter can manage parental-control settings; it does not provi
 
 Prefer documented Atmosphere/Stratosphere interfaces and narrowly scoped version-specific patches. Do not ship version-blind kernel hooks. Unknown firmware must disable unsupported hooks and enter the documented safe state rather than risk a boot loop.
 
-## 8. Concrete migration phases
+## 9. Concrete migration phases
 
 ### Phase 0 — freeze and reference
-- Keep main unchanged and create this feature branch.
-- Record baseline commit and supported firmware/Atmosphere versions.
-- Pin an Atmosphere source revision and identify its official sysmodule template.
-- Check license compatibility before copying build files or code.
+- [x] Keep main unchanged and create this feature branch.
+- [ ] Record baseline commit and supported firmware/Atmosphere versions.
+- [x] Pin an Atmosphere source revision and identify its official sysmodule build rules.
+- [x] Check license compatibility before adapting build glue.
+- [ ] Declare the target console firmware/Atmosphere release before hardware testing.
 
 ### Phase 1 — buildable empty sysmodule
-- Add sysmodule build target using the pinned Stratosphere template.
-- Add module metadata, package layout and minimal start/stop entry point.
-- Add an independent CI job; do not remove the NRO job yet.
-- Acceptance: installable artifact, starts independently of hbmenu/Borealis, clean shutdown and reboot.
+- [x] Add an independent Stratosphere build target and minimal module entry point.
+- [x] Add initial NPDM metadata and a separate CI workflow.
+- [ ] Obtain a successful CI build of the NSP.
+- [ ] Validate start/stop and recovery on a test console.
+- Important: the current title ID is a placeholder; the package is not approved for installation.
 
 ### Phase 2 — lifecycle and local IPC
 - Add versioned local IPC for health, status and policy revision.
@@ -168,7 +184,7 @@ Prefer documented Atmosphere/Stratosphere interfaces and narrowly scoped version
 - Only then remove Borealis, activities, views, XML resources and NRO packaging from the product path.
 - Update README, install guide, compatibility matrix and release assets.
 
-## 9. CI and definition of done
+## 10. CI and definition of done
 
 Keep a temporary legacy NRO job. Add a separate sysmodule build job using the pinned Atmosphere template. Host tests cover policy parsing, revision logic, schedules, event deduplication and reconnect state. Device tests are mandatory for PCTL and system integration; a host build is not evidence of working enforcement.
 
