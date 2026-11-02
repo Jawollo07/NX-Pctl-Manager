@@ -19,6 +19,9 @@ jobs:
         with:
           path: project
 
+      - name: Checkout pinned libnx submodule
+        run: git -C project submodule update --init deps/libnx
+
       - name: Checkout pinned Atmosphere source
         uses: actions/checkout@v4
         with:
@@ -32,7 +35,28 @@ jobs:
             -v "$GITHUB_WORKSPACE:/work" \
             -w /work/project \
             devkitpro/devkita64 \
-            bash -lc 'dkp-pacman -Syu --noconfirm && dkp-pacman -S --noconfirm switch-tools && git config --global --add safe.directory /work/project && git config --global --add safe.directory /work/atmosphere && make -C sysmodule ATMOSPHERE_ROOT=/work/atmosphere nx_release'
+            bash -lc '
+              set -euo pipefail
+              dkp-pacman -Syu --noconfirm
+              dkp-pacman -S --noconfirm switch-tools
+              git config --global --add safe.directory /work/project
+              git config --global --add safe.directory /work/atmosphere
+
+              test -n "${DEVKITPRO:-}" || {
+                echo "DEVKITPRO is not set in the devkitPro container" >&2
+                exit 1
+              }
+
+              make -C deps/libnx -j"$(nproc)"
+              make -C deps/libnx install
+
+              make -C sysmodule ATMOSPHERE_ROOT=/work/atmosphere nx_release
+            '
+
+      - name: Verify packaged sysmodule
+        run: |
+          test -s project/sysmodule/out/nintendo_nx_arm64_armv8a/release/nx_pctl_manager.nsp
+          file project/sysmodule/out/nintendo_nx_arm64_armv8a/release/nx_pctl_manager.nsp
 
       - name: Upload experimental sysmodule artifact
         uses: actions/upload-artifact@v4
