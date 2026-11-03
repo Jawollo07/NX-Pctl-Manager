@@ -53,8 +53,13 @@ namespace {
     bool DeriveStorageKey(u8 out_key[crypto::Aes128KeySize]) {
         spl::AccessKey access_key{};
         u64 generation = 0;
-        if (R_FAILED(spl::GetConfig(&generation, spl::ConfigItem::DeviceUniqueKeyGeneration)) ||
-            generation > static_cast<u64>(std::numeric_limits<s32>::max())) {
+        /* The device-unique generation config item is available from HOS 5.0.0. */
+        if (hos::GetVersion() >= hos::Version_5_0_0 &&
+            R_FAILED(spl::GetConfig(&generation, spl::ConfigItem::DeviceUniqueKeyGeneration))) {
+            Wipe(&access_key, sizeof(access_key));
+            return false;
+        }
+        if (generation > static_cast<u64>(std::numeric_limits<s32>::max())) {
             Wipe(&access_key, sizeof(access_key));
             return false;
         }
