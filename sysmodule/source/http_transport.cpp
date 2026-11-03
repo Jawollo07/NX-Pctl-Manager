@@ -115,6 +115,12 @@ Error Initialize() {
     return Error::None;
 }
 
+void Finalize() {
+    if (!g_initialized) return;
+    ams::socket::Finalize();
+    g_initialized = false;
+}
+
 Error HttpPost(const char *host, u16 port,
                const char *request, std::size_t request_size,
                char *response, std::size_t response_capacity,
