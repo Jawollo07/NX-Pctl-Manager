@@ -82,3 +82,27 @@ production fallback when the hostname is proxied. Cloudflare terminates TLS,
 so TLS alone does not provide cryptographic integrity against Cloudflare
 itself; signed policy snapshots with a pinned public verification key remain
 a future hardening step.
+
+
+## Pinned libnx TLS API audit
+
+The pinned libnx submodule revision `b156b4774fb2df7b93402169509266da7547fc4c`
+contains the Switch SSL service client API (`sslInitialize`, SSL context and
+connection objects, hostname setup, socket descriptor binding, handshake,
+read/write, and certificate verification error reporting). The API documents
+the default peer-CA and hostname verification flags and use of the system
+certificate store. This is the intended TLS implementation path for the
+Cloudflare-proxied hostname; a custom TLS stack or a Cloudflare Origin CA
+trust anchor is not planned.
+
+The next transport implementation must explicitly retain peer-CA, hostname
+and certificate-date verification, set the TLS SNI/hostname to the configured
+public API hostname, and fail closed on any certificate-verification error.
+It must not use `SslOptionType_SkipDefaultVerify` or disable verification.
+The socket must connect to the DNS-resolved Cloudflare address while the TLS
+connection and HTTP `Host` header use the configured hostname.
+
+The service ACL/NPDM requirements for the sysmodule's NIFM, BSD socket and SSL
+service access have not yet been validated against the pinned Atmosphere
+runtime. Do not add guessed service ACL entries or start network access until
+those requirements and the target firmware compatibility are verified.
