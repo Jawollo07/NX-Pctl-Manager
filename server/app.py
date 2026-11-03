@@ -265,7 +265,7 @@ def init_database() -> None:
         if "response_json" not in replay_columns:
             db.execute("ALTER TABLE secure_replays ADD COLUMN response_json TEXT")
         if "status_code" not in replay_columns:
-            db.execute("ALTER TABLE secure_replays ADD COLUMN status_code INTEGER"))
+            db.execute("ALTER TABLE secure_replays ADD COLUMN status_code INTEGER")
 
 
 app = FastAPI(title="NX-Pctl-Manager API", version=APP_VERSION)
