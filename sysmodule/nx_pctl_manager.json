@@ -53,7 +53,8 @@
         "svcCreateSession": "0x40",
         "svcAcceptSession": "0x41",
         "svcReplyAndReceive": "0x43",
-        "svcCreateEvent": "0x45"
+        "svcCreateEvent": "0x45",
+        "svcGetThreadId": "0x25"
       }
     },
     {
