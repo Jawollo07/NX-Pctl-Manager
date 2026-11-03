@@ -43,6 +43,17 @@ namespace {
         ResponseWiper& operator=(const ResponseWiper&) = delete;
     };
 
+    class ScopedWipe {
+    public:
+        ScopedWipe(void* data, std::size_t size) : m_data(data), m_size(size) {}
+        ~ScopedWipe() { Wipe(m_data, m_size); }
+        ScopedWipe(const ScopedWipe&) = delete;
+        ScopedWipe& operator=(const ScopedWipe&) = delete;
+    private:
+        void* m_data;
+        std::size_t m_size;
+    };
+
     bool ExtractString(const char* json, std::size_t length, const char* key,
                        char* output, std::size_t capacity) {
         char pattern[80];
@@ -102,6 +113,7 @@ namespace {
     bool Enroll() {
         ResponseWiper response_wiper;
         char payload[256];
+        ScopedWipe payload_wiper(payload, sizeof(payload));
         const int n = std::snprintf(payload, sizeof(payload),
             "{\"enrollment_code\":\"%s\"}", g_config.enrollment_code);
         if (n <= 0 || static_cast<std::size_t>(n) >= sizeof(payload)) return false;
@@ -147,6 +159,7 @@ namespace {
         ResponseWiper response_wiper;
         if (!g_access_token[0]) return false;
         char payload[512];
+        ScopedWipe payload_wiper(payload, sizeof(payload));
         const int n = std::snprintf(payload, sizeof(payload),
             "{\"access_token\":\"%s\",\"protocol_version\":1,"
             "\"uptime_seconds\":%llu,\"policy_revision\":%llu}",
@@ -165,6 +178,7 @@ namespace {
         ResponseWiper response_wiper;
         if (!g_access_token[0]) return false;
         char payload[384];
+        ScopedWipe payload_wiper(payload, sizeof(payload));
         const int n = std::snprintf(payload, sizeof(payload),
             "{\"access_token\":\"%s\"}", g_access_token);
         if (n <= 0 || static_cast<std::size_t>(n) >= sizeof(payload)) return false;
