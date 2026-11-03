@@ -46,7 +46,9 @@
         "svcSendSyncRequest": "0x21",
         "svcBreak": "0x26",
         "svcGetInfo": "0x29",
-        "svcCreateEvent": "0x45"
+        "svcCreateEvent": "0x45",
+        "svcGetThreadCoreMask": "0x0e",
+        "svcSetThreadCoreMask": "0x0f"
       }
     },
     {
