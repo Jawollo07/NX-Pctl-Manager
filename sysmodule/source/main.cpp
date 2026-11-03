@@ -8,6 +8,7 @@
  */
 #include <stratosphere.hpp>
 #include "../../protocol/runtime_status.hpp"
+#include "../../protocol/worker_supervision.hpp"
 
 #define AMS_NXPCTL_I_RUNTIME_INTERFACE_INFO(C, H) \
     AMS_SF_METHOD_INFO(C, H, 65000, Result, GetRuntimeStatus, \
@@ -24,7 +25,6 @@ namespace ams {
         constexpr size_t WorkerStackSize = 0x4000;
         constexpr s32 SupervisorThreadPriority = 31;
         constexpr size_t SupervisorStackSize = 0x4000;
-        constexpr u32 MaxWorkerRestarts = 3;
         constexpr s64 WorkerPollIntervalNs = 1'000'000'000LL;
         constexpr u64 InitialPolicyRevision = 0;
 
@@ -81,7 +81,7 @@ namespace ams {
         }
 
         void WorkerSupervisorThreadMain(void *) {
-            u32 restart_count = 0;
+            ::nxpctl::protocol::WorkerRestartBudget restart_budget{};
 
             while (!os::TimedWaitEvent(
                 std::addressof(g_supervisor_stop_event),
@@ -94,12 +94,11 @@ namespace ams {
                 os::DestroyThread(std::addressof(g_worker_thread));
                 g_worker_thread_created = false;
 
-                if (restart_count >= MaxWorkerRestarts) {
+                if (!restart_budget.TryConsume()) {
                     g_worker_state = static_cast<u32>(::nxpctl::protocol::WorkerState::Failed);
                     break;
                 }
 
-                ++restart_count;
                 StartWorkerThread();
             }
         }
