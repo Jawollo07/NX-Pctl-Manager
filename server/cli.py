@@ -8,10 +8,16 @@ import sys
 import time
 from pathlib import Path
 
-from app import (
-    DEVICE_ID_RE, _database_path, _hash_secret, _validate_policy,
-    database, init_database, strict_json_loads,
-)
+try:
+    from .app import (
+        DEVICE_ID_RE, _database_path, _hash_secret, _validate_policy,
+        database, init_database, strict_json_loads,
+    )
+except ImportError:  # pragma: no cover - direct execution from server directory
+    from app import (
+        DEVICE_ID_RE, _database_path, _hash_secret, _validate_policy,
+        database, init_database, strict_json_loads,
+    )
 
 
 def create_enrollment(args: argparse.Namespace) -> int:
