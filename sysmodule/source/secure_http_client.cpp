@@ -15,12 +15,13 @@ namespace {
 
     constexpr std::size_t EnvelopeBodyCapacity = 96 * 1024;
     constexpr std::size_t HttpRequestCapacity = 100 * 1024;
-    constexpr std::size_t HttpResponseCapacity = 104 * 1024;
+    constexpr std::size_t HttpResponseCapacity = 108 * 1024;
 
     /* Large network buffers live in BSS, never on the 16 KiB worker stack. */
     char g_envelope[EnvelopeBodyCapacity];
     char g_request[HttpRequestCapacity];
     char g_response[HttpResponseCapacity];
+    char g_cipher_b64[EnvelopeBodyCapacity];
     u8 g_ciphertext[crypto::MaxPlaintextSize + crypto::GcmTagSize];
     u8 g_plaintext[crypto::MaxPlaintextSize];
     bool g_crypto_checked = false;
@@ -312,7 +313,7 @@ Error Post(const char *host, u16 port,
 
     std::size_t nonce_b64_size = 0, cipher_b64_size = 0;
     char nonce_b64[32];
-    char cipher_b64[EnvelopeBodyCapacity];
+    char *cipher_b64 = g_cipher_b64;
     if (!Base64UrlEncode(nonce, sizeof(nonce), nonce_b64, sizeof(nonce_b64), &nonce_b64_size) ||
         !Base64UrlEncode(g_ciphertext, encrypted_size, cipher_b64, sizeof(cipher_b64), &cipher_b64_size)) {
         std::memset(key, 0, sizeof(key));
