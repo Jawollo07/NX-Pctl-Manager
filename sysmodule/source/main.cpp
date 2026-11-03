@@ -10,6 +10,7 @@
 #include "../../protocol/runtime_status.hpp"
 #include "../../protocol/worker_supervision.hpp"
 #include "../../protocol/policy.hpp"
+#include "http_transport.hpp"
 
 #define AMS_NXPCTL_I_RUNTIME_INTERFACE_INFO(C, H) \
     AMS_SF_METHOD_INFO(C, H, 65000, Result, GetRuntimeStatus, \
@@ -209,6 +210,7 @@ namespace ams {
             /* Stop supervision first so an intentional shutdown is not restarted. */
             StopSupervisorThread();
             StopWorkerThread();
+            ::nxpctl::net::Finalize();
             os::FinalizeEvent(std::addressof(g_supervisor_stop_event));
             os::FinalizeEvent(std::addressof(g_worker_stop_event));
         }
