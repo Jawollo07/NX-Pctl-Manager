@@ -47,6 +47,7 @@ struct alignas(8) RuntimeStatus {
 static_assert(offsetof(RuntimeStatus, protocol_version) == 0);
 static_assert(offsetof(RuntimeStatus, worker_state) == 4);
 static_assert(offsetof(RuntimeStatus, worker_heartbeat) == 8);
+static_assert(offsetof(RuntimeStatus, reserved) == 12);
 static_assert(offsetof(RuntimeStatus, policy_revision) == 16);
 static_assert(sizeof(RuntimeStatus) == 24);
 
