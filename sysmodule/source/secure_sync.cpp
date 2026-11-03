@@ -35,6 +35,14 @@ namespace {
         while (size--) *p++ = 0;
     }
 
+    class ResponseWiper {
+    public:
+        ~ResponseWiper() { Wipe(g_response, sizeof(g_response)); }
+        ResponseWiper() = default;
+        ResponseWiper(const ResponseWiper&) = delete;
+        ResponseWiper& operator=(const ResponseWiper&) = delete;
+    };
+
     bool ExtractString(const char* json, std::size_t length, const char* key,
                        char* output, std::size_t capacity) {
         char pattern[80];
@@ -92,6 +100,7 @@ namespace {
     }
 
     bool Enroll() {
+        ResponseWiper response_wiper;
         char payload[256];
         const int n = std::snprintf(payload, sizeof(payload),
             "{\"enrollment_code\":\"%s\"}", g_config.enrollment_code);
@@ -114,6 +123,7 @@ namespace {
     }
 
     bool Authenticate() {
+        ResponseWiper response_wiper;
         if (!g_enrolled || g_device_credential[0] == '\0') return false;
         char payload[256];
         const int n = std::snprintf(payload, sizeof(payload),
@@ -134,6 +144,7 @@ namespace {
     }
 
     bool SendHeartbeat(u64 uptime_seconds, u64 policy_revision) {
+        ResponseWiper response_wiper;
         if (!g_access_token[0]) return false;
         char payload[512];
         const int n = std::snprintf(payload, sizeof(payload),
@@ -151,6 +162,7 @@ namespace {
     }
 
     bool FetchPolicy(policy::PolicyStore& store) {
+        ResponseWiper response_wiper;
         if (!g_access_token[0]) return false;
         char payload[384];
         const int n = std::snprintf(payload, sizeof(payload),
@@ -177,6 +189,7 @@ namespace {
     }
 
     void AcknowledgePolicy(u64 revision) {
+        ResponseWiper response_wiper;
         if (!g_access_token[0] || revision == 0) return;
         char payload[512];
         const int n = std::snprintf(payload, sizeof(payload),
