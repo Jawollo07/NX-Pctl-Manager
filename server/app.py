@@ -65,6 +65,13 @@ def _check_json_depth(value: Any, depth: int = 0) -> None:
             _check_json_depth(child, depth + 1)
 
 
+def _parse_integer(text: str) -> int:
+    digits = text[1:] if text.startswith("-") else text
+    if len(digits) > 20:
+        raise InvalidJSON("integer literal is too large")
+    return int(text)
+
+
 def strict_json_loads(raw: bytes) -> Any:
     if len(raw) > MAX_REQUEST_BYTES:
         raise InvalidJSON("request body too large")
@@ -73,6 +80,7 @@ def strict_json_loads(raw: bytes) -> Any:
         value = json.loads(
             text,
             object_pairs_hook=_unique_object,
+            parse_int=_parse_integer,
             parse_float=lambda _: (_ for _ in ()).throw(InvalidJSON("floats are not accepted")),
             parse_constant=lambda _: (_ for _ in ()).throw(InvalidJSON("non-finite numbers are not accepted")),
         )
@@ -117,8 +125,10 @@ def _validate_policy(policy: Any, expected_device_id: str | None = None) -> dict
         raise HTTPException(422, "invalid policy device_id")
     if expected_device_id is not None and device_id != expected_device_id:
         raise HTTPException(403, "policy device_id mismatch")
-    if obj["revision"] < 1:
-        raise HTTPException(422, "revision must be positive")
+    if not 1 <= obj["revision"] <= 0xFFFFFFFFFFFFFFFF:
+        raise HTTPException(422, "revision must be a positive unsigned 64-bit integer")
+    if any(not 0 <= obj[name] <= 0xFFFFFFFFFFFFFFFF for name in ("issued_at", "not_after", "server_time")):
+        raise HTTPException(422, "policy timestamps must be unsigned 64-bit integers")
     now = int(time.time())
     if obj["issued_at"] < 0 or obj["not_after"] <= obj["issued_at"]:
         raise HTTPException(422, "invalid policy validity interval")
@@ -408,7 +418,7 @@ async def events_batch(device_id: str, request: Request):
             event_type, payload = event["type"], event["payload"]
             if not isinstance(event_id, str) or not 1 <= len(event_id) <= 64:
                 db.rollback(); raise HTTPException(422, "invalid event_id")
-            if not _is_int(sequence) or sequence < 0 or not _is_int(timestamp) or timestamp < 0:
+            if not _is_int(sequence) or not 0 <= sequence <= 0xFFFFFFFFFFFFFFFF or not _is_int(timestamp) or not 0 <= timestamp <= 0xFFFFFFFFFFFFFFFF:
                 db.rollback(); raise HTTPException(422, "invalid event sequence/timestamp")
             if not isinstance(event_type, str) or not 1 <= len(event_type) <= 64 or not re.fullmatch(r"[a-zA-Z0-9._-]+", event_type):
                 db.rollback(); raise HTTPException(422, "invalid event type")
