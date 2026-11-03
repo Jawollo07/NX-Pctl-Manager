@@ -2,8 +2,8 @@
 
 This is a proposed contract for the headless NX-Pctl-Manager sysmodule. It is
 not implemented by a server yet. The REST contract below is aligned with the
-strict policy JSON profile in \`docs/policy-schema-v1.md\` and the decoder in
-\`protocol/policy_json.hpp\`.
+strict policy JSON profile in `docs/policy-schema-v1.md` and the decoder in
+`protocol/policy_json.hpp`.
 
 ## Transport and authentication
 
@@ -11,9 +11,9 @@ strict policy JSON profile in \`docs/policy-schema-v1.md\` and the decoder in
   the platform trust store. No plaintext or accept-all-certificate mode.
 - The device authenticates with a unique, provisioned per-device credential.
   Never embed a shared API key in the repository or firmware image.
-- \`POST /v1/devices/auth\` exchanges the provisioned credential for a short-lived
+- `POST /v1/devices/auth` exchanges the provisioned credential for a short-lived
   bearer token. Authenticated REST requests use
-  \`Authorization: Bearer <access_token>\`.
+  `Authorization: Bearer <access_token>`.
 - Access tokens are held in RAM only and discarded on module shutdown. Device
   credentials are separate from policy data; their persistent storage and
   recovery mechanism must be threat-modelled and validated for the selected
@@ -24,34 +24,34 @@ strict policy JSON profile in \`docs/policy-schema-v1.md\` and the decoder in
 
 ## REST endpoints (proposed)
 
-- \`POST /v1/devices/enroll\` — consume a one-time enrollment code and provision
+- `POST /v1/devices/enroll` — consume a one-time enrollment code and provision
   a unique device credential.
-- \`POST /v1/devices/auth\` — authenticate the device credential and return a
+- `POST /v1/devices/auth` — authenticate the device credential and return a
   short-lived access token, device ID, server time and supported capabilities.
-- \`GET /v1/devices/{device_id}/policy\` — return one complete policy document.
-- \`POST /v1/devices/{device_id}/heartbeat\` — report module/firmware versions,
+- `GET /v1/devices/{device_id}/policy` — return one complete policy document.
+- `POST /v1/devices/{device_id}/heartbeat` — report module/firmware versions,
   uptime, current revision and health counters.
-- \`POST /v1/devices/{device_id}/events:batch\` — accept bounded events with
+- `POST /v1/devices/{device_id}/events:batch` — accept bounded events with
   unique IDs and per-device sequence numbers; deduplicate retries.
-- \`POST /v1/devices/{device_id}/policy-ack\` — acknowledge accepted revision
+- `POST /v1/devices/{device_id}/policy-ack` — acknowledge accepted revision
   and application status.
 
 The authenticated device ID in the path, bearer-token subject and policy's
-\`device_id\` must all match. A mismatch is an authentication/authorization
+`device_id` must all match. A mismatch is an authentication/authorization
 failure, not a policy warning.
 
 ## Policy response body
 
 The policy endpoint returns the **raw policy object**, not a wrapper object.
 It must contain exactly the 17 required fields documented in
-\`docs/policy-schema-v1.md\`. All timestamp values are Unix seconds (integers),
+`docs/policy-schema-v1.md`. All timestamp values are Unix seconds (integers),
 not ISO-8601 strings. The client rejects unknown or duplicate fields, escaped
 or non-ASCII strings, fractional/exponent numbers, missing fields and
 oversized documents.
 
 Illustrative body (IDs and timestamps are examples):
 
-\`\`\`json
+```json
 {
   "protocol_version": 1,
   "schema_version": 1,
@@ -69,18 +69,22 @@ Illustrative body (IDs and timestamps are examples):
   "quiet_hours_enabled": true,
   "quiet_hours_start_minute": 1260,
   "quiet_hours_end_minute": 420,
+  "title_rule_mode": 0,
   "title_rules": [
     {"title_id": 72057594037932032, "action": 1},
     {"title_id": 72057594037936128, "action": 0}
   ]
 }
-\`\`\`
+```
 
-\`offline_behavior\`: 0 = keep the last verified in-memory policy while the
+`title_rule_mode`: 0 = allow all titles except explicit blocks; 1 = allow only
+explicit allow rules (explicit blocks always win).
+
+`offline_behavior`: 0 = keep the last verified in-memory policy while the
 module remains alive, 1 = block new titles while offline, 2 = block all titles.
-\`weekday_limit_minutes\` is Monday through Sunday. The value 65535 means
+`weekday_limit_minutes` is Monday through Sunday. The value 65535 means
 inherit the global limit for a weekday; for the global limit it means no
-daily limit. \`timezone_offset_minutes\` is a fixed UTC offset in v1; IANA
+daily limit. `timezone_offset_minutes` is a fixed UTC offset in v1; IANA
 timezone/DST rules are deferred. Quiet-hours start later than end means the
 interval crosses midnight. Title-rule action 0 means allow and 1 means block.
 
@@ -93,7 +97,7 @@ alone does not authenticate the sender.
 ## WebSocket (deferred)
 
 WSS may be added after HTTPS authentication and policy reconciliation are
-working. A future \`policy.updated\` event must carry a complete schema-v1
+working. A future `policy.updated` event must carry a complete schema-v1
 policy body or a separately versioned delta with an explicit base revision.
 The first implementation should use full snapshots only. Every update must
 pass the same authentication, body-size, decoder and policy-validation path

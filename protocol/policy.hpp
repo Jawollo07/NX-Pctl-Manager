@@ -22,6 +22,11 @@ enum class OfflineBehavior : std::uint8_t {
     BlockAllTitles = 2,
 };
 
+enum class TitleRuleMode : std::uint8_t {
+    AllowAll = 0,
+    AllowListedOnly = 1,
+};
+
 enum class TitleRuleAction : std::uint8_t {
     Allow = 0,
     Block = 1,
@@ -58,6 +63,7 @@ struct Policy {
     std::uint16_t quiet_hours_start_minute = 0;
     std::uint16_t quiet_hours_end_minute = 0;
 
+    TitleRuleMode title_rule_mode = TitleRuleMode::AllowAll;
     std::uint16_t title_rule_count = 0;
     TitleRule title_rules[MaxTitleRules]{};
 };
@@ -176,6 +182,10 @@ struct ValidationContext {
         return ValidationError::InvalidQuietHours;
     }
 
+    if (candidate.title_rule_mode != TitleRuleMode::AllowAll
+        && candidate.title_rule_mode != TitleRuleMode::AllowListedOnly) {
+        return ValidationError::InvalidTitleRule;
+    }
     if (candidate.title_rule_count > MaxTitleRules) {
         return ValidationError::TooManyTitleRules;
     }

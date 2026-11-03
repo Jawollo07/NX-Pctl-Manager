@@ -89,6 +89,10 @@ int main() {
     assert(Validate(invalid, Context()) == ValidationError::InvalidTitleRule);
 
     invalid = candidate;
+    invalid.title_rule_mode = static_cast<TitleRuleMode>(2);
+    assert(Validate(invalid, Context()) == ValidationError::InvalidTitleRule);
+
+    invalid = candidate;
     invalid.title_rule_count = MaxTitleRules + 1;
     assert(Validate(invalid, Context()) == ValidationError::TooManyTitleRules);
 

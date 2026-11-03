@@ -1,0 +1,103 @@
+// Pure, deterministic policy decision logic. No Horizon APIs or side effects.
+#pragma once
+
+#include "policy.hpp"
+
+#include <cstdint>
+
+namespace nxpctl::policy {
+
+enum class DecisionReason : std::uint8_t {
+    Allowed = 0,
+    PolicyDisabled,
+    ParentAuthenticationRequired,
+    OfflineBlockAll,
+    OfflineBlockNewTitle,
+    TitleBlocked,
+    QuietHours,
+    DailyLimitReached,
+    InvalidContext,
+};
+
+struct EvaluationContext {
+    std::uint64_t title_id = 0;
+    // Monday = 0 ... Sunday = 6, matching weekday_limit_minutes.
+    std::uint8_t weekday = 0;
+    std::uint16_t minute_of_day = 0;
+    std::uint16_t daily_usage_minutes = 0;
+    bool offline = false;
+    bool title_already_running = false;
+    bool parent_authenticated = false;
+};
+
+struct Decision {
+    bool allowed = false;
+    DecisionReason reason = DecisionReason::InvalidContext;
+};
+
+[[nodiscard]] inline bool IsWithinQuietHours(
+    const Policy& policy, std::uint16_t minute_of_day) noexcept {
+    if (!policy.quiet_hours_enabled) return false;
+    const auto start = policy.quiet_hours_start_minute;
+    const auto end = policy.quiet_hours_end_minute;
+    if (start < end) return minute_of_day >= start && minute_of_day < end;
+    return minute_of_day >= start || minute_of_day < end;
+}
+
+[[nodiscard]] inline std::uint16_t EffectiveDailyLimit(
+    const Policy& policy, std::uint8_t weekday) noexcept {
+    if (weekday >= 7) return 0;
+    const auto override_limit = policy.weekday_limit_minutes[weekday];
+    return override_limit == NoDailyLimit
+        ? policy.global_daily_limit_minutes
+        : override_limit;
+}
+
+[[nodiscard]] inline Decision Evaluate(
+    const Policy& policy, const EvaluationContext& context) noexcept {
+    if (context.weekday >= 7 || context.minute_of_day >= 1440 || context.title_id == 0) {
+        return {false, DecisionReason::InvalidContext};
+    }
+
+    if (!policy.enabled) return {true, DecisionReason::PolicyDisabled};
+
+    if (policy.require_parent_authentication && !context.parent_authenticated) {
+        return {false, DecisionReason::ParentAuthenticationRequired};
+    }
+
+    if (context.offline) {
+        if (policy.offline_behavior == OfflineBehavior::BlockAllTitles) {
+            return {false, DecisionReason::OfflineBlockAll};
+        }
+        if (policy.offline_behavior == OfflineBehavior::BlockNewTitles
+            && !context.title_already_running) {
+            return {false, DecisionReason::OfflineBlockNewTitle};
+        }
+    }
+
+    // An explicit block always wins. An explicit allow does not override
+    // global quiet hours, daily budgets, parent auth or offline restrictions.
+    bool explicitly_allowed = false;
+    for (std::size_t i = 0; i < policy.title_rule_count && i < MaxTitleRules; ++i) {
+        const auto& rule = policy.title_rules[i];
+        if (rule.title_id != context.title_id) continue;
+        if (rule.action == TitleRuleAction::Block) {
+            return {false, DecisionReason::TitleBlocked};
+        }
+        if (rule.action == TitleRuleAction::Allow) explicitly_allowed = true;
+    }
+
+    if (IsWithinQuietHours(policy, context.minute_of_day)) {
+        return {false, DecisionReason::QuietHours};
+    }
+
+    const auto daily_limit = EffectiveDailyLimit(policy, context.weekday);
+    if (daily_limit != NoDailyLimit && context.daily_usage_minutes >= daily_limit) {
+        return {false, DecisionReason::DailyLimitReached};
+    }
+
+    (void)explicitly_allowed; // Default title behavior is allow; the flag documents rule precedence.
+    return {true, DecisionReason::Allowed};
+}
+
+} // namespace nxpctl::policy

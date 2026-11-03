@@ -8,7 +8,7 @@
 namespace {
 using namespace nxpctl::policy;
 constexpr const char* ValidJson =
-    R"({"protocol_version":1,"schema_version":1,"device_id":"switch-device-01","revision":4,"issued_at":1000,"not_after":605800,"server_time":1000,"enabled":true,"require_parent_authentication":false,"offline_behavior":0,"timezone_offset_minutes":60,"global_daily_limit_minutes":120,"weekday_limit_minutes":[60,60,60,60,90,120,120],"quiet_hours_enabled":true,"quiet_hours_start_minute":1320,"quiet_hours_end_minute":360,"title_rules":[{"title_id":72057594037932032,"action":0},{"title_id":72057594037936128,"action":1}]})";
+    R"({"protocol_version":1,"schema_version":1,"device_id":"switch-device-01","revision":4,"issued_at":1000,"not_after":605800,"server_time":1000,"enabled":true,"require_parent_authentication":false,"offline_behavior":0,"timezone_offset_minutes":60,"global_daily_limit_minutes":120,"weekday_limit_minutes":[60,60,60,60,90,120,120],"quiet_hours_enabled":true,"quiet_hours_start_minute":1320,"quiet_hours_end_minute":360,"title_rule_mode":0,"title_rules":[{"title_id":72057594037932032,"action":0},{"title_id":72057594037936128,"action":1}]})";
 
 ValidationContext Context() { return {"switch-device-01", 1000, 3}; }
 }
@@ -22,6 +22,7 @@ int main() {
     assert(decoded.revision == 4);
     assert(decoded.timezone_offset_minutes == 60);
     assert(decoded.weekday_limit_minutes[4] == 90);
+    assert(decoded.title_rule_mode == TitleRuleMode::AllowAll);
     assert(decoded.title_rule_count == 2);
     assert(decoded.title_rules[1].action == TitleRuleAction::Block);
 
@@ -52,6 +53,12 @@ int main() {
     const auto weekdays = wrong_array.find("[60,60,60,60,90,120,120]");
     wrong_array.replace(weekdays, std::strlen("[60,60,60,60,90,120,120]"), "[60,60]");
     expect(wrong_array, Error::ArraySize);
+
+    auto invalid_mode = std::string(ValidJson);
+    const auto mode = invalid_mode.find(R"("title_rule_mode":0)");
+    assert(mode != std::string::npos);
+    invalid_mode.replace(mode, std::strlen(R"("title_rule_mode":0)"), R"("title_rule_mode":2)");
+    expect(invalid_mode, Error::WrongType);
 
     auto invalid_action = std::string(ValidJson);
     const auto action = invalid_action.find(R"("action":1)");

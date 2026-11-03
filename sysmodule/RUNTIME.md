@@ -50,3 +50,18 @@ The host test covers validation failures, device/revision binding, full-snapshot
 The accepted schema uses printable ASCII strings without escapes, integer-only numeric fields, numeric enum values, exactly seven weekday limits, and title-rule objects containing exactly `title_id` and `action`. This deliberately strict subset must match the server serializer. JSON decoding is followed by the existing policy validator through `DecodeAndValidate`; only a fully decoded and structurally valid candidate is returned.
 
 CI now exercises valid decoding plus malformed/oversized input, unknown/duplicate keys, escapes, fractional values, incorrect arrays and invalid enum values. The decoder does not authenticate its input, verify signatures, or publish to the active store. The worker must not call `PolicyStore::TryReplace` until authenticated transport and message integrity are implemented.
+
+
+## Deterministic policy evaluation (not enforcement)
+
+`protocol/policy_evaluator.hpp` now evaluates a supplied immutable policy and
+context without Horizon calls or side effects. It covers parent-authentication
+gating, offline behavior, explicit title blocks, allow-all versus allow-list-only
+title modes, fixed-offset weekday budgets and quiet hours including intervals
+that cross midnight. Explicit title allows do not override global quiet hours,
+daily budgets, parent authentication or offline restrictions.
+
+The evaluator is host-tested. It is not yet called by the sysmodule worker and
+does not observe title launches, track playtime, mutate PCTL state, or block
+anything on a console. Monotonic accounting and a verified system integration
+point remain separate work.

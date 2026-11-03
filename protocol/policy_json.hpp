@@ -254,7 +254,7 @@ inline Error Decode(const char* input, std::size_t length, Policy* out) noexcept
     if(parser.Get(root).type!=Token::Type::Object)return Error::WrongType;
 
     Policy candidate{};
-    bool seen[17]{};
+    bool seen[18]{};
     auto child=parser.Get(root).first_child;
     const auto child_count=parser.Get(root).child_count;
     if((child_count%2)!=0)return Error::InvalidSyntax;
@@ -265,8 +265,8 @@ inline Error Decode(const char* input, std::size_t length, Policy* out) noexcept
         if(value==0xFFFF)return Error::InvalidSyntax;
         child=parser.Get(value).next_sibling;
         int field=-1;
-        const char* names[]={"protocol_version","schema_version","device_id","revision","issued_at","not_after","server_time","enabled","require_parent_authentication","offline_behavior","timezone_offset_minutes","global_daily_limit_minutes","weekday_limit_minutes","quiet_hours_enabled","quiet_hours_start_minute","quiet_hours_end_minute","title_rules"};
-        for(int i=0;i<17;++i) if(StringEquals(parser,key,names[i])) {field=i;break;}
+        const char* names[]={"protocol_version","schema_version","device_id","revision","issued_at","not_after","server_time","enabled","require_parent_authentication","offline_behavior","timezone_offset_minutes","global_daily_limit_minutes","weekday_limit_minutes","quiet_hours_enabled","quiet_hours_start_minute","quiet_hours_end_minute","title_rule_mode","title_rules"};
+        for(int i=0;i<18;++i) if(StringEquals(parser,key,names[i])) {field=i;break;}
         if(field<0)return Error::UnknownField;
         if(seen[field])return Error::DuplicateField;
         seen[field]=true;
@@ -299,7 +299,8 @@ inline Error Decode(const char* input, std::size_t length, Policy* out) noexcept
             case 13: if(!ReadBool(parser,value,&candidate.quiet_hours_enabled))return Error::WrongType; break;
             case 14: if(!ReadUnsigned(parser,value,&u)||u>UINT16_MAX)return Error::NumberOutOfRange; candidate.quiet_hours_start_minute=static_cast<std::uint16_t>(u); break;
             case 15: if(!ReadUnsigned(parser,value,&u)||u>UINT16_MAX)return Error::NumberOutOfRange; candidate.quiet_hours_end_minute=static_cast<std::uint16_t>(u); break;
-            case 16: {
+            case 16: if(!ReadUnsigned(parser,value,&u)||u>1)return Error::WrongType; candidate.title_rule_mode=static_cast<TitleRuleMode>(u); break;
+            case 17: {
                 if(parser.Get(value).type!=Token::Type::Array||parser.Get(value).child_count>MaxTitleRules)return Error::ArraySize;
                 auto item=parser.Get(value).first_child;
                 while(item!=0xFFFF) {

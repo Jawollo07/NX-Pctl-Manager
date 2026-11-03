@@ -182,7 +182,8 @@ Prefer documented Atmosphere/Stratosphere interfaces and narrowly scoped version
 - [x] Add bounded fixed-buffer JSON decoding; reject unknown/duplicate fields, malformed values and oversized documents.
 - [ ] Add authenticated transport and policy integrity verification before publication.
 - [ ] Connect worker/network lifecycle to policy publication, offline retention and restricted bootstrap.
-- [ ] Add evaluator tests for schedules, title rules and playtime accounting.
+- [x] Add pure evaluator tests for weekday budgets, quiet hours, title allow/block modes, parent authentication and offline decisions.
+- [ ] Add monotonic playtime accounting and cross-midnight/day-boundary tests.
 - Acceptance remains pending: malformed/stale policy rejected; network loss retains last policy; reconnect catches up; restart offline enters restricted bootstrap.
 
 ### Phase 5 — PCTL adapter
