@@ -4,7 +4,8 @@
  * Project-authored code, licensed under GPL-2.0-or-later.
  * This phase provides a resident worker, local HIPC provisioning/status service,
  * and encrypted HTTP policy synchronization. It does not yet enforce policies,
- * inspect running titles, mutate PCTL state, or access persistent storage.
+ * inspect running titles, or mutate PCTL state. Device credentials are persisted
+ * separately by the secure sync subsystem.
  */
 #include <stratosphere.hpp>
 #include <cstring>
