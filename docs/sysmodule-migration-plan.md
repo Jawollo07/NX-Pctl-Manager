@@ -1,6 +1,6 @@
 # Headless Atmosphere Sysmodule Migration Plan
 
-Status: Phase 0 reference pinned; Phase 1 bootstrap scaffold committed. Build and hardware validation are still pending.
+Status: Phase 0 reference pinned; Phase 1 build target committed; Phase 2 runtime and read-only IPC scaffold added. The latest CI build is pending, and no hardware validation has been performed.
 
 ## 1. Accepted decisions
 
@@ -155,9 +155,12 @@ Prefer documented Atmosphere/Stratosphere interfaces and narrowly scoped version
 - Important: the current title ID is a placeholder; the package is not approved for installation.
 
 ### Phase 2 — lifecycle and local IPC
-- Add versioned local IPC for health, status and policy revision.
-- Add suspend/resume, watchdog, bounded workers and clean shutdown.
-- Acceptance: IPC health queries work; repeated start/stop and sleep/wake do not leak handles or threads.
+- [x] Add a versioned, read-only local HIPC endpoint for protocol version, worker state, heartbeat and policy revision.
+- [x] Add a bounded worker thread, dedicated stack, atomic health counters and cooperative stop event.
+- [ ] Add PSC-based suspend/resume handling after the module identity/dependency registration is validated.
+- [ ] Add worker failure supervision and bounded restart/backoff.
+- [ ] Add a companion-client IPC test and verify service access on the declared firmware.
+- Acceptance remains pending: IPC health queries must work; repeated start/stop and sleep/wake must not leak handles or threads.
 
 ### Phase 3 — network and server protocol
 - Add TLS REST, per-device credential provisioning, WSS, reconnect/backoff, heartbeat and bounded RAM event queue.
