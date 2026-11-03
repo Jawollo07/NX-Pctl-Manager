@@ -17,7 +17,6 @@ namespace nxpctl::net {
 namespace {
 
     constexpr std::size_t SocketPoolSize = 512 * 1024;
-    constexpr int BsdNonBlockFlag = 0x800; // libnx maps O_NONBLOCK to this BSD flag.
     alignas(0x1000) u8 g_socket_memory[SocketPoolSize];
     bool g_initialized = false;
 
@@ -64,7 +63,7 @@ namespace {
         if (fd < 0) return Error::ConnectFailed;
 
         const int old_flags = ::bsdFcntl(fd, F_GETFL, 0);
-        if (old_flags < 0 || ::bsdFcntl(fd, F_SETFL, old_flags | BsdNonBlockFlag) < 0) {
+        if (old_flags < 0 || ::bsdFcntl(fd, F_SETFL, old_flags | O_NONBLOCK) < 0) {
             ams::socket::Close(fd);
             return Error::ConnectFailed;
         }
