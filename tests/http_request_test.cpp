@@ -14,6 +14,7 @@ int main() {
         constexpr char body[] = "{\"device_id\":\"switch-a\",\"enrollment_code\":\"abc\"}";
         assert(BuildRequest("POST", "api.example.net", "/v1/devices/enroll",
             nullptr, body, sizeof(body)-1, buffer, sizeof(buffer), &request) == RequestError::None);
+        assert(request.data[request.length] == '\0');
         assert(std::strstr(request.data, "POST /v1/devices/enroll HTTP/1.1\r\n") == request.data);
         assert(std::strstr(request.data, "Host: api.example.net\r\n") != nullptr);
         assert(std::strstr(request.data, "Content-Type: application/json\r\n") != nullptr);
