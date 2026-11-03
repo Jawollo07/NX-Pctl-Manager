@@ -51,3 +51,34 @@ The accepted schema uses printable ASCII strings without escapes, integer-only n
 `protocol/policy_evaluator.hpp` evaluates a supplied immutable policy and context without Horizon calls or side effects. It covers parent-authentication gating, offline behavior, explicit title blocks, allow-all versus allow-list-only title modes, fixed-offset weekday budgets and quiet hours including intervals that cross midnight. Explicit title allows do not override global quiet hours, daily budgets, parent authentication or offline restrictions.
 
 The evaluator is host-tested. It is not yet called by the sysmodule worker and does not observe title launches, track playtime, mutate PCTL state, or block anything on a console. Monotonic accounting and a verified system integration point remain separate work.
+
+
+## HTTP request construction (framing only)
+
+`protocol/http_request.hpp` builds bounded HTTP/1.1 GET/POST requests into a
+caller-owned buffer. It validates the method, DNS host, request path and bearer
+token against header/path injection, emits a single `Host`, `Content-Length`,
+`Connection: close` and `Accept-Encoding: identity`, and caps request bodies
+at 16 KiB. The builder performs no allocation and does not own the output
+buffer.
+
+The request builder and response parser are tested independently on the host.
+They are not a transport implementation: there is no DNS lookup, socket,
+TLS handshake, certificate validation, redirect handling, retry policy or
+credential provisioning yet.
+
+## Cloudflare deployment requirement
+
+The intended public deployment is Switch → HTTPS on Cloudflare-proxied
+hostname (port 443) → Cloudflare → HTTPS origin in Full (strict) mode →
+reverse proxy → loopback-only backend HTTP listener. The device must validate
+the Cloudflare edge's public certificate chain and requested hostname. A
+Cloudflare Origin CA certificate is for the Cloudflare-to-origin connection;
+it is not a trust anchor for the Switch's edge connection. API paths must
+bypass caching and interactive Cloudflare Access/challenge pages.
+
+Plain HTTP remains useful only for isolated development. It is not a
+production fallback when the hostname is proxied. Cloudflare terminates TLS,
+so TLS alone does not provide cryptographic integrity against Cloudflare
+itself; signed policy snapshots with a pinned public verification key remain
+a future hardening step.
