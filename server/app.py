@@ -387,7 +387,13 @@ def get_policy(device_id: str, request: Request):
         row = db.execute("SELECT body_json FROM policies WHERE device_id = ?", (device_id,)).fetchone()
     if row is None:
         raise HTTPException(404, "no policy configured for this device")
-    return JSONResponse(content=json.loads(row["body_json"]), headers={"Cache-Control": "no-store"})
+    policy = json.loads(row["body_json"])
+    now = int(time.time())
+    if policy["not_after"] <= now:
+        raise HTTPException(410, "configured policy has expired")
+    # server_time is a response-time clock sample, not a publish-time field.
+    policy["server_time"] = now
+    return JSONResponse(content=policy, headers={"Cache-Control": "no-store"})
 
 
 @app.post("/v1/devices/{device_id}/heartbeat")
