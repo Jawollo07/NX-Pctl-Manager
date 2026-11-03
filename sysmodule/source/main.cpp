@@ -2,11 +2,18 @@
  * NX-Pctl-Manager — headless Stratosphere sysmodule runtime.
  *
  * Project-authored code, licensed under GPL-2.0-or-later.
- * This phase establishes a resident worker and an explicit stop signal.
- * It does not yet enforce policies, inspect titles, mutate PCTL state,
+ * This phase provides a resident worker and a read-only local HIPC status
+ * service. It does not enforce policies, inspect titles, mutate PCTL state,
  * access persistent storage, or communicate over the network.
  */
 #include <stratosphere.hpp>
+
+#define AMS_NXPCTL_I_RUNTIME_INTERFACE_INFO(C, H) \
+    AMS_SF_METHOD_INFO(C, H, 65000, Result, GetRuntimeStatus, \
+        (sf::Out<u32> out_protocol_version, sf::Out<u32> out_worker_state, sf::Out<u32> out_worker_heartbeat, sf::Out<u64> out_policy_revision), \
+        (out_protocol_version, out_worker_state, out_worker_heartbeat, out_policy_revision))
+
+AMS_SF_DEFINE_INTERFACE(ams::nxpctl::impl, IRuntime, AMS_NXPCTL_I_RUNTIME_INTERFACE_INFO, 0x00000000)
 
 namespace ams {
 
@@ -15,6 +22,8 @@ namespace ams {
         constexpr s32 WorkerThreadPriority = 50;
         constexpr size_t WorkerStackSize = 0x4000;
         constexpr s64 WorkerPollIntervalNs = 1'000'000'000LL;
+        constexpr u32 RuntimeProtocolVersion = 1;
+        constexpr u64 InitialPolicyRevision = 0;
 
         enum WorkerState : u32 {
             WorkerState_Stopped = 0,
@@ -35,8 +44,8 @@ namespace ams {
 
             /*
              * The timed wait is both the worker's idle cadence and its
-             * cooperative shutdown point. Future policy/network work must
-             * remain bounded and return to this wait regularly.
+             * cooperative shutdown point. Future work must remain bounded
+             * and return to this wait regularly.
              */
             while (!os::TimedWaitEvent(
                 std::addressof(g_worker_stop_event),
@@ -84,6 +93,39 @@ namespace ams {
 
     }
 
+    namespace nxpctl {
+
+        class RuntimeService {
+            public:
+                Result GetRuntimeStatus(
+                    sf::Out<u32> out_protocol_version,
+                    sf::Out<u32> out_worker_state,
+                    sf::Out<u32> out_worker_heartbeat,
+                    sf::Out<u64> out_policy_revision) {
+                    *out_protocol_version = RuntimeProtocolVersion;
+                    *out_worker_state = g_worker_state;
+                    *out_worker_heartbeat = g_worker_heartbeat;
+                    *out_policy_revision = InitialPolicyRevision;
+                    R_SUCCEED();
+                }
+        };
+
+        static_assert(impl::IsIRuntime<RuntimeService>);
+
+    }
+
+    namespace {
+
+        using RuntimeServerOptions = sf::hipc::DefaultServerManagerOptions;
+
+        constexpr sm::ServiceName RuntimeServiceName = sm::ServiceName::Encode("nxpctl");
+        constexpr size_t RuntimeMaxSessions = 4;
+
+        sf::hipc::ServerManager<1, RuntimeServerOptions, RuntimeMaxSessions> g_runtime_server_manager;
+        constinit sf::UnmanagedServiceObject<nxpctl::impl::IRuntime, nxpctl::RuntimeService> g_runtime_service;
+
+    }
+
     namespace init {
 
         void InitializeSystemModule() {
@@ -119,13 +161,16 @@ namespace ams {
         StartWorkerThread();
 
         /*
-         * The main thread remains resident. The worker is deliberately
-         * isolated so future IPC handling can be added here without blocking
-         * policy/network maintenance.
+         * This HIPC endpoint is deliberately read-only. It exposes only
+         * runtime diagnostics; policy mutation and enforcement are not
+         * available through this protocol version.
          */
-        for (;;) {
-            svcSleepThread(86'400'000'000'000LL);
-        }
+        R_ABORT_UNLESS(g_runtime_server_manager.RegisterObjectForServer(
+            g_runtime_service.GetShared(),
+            RuntimeServiceName,
+            RuntimeMaxSessions));
+
+        g_runtime_server_manager.LoopProcess();
     }
 
 }

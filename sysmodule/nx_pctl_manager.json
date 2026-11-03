@@ -15,7 +15,9 @@
   "filesystem_access": {
     "permissions": "0x0000000000000000"
   },
-  "service_host": [],
+  "service_host": [
+    "nxpctl"
+  ],
   "service_access": [],
   "kernel_capabilities": [
     {
@@ -37,6 +39,8 @@
         "svcExitThread": "0x0a",
         "svcSleepThread": "0x0b",
         "svcGetThreadPriority": "0x0c",
+        "svcGetThreadCoreMask": "0x0e",
+        "svcSetThreadCoreMask": "0x0f",
         "svcSignalEvent": "0x11",
         "svcClearEvent": "0x12",
         "svcCloseHandle": "0x16",
@@ -46,9 +50,10 @@
         "svcSendSyncRequest": "0x21",
         "svcBreak": "0x26",
         "svcGetInfo": "0x29",
-        "svcCreateEvent": "0x45",
-        "svcGetThreadCoreMask": "0x0e",
-        "svcSetThreadCoreMask": "0x0f"
+        "svcCreateSession": "0x40",
+        "svcAcceptSession": "0x41",
+        "svcReplyAndReceive": "0x43",
+        "svcCreateEvent": "0x45"
       }
     },
     {
@@ -57,7 +62,7 @@
     },
     {
       "type": "handle_table_size",
-      "value": 8
+      "value": 16
     }
   ]
 }
