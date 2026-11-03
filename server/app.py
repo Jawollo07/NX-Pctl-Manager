@@ -54,19 +54,32 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
+def _check_json_depth(value: Any, depth: int = 0) -> None:
+    if depth > 8:
+        raise InvalidJSON("JSON nesting exceeds eight levels")
+    if isinstance(value, dict):
+        for child in value.values():
+            _check_json_depth(child, depth + 1)
+    elif isinstance(value, list):
+        for child in value:
+            _check_json_depth(child, depth + 1)
+
+
 def strict_json_loads(raw: bytes) -> Any:
     if len(raw) > MAX_REQUEST_BYTES:
         raise InvalidJSON("request body too large")
     try:
         text = raw.decode("utf-8", errors="strict")
-        return json.loads(
+        value = json.loads(
             text,
             object_pairs_hook=_unique_object,
             parse_float=lambda _: (_ for _ in ()).throw(InvalidJSON("floats are not accepted")),
             parse_constant=lambda _: (_ for _ in ()).throw(InvalidJSON("non-finite numbers are not accepted")),
         )
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise InvalidJSON("invalid JSON") from exc
+        _check_json_depth(value)
+        return value
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
+        raise InvalidJSON("invalid or excessively nested JSON") from exc
 
 
 def _is_int(value: Any) -> bool:
