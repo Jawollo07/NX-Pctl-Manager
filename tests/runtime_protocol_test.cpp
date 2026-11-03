@@ -9,7 +9,7 @@ int main() {
 
     static_assert(RuntimeStatusCommandId == 65000);
     static_assert(RuntimeProtocolVersion == 1);
-    static_assert(offsetof(RuntimeStatus, reserved) == 12);
+    static_assert(offsetof(RuntimeStatus, worker_restart_count) == 12);
     static_assert(IsKnownWorkerState(static_cast<std::uint32_t>(WorkerState::Stopped)));
     static_assert(IsKnownWorkerState(static_cast<std::uint32_t>(WorkerState::Starting)));
     static_assert(IsKnownWorkerState(static_cast<std::uint32_t>(WorkerState::Running)));
@@ -23,6 +23,7 @@ int main() {
     value.protocol_version = RuntimeProtocolVersion;
     value.worker_state = static_cast<std::uint32_t>(WorkerState::Running);
     value.worker_heartbeat = 42;
+    value.worker_restart_count = 2;
     value.policy_revision = 7;
 
     assert(IsCompatibleRuntimeStatus(value));
@@ -41,7 +42,7 @@ int main() {
     assert(!IsCompatibleRuntimeStatus(invalid));
 
     invalid = value;
-    invalid.reserved = 1;
+    invalid.worker_restart_count = MaxWorkerRestarts + 1;
     assert(!IsCompatibleRuntimeStatus(invalid));
 
     std::cout << "runtime protocol ABI and validation OK; size=" << sizeof(value)
