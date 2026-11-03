@@ -41,8 +41,7 @@ Result configure_enrollment(const protocol::ProvisioningRequest* request) {
     Result rc = smGetService(&service, protocol::ServiceName);
     if (R_FAILED(rc)) return rc;
 
-    const u32 empty_input = 0;
-    rc = serviceDispatch(&service, protocol::ProvisioningCommandId, empty_input,
+    rc = serviceDispatch(&service, protocol::ProvisioningCommandId,
         .buffer_attrs = { .attr0 = SfBufferAttr_In | SfBufferAttr_HipcMapAlias },
         .buffers = {{ .ptr = request, .size = sizeof(*request) }});
     serviceClose(&service);
