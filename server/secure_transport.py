@@ -49,9 +49,11 @@ class MessageContext:
             raise SecureMessageError("invalid request path")
         if not _DIRECTION.fullmatch(self.direction):
             raise SecureMessageError("invalid message direction")
+        if type(self.sequence) is not int or not 0 <= self.sequence <= 0xFFFFFFFFFFFFFFFF:
+            raise SecureMessageError("invalid message sequence")
         return (
             "NX-PCTL-AEAD/1\n"
-            f"{self.direction}\n{self.method}\n{self.path}\n{self.device_id}"
+            f"{self.direction}\n{self.method}\n{self.path}\n{self.device_id}\n{self.sequence}"
         ).encode("ascii")
 
 
