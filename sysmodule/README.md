@@ -59,10 +59,15 @@ response authenticity before plaintext reaches the policy decoder. The
 provisioning lock is held only for bounded memory copies, never across network
 I/O, so local HIPC requests are not blocked by DNS/TCP/HTTP waits.
 
-Device credentials and tokens currently exist only in RAM. A sysmodule restart
-therefore requires a fresh enrollment; protected credential persistence and
-recovery are not implemented. There is still no PCTL mutation, title
-monitoring, filesystem permission or system-wide enforcement. Hardware
+The sysmodule stores the API host, device ID and long-lived device credential
+in its own device save data. Records are AES-128-GCM encrypted with a key
+derived through SPL from an application-owned key source and the console
+device key ladder. Two alternating records provide recovery from interrupted
+writes. The short-lived access token and one-time enrollment code remain
+RAM-only; after restart, the sysmodule restores the device credential and
+authenticates again for a fresh access token. The NPDM requests the device-save
+data and own-save-data capabilities plus `fsp-srv` and `spl:crypto`. There is
+still no PCTL mutation, title monitoring or system-wide enforcement. Hardware
 validation has not been performed.
 
 A successful host-side compile is not evidence that the module is safe to load.
