@@ -49,8 +49,11 @@ The current experimental module initializes the service-manager client,
 starts a resident worker and supervisor, and exposes the read-only `nxpctl`
 HIPC diagnostics service. It also contains a fixed-size RAM-only policy
 snapshot store and a bounded schema-v1 JSON decoder, but no code currently
-loads a policy into the store. It has no network access, no PCTL mutation, no
-filesystem permissions and no system-wide enforcement.
+loads a policy into the store. It now includes an HTTP-only Horizon BSD transport and a Switch-side
+AES-128-GCM/HKDF secure-envelope client. The worker does not invoke API
+operations yet because trusted API-host/enrollment-code provisioning and
+credential lifecycle are not implemented. There is still no PCTL mutation,
+filesystem permission or system-wide enforcement.
 
 A successful host-side compile is not evidence that the module is safe to load.
 Hardware installation/testing is intentionally not part of this phase.
@@ -71,11 +74,12 @@ policy acknowledgements. Administration is performed through
 `python -m server.cli`; there is intentionally no unauthenticated web-admin
 surface.
 
-The backend supports plain HTTP for development and isolated trusted networks.
-For traffic crossing an untrusted network, terminate TLS at a reverse proxy.
-Plain HTTP exposes credentials and policy data to network observers and is not
-an authenticated transport.
+The device API uses HTTP with application-layer AES-128-GCM encryption and
+authentication for every request/response body. IP addresses, hostname, URL
+path, headers, packet sizes and timing remain visible. The secure routes are
+required; legacy plaintext routes are disabled by default.
 
-This does **not** mean the sysmodule is network-connected yet. The Switch-side
-HTTP client, credential provisioning/storage, token refresh and worker
-integration remain pending. The backend is server-side only at this stage.
+The sysmodule now contains the TCP/HTTP transport and encrypted wire client.
+It is not activated from the worker: trusted provisioning of the API host and
+one-time enrollment code, followed by secure credential lifecycle handling,
+must be implemented before the console can enroll or synchronize.
