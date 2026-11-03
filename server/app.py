@@ -499,7 +499,14 @@ def _accept_secure_sequence(scope: str, sequence: int) -> None:
     now = int(time.time())
     with database() as db:
         db.execute("BEGIN IMMEDIATE")
-        db.execute("DELETE FROM secure_replays WHERE seen_at < ?", (now - 24 * 60 * 60,))
+        db.execute(
+            "DELETE FROM secure_replays WHERE key_scope LIKE 'session:%' AND seen_at < ?",
+            (now - TOKEN_TTL_SECONDS - 60,),
+        )
+        db.execute(
+            "DELETE FROM secure_replays WHERE key_scope LIKE 'enroll:%' AND seen_at < ?",
+            (now - ENROLLMENT_TTL_SECONDS - 60,),
+        )
         try:
             db.execute(
                 "INSERT INTO secure_replays(key_scope,sequence,seen_at) VALUES(?,?,?)",
@@ -645,7 +652,16 @@ async def secure_device_api(device_id: str, operation: str, request: Request):
             supplied = payload.get("device_credential")
             if not isinstance(supplied, str) or not hmac.compare_digest(_hash_secret(supplied), envelope["k"]):
                 raise SecureMessageError("authentication key does not match payload")
-        _accept_secure_sequence(_secure_scope(digest, purpose, device_id), sequence)
+        if operation == "auth":
+            replay_scope = f"auth:{digest.hex()}"
+        elif operation == "enroll":
+            replay_scope = f"enroll:{digest.hex()}"
+        else:
+            access_token = payload.get("access_token")
+            if not isinstance(access_token, str) or not access_token:
+                raise HTTPException(401, "invalid device session")
+            replay_scope = f"session:{_hash_secret(access_token)}"
+        _accept_secure_sequence(replay_scope, sequence)
         try:
             result = await _dispatch_secure_operation(operation, device_id, request, payload)
             status_code = 200
