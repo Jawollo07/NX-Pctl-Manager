@@ -24,17 +24,17 @@ The HIPC interface exposes read-only diagnostics plus a single enrollment bootst
 4. [x] Add bounded policy validation and in-memory policy snapshots.
 5. [x] Add bounded schema-v1 JSON decoding and host tests.
 6. [x] Add bounded HTTP response framing parser and host tests. [x] Add authenticated message integrity verification and connect only verified full snapshots to the RAM store.
-7. Implement enforcement only after the required Horizon services, permissions, firmware compatibility, and recovery behavior have been validated. The pure evaluator is ready for integration, but title monitoring, usage accounting, PCTL interaction and the hardware recovery path remain unverified.
+7. Implement enforcement only after the required Horizon services, permissions, firmware compatibility, and recovery behavior have been validated. The pure evaluator is ready for integration, but application-activity monitoring, global usage accounting, PCTL interaction and the hardware recovery path remain unverified.
 
-## Title monitoring and PCTL integration gate
+## Application activity monitoring and PCTL integration gate
 
-The pinned Atmosphere headers expose pm::dmnt::GetApplicationProcessId,
-pm::dmnt::GetProgramId and pm::dmnt::HookToCreateApplicationProcess.
+The pinned Atmosphere headers expose `pm::dmnt::GetApplicationProcessId`,
+`pm::dmnt::GetProgramId` and `pm::dmnt::HookToCreateApplicationProcess`.
 These are process/debug-monitor interfaces, not a generic unprivileged
-foreground-title API. Their service access and NPDM requirements have not
-been established for this module. Do not add pm:dmnt or process hooks to
-the manifest until the required privileges and failure/recovery behavior are
-verified on the target firmware.
+foreground-application API. Their service access and NPDM requirements have
+not been established for this module. Do not add `pm:dmnt` or process hooks
+to the manifest until the required privileges and failure/recovery behavior
+are verified on the target firmware.
 
 The pinned libnx PCTL wrapper exposes parental-control state/settings queries
 and synchronization/play-timer events. Its public wrapper does not expose a
@@ -43,11 +43,19 @@ terminate a title based on this project's policy. Therefore the current
 policy evaluator cannot be described as enforcement, and PCTL must not be
 modified by guessed IPC command IDs.
 
+The usage model is deliberately global: while any game/application is active,
+all elapsed time contributes to one shared daily console counter. Switching
+between games or applications does not create a new bucket or a per-title
+record. HOME-menu/idle time is excluded. The tracker accepts only an
+application-active boolean, monotonic seconds and a local-day key; it does not
+accept or store title IDs. This is separate from any future per-game
+restriction rules, which must not create per-game playtime counters.
+
 The next safe integration step is a narrowly scoped platform adapter that
-can identify the foreground application using a verified, permitted service.
-It must be tested independently before it is connected to usage accounting
-or any launch/termination action. Until then, title monitoring and all
-restriction enforcement remain disabled.
+can identify whether a game/application is active using a verified, permitted
+service. It must be tested independently before it is connected to global
+usage accounting or any launch/termination action. Until then, application
+monitoring and all restriction enforcement remain disabled.
 
 ## Power-state integration gate
 
@@ -71,21 +79,24 @@ The accepted schema uses printable ASCII strings without escapes, integer-only n
 
 ## Daily usage accounting primitive (not yet connected)
 
-`protocol/usage_tracker.hpp` provides a host-testable, allocation-free daily
-usage counter. It consumes observations containing a title ID, monotonic
-seconds and a local-day key. It rounds started minutes up, resets on a forward
-day transition, does not erase accumulated usage on a backward wall-clock
-correction, and ignores observation gaps longer than two seconds rather than
-assuming continuous playtime. The tracker is RAM-only and is not yet wired to a
-Horizon title source, a trusted clock anchor, suspend/resume handling or
-persistent storage. It must not be treated as active console enforcement.
+`protocol/usage_tracker.hpp` provides a host-testable, allocation-free **global
+daily console usage counter**. It consumes only an application-active boolean,
+monotonic seconds and a local-day key; it does not receive, store or distinguish
+title IDs. Time from all running games/applications is combined into one daily
+total, and switching between applications does not interrupt accounting.
+HOME-menu/idle time is excluded. It rounds started minutes up, resets on a
+forward day transition, does not erase accumulated usage on a backward
+wall-clock correction, and ignores observation gaps longer than two seconds
+rather than assuming continuous playtime. The tracker is RAM-only and is not
+yet wired to a Horizon application-activity source, a trusted clock anchor,
+suspend/resume handling or persistent storage. It must not be treated as
+active console enforcement.
 
 ## Deterministic policy evaluation (not enforcement)
 
 `protocol/policy_evaluator.hpp` evaluates a supplied immutable policy and context without Horizon calls or side effects. It covers parent-authentication gating, offline behavior, explicit title blocks, allow-all versus allow-list-only title modes, fixed-offset weekday budgets and quiet hours including intervals that cross midnight. Explicit title allows do not override global quiet hours, daily budgets, parent authentication or offline restrictions.
 
-The evaluator is host-tested. It is not yet called by the sysmodule worker and does not observe title launches, track playtime, mutate PCTL state, or block anything on a console. Monotonic accounting and a verified system integration point remain separate work.
-
+The evaluator is host-tested. It is not yet called by the sysmodule worker and does not observe application activity, track global playtime, mutate PCTL state, or block anything on a console. Monotonic accounting and a verified system integration point remain separate work.
 
 ## HTTP transport and secure envelope client
 
@@ -106,10 +117,10 @@ at eight seconds per wait. Connections are closed after each request.
 `sysmodule/source/secure_http_client.cpp` builds the exact v1 envelope, derives the
 AES-128 key and SHA-256 key selector, generates a fresh 63-bit request ID and
 96-bit nonce, binds request/response direction and path in AAD, and verifies
-the response selector, echoed request ID and GCM tag before exposing plaintext.
-The AES-GCM NIST vector and backend-matched HKDF vector are run before the first
-secure POST. Large transport buffers are static BSS allocations, not worker
-stack allocations.
+the response selector, echoed request ID and GCM tag before exposing
+plaintext. The AES-GCM NIST vector and backend-matched HKDF vector are run
+before the first secure POST. Large transport buffers are static BSS
+allocations, not worker stack allocations.
 
 The NRO supplies the API hostname, device ID and one-time enrollment code
 through HIPC command 65001. The worker invokes the secure client to enroll,
@@ -143,8 +154,8 @@ exact request AAD, sends the encrypted envelope over HTTP, and verifies the
 response key selector, request ID and GCM tag before returning plaintext.
 The first secure POST is gated by NIST AES-GCM and backend-matched HKDF
 self-tests. Transport buffers are static and bounded. TCP connect is
-nonblocking with a five-second timeout; send/receive waits are capped at eight
-seconds each. DNS has a five-second caller deadline and a single-flight
+nonblocking with a five-second timeout; send/receive waits are capped at
+eight seconds each. DNS has a five-second caller deadline and a single-flight
 resolver thread; a timed-out resolver is allowed to finish safely in the
 background and prevents overlapping resolver calls.
 
@@ -173,7 +184,7 @@ policy retrieval, policy validation/publication and policy acknowledgement
 are implemented, including protected device-credential persistence. The API
 host, device ID and long-lived credential are stored in alternating
 AES-GCM-authenticated records in this sysmodule's own device save data. After
-a restart, the newest valid record is restored and a fresh access token is
-obtained. Cross-language fixture coverage and real-device
+a restart, the newest valid record is restored and a fresh short-lived access
+token is obtained. Cross-language fixture coverage and real-device
 validation remain required before public deployment. No restrictions are
 enforced on the console yet.
