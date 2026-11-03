@@ -18,6 +18,9 @@ CONFIG_JSON := nx_pctl_manager.json
 
 include $(ATMOSPHERE_ROOT)/libraries/config/templates/stratosphere.mk
 
+# common.mk defaults TARGET to the directory name; restore the package name.
+TARGET := nx_pctl_manager
+
 ATMOSPHERE_SYSTEM_MODULE_TARGETS := nsp
 
 ifneq ($(__RECURSIVE__),1)
