@@ -80,9 +80,10 @@ The exact schema-v1 JSON profile is documented in [`docs/policy-schema-v1.md`](.
 The current branch includes a bounded schema-v1 decoder, authenticated encrypted
 policy retrieval, full-snapshot validation and atomic publication to the
 RAM-only policy store. The pure evaluator supports allow-all and allow-list-only
-title modes and is host-tested. It is not yet connected to Horizon title
-monitoring, playtime accounting or enforcement. No restrictions are currently
-applied to running or launching titles.
+title modes and is host-tested. A separate daily usage tracker is also
+host-tested, but remains RAM-only and is not connected to a trusted clock or
+Horizon title monitoring. Neither component is connected to enforcement. No
+restrictions are currently applied to running or launching titles.
 
 
 ## HTTP backend
