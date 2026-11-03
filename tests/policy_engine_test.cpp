@@ -57,8 +57,8 @@ int main() {
     assert(Validate(invalid, Context()) == ValidationError::InvalidTimestamps);
 
     invalid = candidate;
-    invalid.not_after = 1'000;
-    assert(Validate(invalid, Context()) == ValidationError::Expired);
+    invalid.not_after = 1'050;
+    assert(Validate(invalid, {"switch-device-01", 1'100, 0}) == ValidationError::Expired);
 
     invalid = candidate;
     invalid.server_time += AllowedClockSkewSeconds + 1;
