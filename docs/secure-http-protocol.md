@@ -27,7 +27,7 @@ The JSON wire envelope is exactly:
 - Base64url without padding; no additional envelope fields.
 - Maximum plaintext: 64 KiB.
 - The GCM associated data is the ASCII string
-  `NX-PCTL-AEAD/1\\n{direction}\\n{method}\\n{path}\\n{device_id}`.
+  `NX-PCTL-AEAD/1\n{direction}\n{method}\n{path}\n{device_id}`.
 - Direction is `request` or `response`; method is currently GET or POST.
   Thus a valid ciphertext cannot be moved to another endpoint, device, HTTP
   method or direction.
