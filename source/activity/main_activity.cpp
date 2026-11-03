@@ -12,12 +12,33 @@
 #include "util/numpad.hpp"
 #include "util/pctl_ops_c.hpp"
 #include "util/totp.hpp"
+#include "util/sysmodule_client.hpp"
+#include "../../protocol/provisioning.hpp"
+#include <switch/applets/swkbd.h>
 #include "util/trf.hpp"
 
 using namespace brls::literals;   // for "key"_i18n
 
 namespace
 {
+bool prompt_network_field(const char* guide, char* output, std::size_t capacity)
+{
+    SwkbdConfig config{};
+    Result rc = swkbdCreate(&config, 0);
+    if (R_FAILED(rc)) return false;
+    swkbdConfigMakePresetDefault(&config);
+    swkbdConfigSetGuideText(&config, guide);
+    rc = swkbdShow(&config, output, capacity);
+    swkbdClose(&config);
+    return R_SUCCEEDED(rc) && output[0] != '\0';
+}
+
+void wipe_bytes(void* data, std::size_t size)
+{
+    volatile uint8_t* p = static_cast<volatile uint8_t*>(data);
+    while (size--) *p++ = 0;
+}
+
 void wipe_totp_secret(std::array<uint8_t, totp::SECRET_BYTES>& secret)
 {
     volatile uint8_t* p = secret.data();
@@ -55,6 +76,35 @@ void MainActivity::onContentAvailable()
     this->item_refresh->registerClickAction([this](brls::View*) {
         this->status_panel->refresh();
         brls::Application::notify("nx_pctl/toast/status_refreshed"_i18n);
+        return true;
+    });
+
+    this->item_network->registerClickAction([](brls::View*) {
+        nxpctl::protocol::ProvisioningRequest request{};
+        const bool host_ok = prompt_network_field(
+            "API hostname (DNS name only; HTTP port 80)", request.api_host, sizeof(request.api_host));
+        const bool device_ok = host_ok && prompt_network_field(
+            "Device ID assigned in the NX-Pctl server", request.device_id, sizeof(request.device_id));
+        const bool code_ok = device_ok && prompt_network_field(
+            "One-time enrollment code", request.enrollment_code, sizeof(request.enrollment_code));
+        if (!code_ok) {
+            wipe_bytes(&request, sizeof(request));
+            brls::Application::notify("Network enrollment cancelled.");
+            return true;
+        }
+
+        if (!nxpctl::protocol::IsValidProvisioningRequest(request)) {
+            wipe_bytes(&request, sizeof(request));
+            brls::Application::notify("Invalid host, device ID or enrollment code.");
+            return true;
+        }
+
+        const Result rc = nxpctl::configure_enrollment(&request);
+        wipe_bytes(&request, sizeof(request));
+        if (R_SUCCEEDED(rc))
+            brls::Application::notify("Enrollment request accepted by nxpctl. Check sysmodule diagnostics for synchronization.");
+        else
+            brls::Application::notify(fmt::format("Could not provision nxpctl (0x{:08X}).", (unsigned)rc));
         return true;
     });
 
