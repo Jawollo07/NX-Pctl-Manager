@@ -44,7 +44,7 @@ int main() {
             small, sizeof(small), &request) == RequestError::OutputTooSmall);
     }
     {
-        assert(BuildRequest("POST", "api.example.net", "/", nullptr, "x", 16385,
+        assert(BuildRequest("POST", "api.example.net", "/", nullptr, "x", 98305,
             buffer, sizeof(buffer), &request) == RequestError::BodyTooLarge);
     }
     return 0;
