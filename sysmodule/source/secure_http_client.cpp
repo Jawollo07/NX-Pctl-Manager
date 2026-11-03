@@ -294,7 +294,8 @@ Error Post(const char *host, u16 port,
     HexEncode(digest, selector);
     std::memset(digest, 0, sizeof(digest));
 
-    /* SQLite INTEGER is signed 64-bit; keep the random replay ID in its safe range. */\n    const u64 sequence = crypto::GenerateRequestId() & 0x7fffffffffffffffULL;
+    /* SQLite INTEGER is signed 64-bit; keep the random replay ID in its safe range. */
+    const u64 sequence = crypto::GenerateRequestId() & 0x7fffffffffffffffULL;
     u8 nonce[crypto::GcmNonceSize];
     crypto::GenerateNonce(nonce);
 
