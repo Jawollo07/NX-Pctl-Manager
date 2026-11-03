@@ -1,5 +1,6 @@
 #include "http_transport.hpp"
 
+#include <stratosphere/os.hpp>
 #include <stratosphere/socket.hpp>
 
 extern "C" {
@@ -15,6 +16,9 @@ extern "C" {
 
 namespace nxpctl::net {
 namespace {
+
+    namespace os = ams::os;
+    using ams::TimeSpan;
 
     constexpr std::size_t SocketPoolSize = 512 * 1024;
     alignas(0x1000) u8 g_socket_memory[SocketPoolSize];
@@ -92,7 +96,7 @@ namespace {
         g_resolver_result = EAI_FAIL;
         os::ClearEvent(std::addressof(g_resolver_event));
 
-        const Result create_result = os::CreateThread(
+        const ams::Result create_result = os::CreateThread(
             std::addressof(g_resolver_thread),
             ResolverThreadMain,
             nullptr,
