@@ -1,6 +1,7 @@
 // Read-only client for the NX-Pctl-Manager resident sysmodule.
 // Copyright (C) 2026 Taylor. GPLv3-or-later (see LICENSE).
 #include "sysmodule_client.hpp"
+#include <cstring>
 
 namespace nxpctl {
 static_assert(offsetof(RuntimeStatus, worker_state) == 4,
@@ -29,6 +30,22 @@ Result get_runtime_status(RuntimeStatus* out) {
     serviceClose(&service);
     if (R_FAILED(rc))
         *out = {};
+    return rc;
+}
+
+Result configure_enrollment(const protocol::ProvisioningRequest* request) {
+    if (request == nullptr || !protocol::IsValidProvisioningRequest(*request))
+        return MAKERESULT(Module_Libnx, LibnxError_BadInput);
+
+    Service service{};
+    Result rc = smGetService(&service, protocol::ServiceName);
+    if (R_FAILED(rc)) return rc;
+
+    const u32 empty_input = 0;
+    rc = serviceDispatch(&service, protocol::ProvisioningCommandId, empty_input,
+        .buffer_attrs = { .attr0 = SfBufferAttr_In | SfBufferAttr_HipcMapAlias },
+        .buffers = {{ .ptr = request, .size = sizeof(*request) }});
+    serviceClose(&service);
     return rc;
 }
 } // namespace nxpctl
