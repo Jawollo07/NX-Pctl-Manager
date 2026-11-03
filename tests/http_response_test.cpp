@@ -48,7 +48,7 @@ int main() {
         assert(ParseResponse(response, sizeof(response) - 1, &view) == Error::MissingContentLength);
     }
     {
-        constexpr char response[] = "HTTP/1.1 200 OK\r\nContent-Length: 16385\r\n\r\n";
+        constexpr char response[] = "HTTP/1.1 200 OK\r\nContent-Length: 98305\r\n\r\n";
         ResponseView view{};
         assert(ParseResponse(response, sizeof(response) - 1, &view) == Error::BodyTooLarge);
     }
