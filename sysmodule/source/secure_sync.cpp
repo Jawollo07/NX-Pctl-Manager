@@ -1,5 +1,6 @@
 #include "secure_sync.hpp"
 #include "secure_http_client.hpp"
+#include "credential_store.hpp"
 #include "../../protocol/policy_json.hpp"
 
 #include <algorithm>
@@ -22,6 +23,7 @@ namespace {
     char g_device_credential[129]{};
     char g_access_token[257]{};
     u32 g_cycles_since_auth = AuthRefreshCycles;
+    bool g_persistence_pending = false;
     char g_response[ResponseCapacity];
 
     class Guard {
@@ -127,6 +129,14 @@ namespace {
         if (!ExtractString(g_response, response_size, "device_credential",
                            credential, sizeof(credential))) return false;
         std::memcpy(g_device_credential, credential, std::strlen(credential) + 1);
+
+        credential_store::CredentialData stored{};
+        std::memcpy(stored.api_host, g_config.api_host, sizeof(stored.api_host));
+        std::memcpy(stored.device_id, g_config.device_id, sizeof(stored.device_id));
+        std::memcpy(stored.device_credential, g_device_credential, sizeof(stored.device_credential));
+        g_persistence_pending = !credential_store::Save(stored);
+        Wipe(&stored, sizeof(stored));
+
         Wipe(credential, sizeof(credential));
         Wipe(g_config.enrollment_code, sizeof(g_config.enrollment_code));
         g_enrolled.store(true, std::memory_order_release);
@@ -220,6 +230,26 @@ namespace {
     }
 }
 
+bool Initialize() {
+    const bool storage_available = credential_store::Initialize();
+    credential_store::CredentialData stored{};
+    if (storage_available && credential_store::Load(&stored)) {
+        Wipe(&g_config, sizeof(g_config));
+        std::memcpy(g_config.api_host, stored.api_host, sizeof(g_config.api_host));
+        std::memcpy(g_config.device_id, stored.device_id, sizeof(g_config.device_id));
+        std::memcpy(g_device_credential, stored.device_credential, sizeof(g_device_credential));
+        g_configured.store(true, std::memory_order_release);
+        g_enrolled.store(true, std::memory_order_release);
+        g_cycles_since_auth = AuthRefreshCycles;
+    }
+    Wipe(&stored, sizeof(stored));
+    return storage_available;
+}
+
+void Finalize() {
+    credential_store::Finalize();
+}
+
 void Configure(const protocol::ProvisioningRequest& request) {
     /*
      * HIPC must never wait for DNS/TCP/HTTP while the worker is synchronizing.
@@ -276,6 +306,15 @@ void RunCycle(policy::PolicyStore& store, u64 uptime_seconds) {
         g_enrollment_in_progress.store(false, std::memory_order_release);
         if (!enrolled) return;
     }
+
+    if (g_persistence_pending && g_enrolled.load(std::memory_order_acquire)) {
+        credential_store::CredentialData stored{};
+        std::memcpy(stored.api_host, g_config.api_host, sizeof(stored.api_host));
+        std::memcpy(stored.device_id, g_config.device_id, sizeof(stored.device_id));
+        std::memcpy(stored.device_credential, g_device_credential, sizeof(stored.device_credential));
+        g_persistence_pending = !credential_store::Save(stored);
+        Wipe(&stored, sizeof(stored));
+    }
     if (g_access_token[0] == '\0' || g_cycles_since_auth >= AuthRefreshCycles) {
         Wipe(g_access_token, sizeof(g_access_token));
         if (!Authenticate()) return;
@@ -299,6 +338,7 @@ void Clear() {
     g_configured.store(false, std::memory_order_release);
     g_enrolled.store(false, std::memory_order_release);
     g_enrollment_in_progress.store(false, std::memory_order_release);
+    g_persistence_pending = false;
     g_cycles_since_auth = AuthRefreshCycles;
 }
 
