@@ -78,9 +78,16 @@ through HIPC command 65001. The worker invokes the secure client to enroll,
 authenticate, refresh its short-lived token, send heartbeats, retrieve and
 validate policy snapshots, publish accepted snapshots to the RAM-only store,
 and acknowledge their revisions. The enrollment code is erased after a
-successful enrollment. Device credentials and tokens are currently RAM-only:
-a sysmodule restart requires a new enrollment. Protected persistence and
-recovery remain unimplemented. Do not expose the backend publicly until
+successful enrollment. The API host, device ID and long-lived device credential
+are stored in two versioned AES-128-GCM records in this sysmodule's own device
+save data. The encryption key is derived through SPL from an application-owned
+key source and the console device key ladder; neither the key nor plaintext
+credential is written to storage. Alternating records preserve the previous
+valid record if a write is interrupted. On restart, the newest authenticated
+record is restored and the worker obtains a fresh short-lived access token.
+Access tokens and enrollment codes are never persisted. If save-data mounting
+or key derivation fails, the current session can still operate in RAM, but
+persistence is not claimed. Do not expose the backend publicly until
 cross-language fixtures and real-device validation are complete.
 
 ## HTTP and Cloudflare deployment decision
