@@ -20,8 +20,7 @@
   ],
   "service_access": [
     "bsd:s",
-    "sfdnsres",
-    "ssl"
+    "sfdnsres"
   ],
   "kernel_capabilities": [
     {
