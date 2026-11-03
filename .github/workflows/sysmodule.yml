@@ -78,13 +78,21 @@ jobs:
             '
 
       - name: Verify packaged sysmodule
+        shell: bash
         run: |
-          test -s project/sysmodule/out/nintendo_nx_arm64_armv8a/release/nx_pctl_manager.nsp
-          file project/sysmodule/out/nintendo_nx_arm64_armv8a/release/nx_pctl_manager.nsp
+          mapfile -t nsp_files < <(find project/sysmodule/out -type f -name '*.nsp' -size +0c -print)
+          if [ "${#nsp_files[@]}" -ne 1 ]; then
+            echo "Expected exactly one non-empty NSP, found ${#nsp_files[@]}" >&2
+            printf '%s\n' "${nsp_files[@]}" >&2
+            exit 1
+          fi
+          mkdir -p project/sysmodule/artifacts
+          cp "${nsp_files[0]}" project/sysmodule/artifacts/nx_pctl_manager.nsp
+          file project/sysmodule/artifacts/nx_pctl_manager.nsp
 
       - name: Upload experimental sysmodule artifact
         uses: actions/upload-artifact@v4
         with:
           name: nx-pctl-manager-sysmodule-experimental
-          path: project/sysmodule/out/nintendo_nx_arm64_armv8a/release/nx_pctl_manager.nsp
+          path: project/sysmodule/artifacts/nx_pctl_manager.nsp
           if-no-files-found: error
