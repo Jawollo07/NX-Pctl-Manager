@@ -40,7 +40,7 @@ The expected release package is
 
 ## Development-only metadata
 
-The NPDM title ID `0x010000000000D7A1` is a provisional development value,
+The NPDM title ID `0x420000000A3F1E7C` is the currently configured development value,
 not a registered or hardware-validated title ID. Do not install this package
 on a Switch until the title ID, service permissions, kernel capabilities,
 firmware compatibility and boot/recovery procedure have been reviewed.
