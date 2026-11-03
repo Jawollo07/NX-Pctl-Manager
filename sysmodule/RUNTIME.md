@@ -4,7 +4,7 @@
 
 The experimental Stratosphere target now has a resident main thread, a separate cooperative worker thread, and a local HIPC status and enrollment-provisioning service.
 
-- `InitializeSystemModule` initializes the service-manager client, checks the pinned libstratosphere API, and creates the worker stop event.
+- `InitializeSystemModule` initializes the service-manager client, checks the pinned libstratosphere API, creates the worker stop event, and attempts to mount this sysmodule’s own device save data before the worker starts.
 - `Main` starts the worker, registers the `nxpctl` HIPC service, and enters the Stratosphere server loop.
 - The worker uses a dedicated 32 KiB stack and a one-second timed event wait as its idle cadence and cooperative shutdown point. The larger stack accommodates the bounded schema-v1 parser and network call frames. A separate supervisor checks thread termination with `os::TryWaitThread`, reaps the exited thread, and permits at most three automatic restarts per module lifetime. After the retry budget is exhausted, the service reports `WorkerState::Failed` and does not restart indefinitely.
 - Finalization stops and joins the supervisor before stopping the worker, preventing an intentional shutdown from being mistaken for a worker failure.
@@ -14,13 +14,13 @@ The experimental Stratosphere target now has a resident main thread, a separate 
 - The existing NRO performs an optional read-only status request at startup. If the service is absent, it logs the condition and continues in standalone mode.
 - `FinalizeSystemModule` signals the worker, joins it, destroys its thread object, and finalizes the event.
 
-The HIPC interface exposes read-only diagnostics plus a single enrollment bootstrap operation. It does not inspect running titles, change parental-control state, apply restrictions or access persistent storage. The NRO offers an enrollment screen and passes the API hostname, server-assigned device ID and one-time code to the sysmodule. The worker then performs encrypted enrollment, exchanges the returned device credential for a short-lived token, fetches and validates policy snapshots, sends heartbeats and acknowledges accepted revisions.
+The HIPC interface exposes read-only diagnostics plus a single enrollment bootstrap operation. It does not inspect running titles, change parental-control state or apply restrictions. Credential persistence uses this sysmodule’s own device save data. The NRO offers an enrollment screen and passes the API hostname, server-assigned device ID and one-time code to the sysmodule. The worker then performs encrypted enrollment, exchanges the returned device credential for a short-lived token, fetches and validates policy snapshots, sends heartbeats and acknowledges accepted revisions.
 
 ## Next implementation phases
 
 1. Verify live HIPC session establishment and command dispatch on supported hardware/CFW; the current CI test validates the shared ABI, not the Horizon IPC transport.
 2. [x] Add worker failure supervision and bounded restart attempts. [ ] Add explicit suspend/resume state transitions after the PSC identity gate is resolved.
-3. [x] Implement Horizon HTTP transport, local enrollment provisioning, encrypted enrollment/authentication, token refresh, heartbeat and policy retrieval/acknowledgement. HTTP is the selected device transport. [ ] Add protected credential persistence/recovery so an enrolled device survives a sysmodule restart without revocation and re-enrollment.
+3. [x] Implement Horizon HTTP transport, local enrollment provisioning, encrypted enrollment/authentication, token refresh, heartbeat, policy retrieval/acknowledgement and protected credential persistence/recovery. HTTP is the selected device transport.
 4. [x] Add bounded policy validation and in-memory policy snapshots.
 5. [x] Add bounded schema-v1 JSON decoding and host tests.
 6. [x] Add bounded HTTP response framing parser and host tests. [ ] Add authenticated message integrity verification and connect only verified full snapshots to the RAM store.
@@ -32,7 +32,7 @@ The pinned Atmosphere revision exposes suspend/resume notifications through `ams
 
 ## Safety boundary
 
-The NPDM title ID remains provisional. Do not install or launch this artifact on a console until the title ID, service permissions, kernel capabilities, firmware compatibility, and recovery procedure have been reviewed. CI packaging does not constitute hardware validation.
+The NPDM title ID is currently configured as `0x420000000A3F1E7C`, but is not yet confirmed as registered or hardware-validated. Do not install or launch this artifact on a console until the title ID, service permissions, kernel capabilities, firmware compatibility, and recovery procedure have been reviewed. CI packaging does not constitute hardware validation.
 
 ## RAM-only policy model (validation stage)
 
