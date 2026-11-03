@@ -51,7 +51,8 @@ inline bool IsValidProvisioningRequest(const ProvisioningRequest& request) noexc
           (request.device_id[0] >= '0' && request.device_id[0] <= '9'))) return false;
     for (std::size_t i = 0; i < code_length; ++i) {
         const unsigned char c = static_cast<unsigned char>(request.enrollment_code[i]);
-        if (c < 0x21 || c > 0x7e) return false;
+        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+              (c >= '0' && c <= '9') || c == '_' || c == '-')) return false;
     }
     return true;
 }
