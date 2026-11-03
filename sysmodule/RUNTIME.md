@@ -26,6 +26,29 @@ The HIPC interface exposes read-only diagnostics plus a single enrollment bootst
 6. [x] Add bounded HTTP response framing parser and host tests. [x] Add authenticated message integrity verification and connect only verified full snapshots to the RAM store.
 7. Implement enforcement only after the required Horizon services, permissions, firmware compatibility, and recovery behavior have been validated. The pure evaluator is ready for integration, but title monitoring, usage accounting, PCTL interaction and the hardware recovery path remain unverified.
 
+## Title monitoring and PCTL integration gate
+
+The pinned Atmosphere headers expose pm::dmnt::GetApplicationProcessId,
+pm::dmnt::GetProgramId and pm::dmnt::HookToCreateApplicationProcess.
+These are process/debug-monitor interfaces, not a generic unprivileged
+foreground-title API. Their service access and NPDM requirements have not
+been established for this module. Do not add pm:dmnt or process hooks to
+the manifest until the required privileges and failure/recovery behavior are
+verified on the target firmware.
+
+The pinned libnx PCTL wrapper exposes parental-control state/settings queries
+and synchronization/play-timer events. Its public wrapper does not expose a
+general command to install arbitrary per-title allow/block rules or to
+terminate a title based on this project's policy. Therefore the current
+policy evaluator cannot be described as enforcement, and PCTL must not be
+modified by guessed IPC command IDs.
+
+The next safe integration step is a narrowly scoped platform adapter that
+can identify the foreground application using a verified, permitted service.
+It must be tested independently before it is connected to usage accounting
+or any launch/termination action. Until then, title monitoring and all
+restriction enforcement remain disabled.
+
 ## Power-state integration gate
 
 The pinned Atmosphere revision exposes suspend/resume notifications through `ams::psc::PmModule`. Its `PmModuleId` enum assigns named IDs to platform modules (including PCTL and other system services), but it does not provide a project-owned ID for this sysmodule. The gaps and reserved value are not safe allocation points. This project must not claim one of those IDs or register as another system service. PSC integration remains blocked until a valid module identity/dependency registration is established for the target firmware. Until then, no PSC request is acknowledged and no suspend/resume behavior is implemented.
