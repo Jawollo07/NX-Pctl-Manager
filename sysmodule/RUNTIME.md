@@ -2,25 +2,25 @@
 
 ## Current runtime phase
 
-The experimental Stratosphere target now has a resident main thread, a separate cooperative worker thread, and a read-only local HIPC service.
+The experimental Stratosphere target now has a resident main thread, a separate cooperative worker thread, and a local HIPC status and enrollment-provisioning service.
 
 - `InitializeSystemModule` initializes the service-manager client, checks the pinned libstratosphere API, and creates the worker stop event.
 - `Main` starts the worker, registers the `nxpctl` HIPC service, and enters the Stratosphere server loop.
 - The worker uses a one-second timed event wait as its idle cadence and cooperative shutdown point. A separate supervisor checks thread termination with `os::TryWaitThread`, reaps the exited thread, and permits at most three automatic restarts per module lifetime. After the retry budget is exhausted, the service reports `WorkerState::Failed` and does not restart indefinitely.
 - Finalization stops and joins the supervisor before stopping the worker, preventing an intentional shutdown from being mistaken for a worker failure.
-- HIPC command 65000 (`GetRuntimeStatus`) returns protocol version, worker state, worker heartbeat, bounded worker restart count, and policy revision. The initial policy revision is zero.
+- HIPC command 65000 (`GetRuntimeStatus`) returns protocol version, worker state, worker heartbeat, bounded worker restart count, and policy revision. Command 65001 (`ConfigureEnrollment`) accepts one fixed-size, validated host/device-ID/enrollment-code buffer. It is not a general configuration or policy-write interface.
 - `protocol/runtime_status.hpp` is the shared, Horizon-independent wire contract used by both the NRO client and sysmodule. `protocol/worker_supervision.hpp` contains the Horizon-independent three-restart budget used by the supervisor; CI tests that budget independently. `WorkerState::Failed` is a terminal health state after the bounded restart budget is exhausted. The CMIF output layout is four `u32` values at offsets 0/4/8/12 (protocol version, worker state, heartbeat, restart count), then the aligned `u64` policy revision at offset 16.
 - `protocol/http_response.hpp` now provides a bounded, allocation-free HTTP/1.0/1.1 response parser. It requires exactly one decimal `Content-Length`, rejects chunked/other transfer encodings, rejects compressed bodies, duplicate lengths, malformed CRLF framing, truncated bodies and trailing bytes, and caps headers/body at 8 KiB/96 KiB. It returns a view into the caller-owned receive buffer; it does not perform socket I/O or authenticate the peer.
 - The existing NRO performs an optional read-only status request at startup. If the service is absent, it logs the condition and continues in standalone mode.
 - `FinalizeSystemModule` signals the worker, joins it, destroys its thread object, and finalizes the event.
 
-The HIPC interface is read-only. It does not inspect running titles, change parental-control state, apply restrictions or access persistent storage. The secure HTTP client is implemented as a callable transport primitive, but no host/device credential is provisioned and the worker does not yet invoke API operations.
+The HIPC interface exposes read-only diagnostics plus a single enrollment bootstrap operation. It does not inspect running titles, change parental-control state, apply restrictions or access persistent storage. The NRO offers an enrollment screen and passes the API hostname, server-assigned device ID and one-time code to the sysmodule. The worker then performs encrypted enrollment, exchanges the returned device credential for a short-lived token, fetches and validates policy snapshots, sends heartbeats and acknowledges accepted revisions.
 
 ## Next implementation phases
 
 1. Verify live HIPC session establishment and command dispatch on supported hardware/CFW; the current CI test validates the shared ABI, not the Horizon IPC transport.
 2. [x] Add worker failure supervision and bounded restart attempts. [ ] Add explicit suspend/resume state transitions after the PSC identity gate is resolved.
-3. Implement a Horizon network transport, enrollment/credential provisioning and authentication refresh. HTTP is the selected device transport. The encrypted-message layer must be integrated and replay-protected before public deployment; until then the existing plaintext endpoints must remain private.
+3. [x] Implement Horizon HTTP transport, local enrollment provisioning, encrypted enrollment/authentication, token refresh, heartbeat and policy retrieval/acknowledgement. HTTP is the selected device transport. [ ] Add protected credential persistence/recovery so an enrolled device survives a sysmodule restart without revocation and re-enrollment.
 4. [x] Add bounded policy validation and in-memory policy snapshots.
 5. [x] Add bounded schema-v1 JSON decoding and host tests.
 6. [x] Add bounded HTTP response framing parser and host tests. [ ] Add authenticated message integrity verification and connect only verified full snapshots to the RAM store.
@@ -38,13 +38,13 @@ The NPDM title ID remains provisional. Do not install or launch this artifact on
 
 `protocol/policy.hpp` defines the fixed-size, versioned policy model and a bounded in-memory `PolicyStore`. It validates device binding, protocol/schema versions, strictly increasing revisions, trusted-server clock skew, expiry and maximum lifetime, offline behavior, fixed UTC offset, daily limits, quiet hours, and bounded/unique title rules. A candidate is validated again while holding the store lock against the currently active revision, then copied as one complete snapshot. Invalid or stale candidates leave the previous snapshot unchanged.
 
-The store uses fixed-size memory and performs no allocation, file I/O, database access, or network access. The HIPC status endpoint reports the store's active revision (zero until a future authenticated policy-delivery path publishes a snapshot). The model is not yet populated by the worker and does not enforce restrictions.
+The store uses fixed-size memory and performs no allocation, file I/O, database access, or network access. The HIPC status endpoint reports the store's active revision. The secure sync worker now feeds it only after encrypted response verification and schema/clock/device/revision validation. The model still does not enforce restrictions.
 
 ## Bounded policy JSON decoding
 
 `protocol/policy_json.hpp` adds a fixed-buffer parser for schema v1. It accepts documents up to 16 KiB, uses a fixed token array, bounds nesting and string length, rejects unknown and duplicate root fields, requires every schema field, checks array lengths and integer ranges, and rejects malformed numbers and unsupported string escapes. No heap allocation is performed.
 
-The accepted schema uses printable ASCII strings without escapes, integer-only numeric fields, numeric enum values, exactly seven weekday limits, and title-rule objects containing exactly `title_id` and `action`. This deliberately strict subset must match the server serializer. JSON decoding is followed by the existing policy validator through `DecodeAndValidate`; only a fully decoded and structurally valid candidate is returned. The decoder does not authenticate its input or publish to the active store.
+The accepted schema uses printable ASCII strings without escapes, integer-only numeric fields, numeric enum values, exactly seven weekday limits, and title-rule objects containing exactly `title_id` and `action`. This deliberately strict subset must match the server serializer. JSON decoding is followed by the existing policy validator through `DecodeAndValidate`; only a fully decoded and structurally valid candidate is returned. The decoder does not authenticate its input; the secure sync worker verifies the AEAD envelope before calling it and publishes only a fully validated snapshot.
 
 ## Deterministic policy evaluation (not enforcement)
 
