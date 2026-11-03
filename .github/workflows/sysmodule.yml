@@ -10,6 +10,11 @@ on:
 permissions:
   contents: read
 
+# Keep only the newest branch build active; each Atmosphere build is expensive.
+concurrency:
+  group: sysmodule-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-sysmodule:
     runs-on: ubuntu-latest
