@@ -60,3 +60,22 @@ The exact schema-v1 JSON profile is documented in [`docs/policy-schema-v1.md`](.
 ## Policy processing status
 
 The current branch includes a bounded schema-v1 decoder and a pure policy evaluator with allow-all and allow-list-only title modes. Both are host-tested foundations only: no authenticated network path feeds them, and the evaluator is not connected to title monitoring or enforcement.
+
+
+## HTTP backend
+
+A reference FastAPI/SQLite backend now lives in [`server/`](../server/README.md).
+It implements one-time enrollment, per-device credentials, short-lived bearer
+tokens, strict policy retrieval, heartbeats, deduplicated event batches and
+policy acknowledgements. Administration is performed through
+`python -m server.cli`; there is intentionally no unauthenticated web-admin
+surface.
+
+The backend supports plain HTTP for development and isolated trusted networks.
+For traffic crossing an untrusted network, terminate TLS at a reverse proxy.
+Plain HTTP exposes credentials and policy data to network observers and is not
+an authenticated transport.
+
+This does **not** mean the sysmodule is network-connected yet. The Switch-side
+HTTP client, credential provisioning/storage, token refresh and worker
+integration remain pending. The backend is server-side only at this stage.
