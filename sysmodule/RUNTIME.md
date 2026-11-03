@@ -8,7 +8,7 @@ The experimental Stratosphere target now has a resident main thread, a separate 
 - `Main` starts the worker, registers the `nxpctl` HIPC service, and enters the Stratosphere server loop.
 - The worker uses a one-second timed event wait as its idle cadence and cooperative shutdown point.
 - HIPC command 65000 (`GetRuntimeStatus`) returns protocol version, worker state, worker heartbeat, and policy revision. The initial policy revision is zero.
-- `protocol/runtime_status.hpp` is the shared, Horizon-independent wire contract used by both the NRO client and sysmodule. CI compiles and runs a host-side ABI test for the service name, command ID, field offsets, and structure size.
+- `protocol/runtime_status.hpp` is the shared, Horizon-independent wire contract used by both the NRO client and sysmodule. The CMIF output layout is three `u32` values at offsets 0/4/8, an explicit zero-valued reserved `u32` at offset 12, then the aligned `u64` policy revision at offset 16. The server writes the reserved word explicitly; this avoids relying on uninitialized alignment padding. CI compiles and runs a host-side ABI test for the service name, command ID, field offsets, and structure size.
 - The existing NRO performs an optional read-only status request at startup. If the service is absent, it logs the condition and continues in standalone mode.
 - `FinalizeSystemModule` signals the worker, joins it, destroys its thread object, and finalizes the event.
 
