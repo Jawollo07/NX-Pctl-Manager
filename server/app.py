@@ -256,9 +256,16 @@ def init_database() -> None:
             key_scope TEXT NOT NULL,
             sequence TEXT NOT NULL,
             seen_at INTEGER NOT NULL,
+            response_json TEXT,
+            status_code INTEGER,
             PRIMARY KEY(key_scope, sequence)
         );
         """)
+        replay_columns = {row["name"] for row in db.execute("PRAGMA table_info(secure_replays)")}
+        if "response_json" not in replay_columns:
+            db.execute("ALTER TABLE secure_replays ADD COLUMN response_json TEXT")
+        if "status_code" not in replay_columns:
+            db.execute("ALTER TABLE secure_replays ADD COLUMN status_code INTEGER"))
 
 
 app = FastAPI(title="NX-Pctl-Manager API", version=APP_VERSION)
@@ -496,8 +503,8 @@ async def policy_ack(device_id: str, request: Request):
     return {"accepted": True}
 
 
-def _accept_secure_sequence(scope: str, sequence: int) -> None:
-    """Atomically consume a random 64-bit request ID for this key epoch."""
+def _claim_secure_sequence(scope: str, sequence: int):
+    """Atomically claim a random request ID, or return its cached response."""
     now = int(time.time())
     with database() as db:
         db.execute("BEGIN IMMEDIATE")
@@ -509,15 +516,32 @@ def _accept_secure_sequence(scope: str, sequence: int) -> None:
             "DELETE FROM secure_replays WHERE key_scope LIKE 'enroll:%' AND seen_at < ?",
             (now - ENROLLMENT_TTL_SECONDS - 60,),
         )
-        try:
-            db.execute(
-                "INSERT INTO secure_replays(key_scope,sequence,seen_at) VALUES(?,?,?)",
-                (scope, str(sequence), now),
-            )
-        except sqlite3.IntegrityError as exc:
-            db.rollback()
-            raise HTTPException(409, "replayed secure message") from exc
+        row = db.execute(
+            "SELECT response_json,status_code FROM secure_replays WHERE key_scope=? AND sequence=?",
+            (scope, str(sequence)),
+        ).fetchone()
+        if row is not None:
+            db.commit()
+            if row["response_json"] is None or row["status_code"] is None:
+                raise HTTPException(409, "secure request is already being processed")
+            return int(row["status_code"]), json.loads(row["response_json"])
+        db.execute(
+            "INSERT INTO secure_replays(key_scope,sequence,seen_at) VALUES(?,?,?)",
+            (scope, str(sequence), now),
+        )
         db.commit()
+    return None
+
+
+def _cache_secure_response(scope: str, sequence: int, status_code: int, envelope: dict[str, Any]) -> None:
+    serialized = json.dumps(envelope, separators=(",", ":"), sort_keys=True, ensure_ascii=True)
+    with database() as db:
+        cursor = db.execute(
+            "UPDATE secure_replays SET response_json=?,status_code=? WHERE key_scope=? AND sequence=?",
+            (serialized, status_code, scope, str(sequence)),
+        )
+        if cursor.rowcount != 1:
+            raise RuntimeError("secure replay claim disappeared before response caching")
 
 
 def _synthetic_request(request: Request, path: str, body: dict[str, Any]) -> Request:
@@ -667,7 +691,14 @@ async def secure_device_api(device_id: str, operation: str, request: Request):
             if not isinstance(access_token, str) or not access_token:
                 raise HTTPException(401, "invalid device session")
             replay_scope = "session:" + device_id + ":" + _hash_secret(access_token)
-        _accept_secure_sequence(replay_scope, sequence)
+        cached = _claim_secure_sequence(replay_scope, sequence)
+        if cached is not None:
+            cached_status, cached_envelope = cached
+            return JSONResponse(
+                status_code=cached_status,
+                content=cached_envelope,
+                headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+            )
         try:
             result = await _dispatch_secure_operation(operation, device_id, request, payload)
             status_code = 200
@@ -675,9 +706,13 @@ async def secure_device_api(device_id: str, operation: str, request: Request):
         except HTTPException as exc:
             status_code = exc.status_code
             response_payload = {"error": exc.detail}
+        except Exception:
+            status_code = 500
+            response_payload = {"error": "internal_error"}
         response_context = MessageContext(device_id, "POST", path, "response", sequence)
         response_envelope = seal_json(response_payload, key, response_context)
         response_envelope["k"] = envelope["k"]
+        _cache_secure_response(replay_scope, sequence, status_code, response_envelope)
         return JSONResponse(
             status_code=status_code,
             content=response_envelope,
