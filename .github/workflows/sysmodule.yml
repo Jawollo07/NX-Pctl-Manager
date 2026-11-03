@@ -28,6 +28,8 @@ jobs:
         run: |
           c++ -std=c++17 -Wall -Wextra -Werror project/tests/runtime_protocol_test.cpp -o "$RUNNER_TEMP/runtime-protocol-test"
           "$RUNNER_TEMP/runtime-protocol-test"
+          c++ -std=c++17 -Wall -Wextra -Werror project/tests/worker_supervision_test.cpp -o "$RUNNER_TEMP/worker-supervision-test"
+          "$RUNNER_TEMP/worker-supervision-test"
 
       - name: Checkout pinned libnx submodule
         run: git -C project submodule update --init deps/libnx
