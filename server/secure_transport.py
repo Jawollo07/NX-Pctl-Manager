@@ -38,6 +38,7 @@ class MessageContext:
     method: str
     path: str
     direction: str
+    sequence: int = 0
 
     def aad(self) -> bytes:
         if not _DEVICE_ID.fullmatch(self.device_id):
@@ -106,6 +107,8 @@ def open_message(envelope: object, key: bytes, context: MessageContext) -> bytes
         raise SecureMessageError("invalid envelope fields")
     if type(envelope["v"]) is not int or envelope["v"] != PROTOCOL_VERSION:
         raise SecureMessageError("unsupported secure-message version")
+    if type(envelope["s"]) is not int or envelope["s"] != context.sequence:
+        raise SecureMessageError("message sequence mismatch")
     if not isinstance(key, bytes) or len(key) != KEY_BYTES:
         raise SecureMessageError("AES-128 key required")
     nonce = _b64decode(envelope["n"], maximum=32)
