@@ -9,12 +9,12 @@ using nxpctl::http::ResponseView;
 
 int main() {
     {
-        constexpr char response[] = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 7\r\n\r\n{\"ok\":1}";
+        constexpr char response[] = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 8\r\n\r\n{\"ok\":1}";
         ResponseView view{};
         assert(ParseResponse(response, sizeof(response) - 1, &view) == Error::None);
         assert(view.status_code == 200);
-        assert(view.body_length == 7);
-        assert(std::memcmp(view.body, "{\"ok\":1}", 7) == 0);
+        assert(view.body_length == 8);
+        assert(std::memcmp(view.body, "{\"ok\":1}", 8) == 0);
     }
     {
         constexpr char response[] = "HTTP/1.0 410 Gone\r\ncontent-length: 0\r\n\r\n";
