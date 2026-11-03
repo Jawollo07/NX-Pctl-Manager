@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include "worker_supervision.hpp"
 
 namespace nxpctl::protocol {
 
@@ -22,7 +23,7 @@ struct alignas(8) RuntimeStatus {
     std::uint32_t protocol_version;
     std::uint32_t worker_state;
     std::uint32_t worker_heartbeat;
-    std::uint32_t reserved;
+    std::uint32_t worker_restart_count;
     std::uint64_t policy_revision;
 };
 
@@ -43,13 +44,13 @@ struct alignas(8) RuntimeStatus {
 [[nodiscard]] constexpr bool IsCompatibleRuntimeStatus(const RuntimeStatus& status) noexcept {
     return status.protocol_version == RuntimeProtocolVersion
         && IsKnownWorkerState(status.worker_state)
-        && status.reserved == 0;
+        && status.worker_restart_count <= MaxWorkerRestarts;
 }
 
 static_assert(offsetof(RuntimeStatus, protocol_version) == 0);
 static_assert(offsetof(RuntimeStatus, worker_state) == 4);
 static_assert(offsetof(RuntimeStatus, worker_heartbeat) == 8);
-static_assert(offsetof(RuntimeStatus, reserved) == 12);
+static_assert(offsetof(RuntimeStatus, worker_restart_count) == 12);
 static_assert(offsetof(RuntimeStatus, policy_revision) == 16);
 static_assert(sizeof(RuntimeStatus) == 24);
 
