@@ -245,6 +245,8 @@ namespace ams {
                 std::addressof(g_supervisor_stop_event),
                 false,
                 os::EventClearMode_AutoClear);
+            /* Restore encrypted device credentials before the worker starts. */
+            (void)::nxpctl::sync::Initialize();
         }
 
         void FinalizeSystemModule() {
@@ -252,6 +254,7 @@ namespace ams {
             StopSupervisorThread();
             StopWorkerThread();
             ::nxpctl::sync::Clear();
+            ::nxpctl::sync::Finalize();
             ::nxpctl::net::Finalize();
             os::FinalizeEvent(std::addressof(g_supervisor_stop_event));
             os::FinalizeEvent(std::addressof(g_worker_stop_event));
