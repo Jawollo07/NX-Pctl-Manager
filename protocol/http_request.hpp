@@ -119,7 +119,7 @@ inline bool AppendUnsigned(char* output, std::size_t capacity, std::size_t* used
         return RequestError::OutputTooSmall;
 
     if (used >= capacity) return RequestError::OutputTooSmall;
-    output[used] = '\\0';
+    output[used] = '\0';
     result->data = output;
     result->length = used;
     return RequestError::None;
