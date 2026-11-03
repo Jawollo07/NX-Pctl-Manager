@@ -208,7 +208,7 @@ def test_secure_enrollment_auth_and_heartbeat_are_encrypted(client, monkeypatch)
     assert client.post("/v1/devices/switch-test/heartbeat", json={}).status_code == 404
 
 
-def test_secure_enrollment_rejects_replay_and_wrong_context(client, monkeypatch):
+def test_secure_enrollment_replay_returns_cached_credential(client, monkeypatch):
     import secrets as _secrets
     from server.app import _hash_secret
 
@@ -223,7 +223,8 @@ def test_secure_enrollment_rejects_replay_and_wrong_context(client, monkeypatch)
     first = client.post(path, json=envelope)
     assert first.status_code == 200
     replay = client.post(path, json=envelope)
-    assert replay.status_code == 409
+    assert replay.status_code == 200
+    assert replay.json() == first.json()
 
 
 def test_secure_auth_rejects_plaintext_device_endpoints_by_default(client, monkeypatch):
