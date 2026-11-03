@@ -1,0 +1,121 @@
+// Monotonic, Horizon-independent daily playtime accounting.
+#pragma once
+
+#include <cstdint>
+#include <limits>
+
+namespace nxpctl::usage {
+
+inline constexpr std::uint64_t NoActiveTitle = 0;
+inline constexpr std::uint64_t MaxObservationGapSeconds = 2;
+inline constexpr std::uint16_t MaxDailyUsageMinutes = 24 * 60;
+
+enum class ObserveResult : std::uint8_t {
+    BaselineEstablished = 0,
+    Accumulated,
+    DayRolledOver,
+    ClockRegressed,
+    ObservationGapTooLarge,
+};
+
+class DailyUsageTracker {
+public:
+    // local_day_key is a monotonically increasing local calendar-day number
+    // (for example, Unix days after applying the policy's fixed UTC offset).
+    // monotonic_seconds must come from a monotonic clock, never wall time.
+    [[nodiscard]] ObserveResult Observe(
+        std::uint64_t title_id,
+        std::uint64_t monotonic_seconds,
+        std::int64_t local_day_key) noexcept {
+        if (!initialized_) {
+            initialized_ = true;
+            last_title_id_ = title_id;
+            last_monotonic_seconds_ = monotonic_seconds;
+            local_day_key_ = local_day_key;
+            return ObserveResult::BaselineEstablished;
+        }
+
+        if (local_day_key > local_day_key_) {
+            // Do not charge an interval spanning midnight to either day.
+            active_seconds_ = 0;
+            local_day_key_ = local_day_key;
+            last_title_id_ = title_id;
+            last_monotonic_seconds_ = monotonic_seconds;
+            return ObserveResult::DayRolledOver;
+        }
+
+        if (local_day_key < local_day_key_) {
+            // A wall-clock correction must not roll the usage counter back.
+            // Keep the current day bucket but refresh the monotonic baseline.
+            last_title_id_ = title_id;
+            last_monotonic_seconds_ = monotonic_seconds;
+            return ObserveResult::ClockRegressed;
+        }
+
+        if (monotonic_seconds < last_monotonic_seconds_) {
+            last_title_id_ = title_id;
+            last_monotonic_seconds_ = monotonic_seconds;
+            return ObserveResult::ClockRegressed;
+        }
+
+        const std::uint64_t elapsed = monotonic_seconds - last_monotonic_seconds_;
+        last_title_id_ = title_id;
+        last_monotonic_seconds_ = monotonic_seconds;
+
+        if (elapsed > MaxObservationGapSeconds) {
+            // A stalled worker, suspend, or missed observation is not
+            // assumed to be continuous playtime.
+            return ObserveResult::ObservationGapTooLarge;
+        }
+
+        if (previous_title_was_active_) {
+            if (std::numeric_limits<std::uint64_t>::max() - active_seconds_ < elapsed) {
+                active_seconds_ = std::numeric_limits<std::uint64_t>::max();
+            } else {
+                active_seconds_ += elapsed;
+            }
+        }
+
+        previous_title_was_active_ = title_id != NoActiveTitle;
+        return ObserveResult::Accumulated;
+    }
+
+    void Reset() noexcept {
+        initialized_ = false;
+        previous_title_was_active_ = false;
+        last_title_id_ = NoActiveTitle;
+        last_monotonic_seconds_ = 0;
+        local_day_key_ = 0;
+        active_seconds_ = 0;
+    }
+
+    [[nodiscard]] std::uint64_t GetActiveSeconds() const noexcept {
+        return active_seconds_;
+    }
+
+    // Round up: any started minute consumes one policy minute.
+    [[nodiscard]] std::uint16_t GetDailyUsageMinutes() const noexcept {
+        if (active_seconds_ == 0) return 0;
+        const std::uint64_t rounded = 1 + ((active_seconds_ - 1) / 60);
+        return static_cast<std::uint16_t>(
+            rounded > MaxDailyUsageMinutes ? MaxDailyUsageMinutes : rounded);
+    }
+
+    [[nodiscard]] std::int64_t GetLocalDayKey() const noexcept {
+        return local_day_key_;
+    }
+
+    [[nodiscard]] bool HasBaseline() const noexcept {
+        return initialized_;
+    }
+
+private:
+    bool initialized_ = false;
+    bool previous_title_was_active_ = false;
+    std::uint64_t last_title_id_ = NoActiveTitle;
+    std::uint64_t last_monotonic_seconds_ = 0;
+    std::int64_t local_day_key_ = 0;
+    std::uint64_t active_seconds_ = 0;
+};
+
+} // namespace nxpctl::usage
