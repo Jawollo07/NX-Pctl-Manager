@@ -45,10 +45,11 @@ int run()
         if (R_SUCCEEDED(sysmodule_rc)) {
             if (nxpctl::protocol::IsCompatibleRuntimeStatus(runtime_status)) {
                 brls::Logger::info(
-                    "nxpctl sysmodule: protocol={}, worker_state={}, heartbeat={}, policy_revision={}",
+                    "nxpctl sysmodule: protocol={}, worker_state={}, heartbeat={}, restarts={}, policy_revision={}",
                     runtime_status.protocol_version,
                     runtime_status.worker_state,
                     runtime_status.worker_heartbeat,
+                    runtime_status.worker_restart_count,
                     runtime_status.policy_revision);
             } else {
                 brls::Logger::warning(
