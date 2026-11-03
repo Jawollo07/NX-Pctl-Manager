@@ -147,9 +147,35 @@ def _reject_json_number(_: str) -> object:
     raise SecureMessageError("non-integer JSON numbers are not accepted")
 
 
+def _parse_json_integer(value: str) -> int:
+    digits = value[1:] if value.startswith("-") else value
+    if len(digits) > 20:
+        raise SecureMessageError("decrypted JSON integer is too large")
+    return int(value)
+
+
+def _check_json_depth(value: object, depth: int = 0) -> None:
+    if depth > 8:
+        raise SecureMessageError("decrypted JSON nesting exceeds eight levels")
+    if isinstance(value, dict):
+        for child in value.values():
+            _check_json_depth(child, depth + 1)
+    elif isinstance(value, list):
+        for child in value:
+            _check_json_depth(child, depth + 1)
+
+
 def open_json(envelope: object, key: bytes, context: MessageContext) -> object:
     plaintext = open_message(envelope, key, context)
     try:
-        return json.loads(plaintext.decode("ascii"), object_pairs_hook=_unique_json_object, parse_float=_reject_json_number, parse_constant=_reject_json_number)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        value = json.loads(
+            plaintext.decode("ascii"),
+            object_pairs_hook=_unique_json_object,
+            parse_int=_parse_json_integer,
+            parse_float=_reject_json_number,
+            parse_constant=_reject_json_number,
+        )
+        _check_json_depth(value)
+        return value
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
         raise SecureMessageError("decrypted payload is not valid JSON") from exc
