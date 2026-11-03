@@ -7,6 +7,7 @@
  * access persistent storage, or communicate over the network.
  */
 #include <stratosphere.hpp>
+#include "../../protocol/runtime_status.hpp"
 
 #define AMS_NXPCTL_I_RUNTIME_INTERFACE_INFO(C, H) \
     AMS_SF_METHOD_INFO(C, H, 65000, Result, GetRuntimeStatus, \
@@ -22,15 +23,9 @@ namespace ams {
         constexpr s32 WorkerThreadPriority = 30;
         constexpr size_t WorkerStackSize = 0x4000;
         constexpr s64 WorkerPollIntervalNs = 1'000'000'000LL;
-        constexpr u32 RuntimeProtocolVersion = 1;
         constexpr u64 InitialPolicyRevision = 0;
 
-        enum WorkerState : u32 {
-            WorkerState_Stopped = 0,
-            WorkerState_Starting = 1,
-            WorkerState_Running = 2,
-            WorkerState_Stopping = 3,
-        };
+        using protocol::WorkerState;
 
         alignas(os::ThreadStackAlignment) u8 g_worker_stack[WorkerStackSize];
         os::ThreadType g_worker_thread;
@@ -40,7 +35,7 @@ namespace ams {
         bool g_worker_thread_created = false;
 
         void WorkerThreadMain(void *) {
-            g_worker_state = WorkerState_Running;
+            g_worker_state = static_cast<u32>(protocol::WorkerState::Running);
 
             /*
              * The timed wait is both the worker's idle cadence and its
@@ -53,13 +48,13 @@ namespace ams {
                 ++g_worker_heartbeat;
             }
 
-            g_worker_state = WorkerState_Stopped;
+            g_worker_state = static_cast<u32>(protocol::WorkerState::Stopped);
         }
 
         void StartWorkerThread() {
             AMS_ASSERT(!g_worker_thread_created);
 
-            g_worker_state = WorkerState_Starting;
+            g_worker_state = static_cast<u32>(protocol::WorkerState::Starting);
             g_worker_heartbeat = 0;
 
             R_ABORT_UNLESS(os::CreateThread(
@@ -84,7 +79,7 @@ namespace ams {
                 return;
             }
 
-            g_worker_state = WorkerState_Stopping;
+            g_worker_state = static_cast<u32>(protocol::WorkerState::Stopping);
             os::SignalEvent(std::addressof(g_worker_stop_event));
             os::WaitThread(std::addressof(g_worker_thread));
             os::DestroyThread(std::addressof(g_worker_thread));
@@ -102,7 +97,7 @@ namespace ams {
                     sf::Out<u32> out_worker_state,
                     sf::Out<u32> out_worker_heartbeat,
                     sf::Out<u64> out_policy_revision) {
-                    *out_protocol_version = RuntimeProtocolVersion;
+                    *out_protocol_version = protocol::RuntimeProtocolVersion;
                     *out_worker_state = g_worker_state;
                     *out_worker_heartbeat = g_worker_heartbeat;
                     *out_policy_revision = InitialPolicyRevision;
@@ -118,7 +113,7 @@ namespace ams {
 
         using RuntimeServerOptions = sf::hipc::DefaultServerManagerOptions;
 
-        constexpr sm::ServiceName RuntimeServiceName = sm::ServiceName::Encode("nxpctl");
+        constexpr sm::ServiceName RuntimeServiceName = sm::ServiceName::Encode(protocol::ServiceName);
         constexpr size_t RuntimeMaxSessions = 4;
 
         sf::hipc::ServerManager<1, RuntimeServerOptions, RuntimeMaxSessions> g_runtime_server_manager;

@@ -1,7 +1,6 @@
 // Read-only client for the NX-Pctl-Manager resident sysmodule.
 // Copyright (C) 2026 Taylor. GPLv3-or-later (see LICENSE).
 #include "sysmodule_client.hpp"
-#include <cstddef>
 
 namespace nxpctl {
 static_assert(offsetof(RuntimeStatus, policy_revision) == 16,
@@ -13,12 +12,12 @@ Result get_runtime_status(RuntimeStatus* out) {
 
     *out = {};
     Service service{};
-    Result rc = smGetService(&service, "nxpctl");
+    Result rc = smGetService(&service, protocol::ServiceName);
     if (R_FAILED(rc))
         return rc;
 
     // Command 65000 mirrors IRuntime::GetRuntimeStatus in the sysmodule.
-    rc = serviceDispatchOut(&service, 65000, *out);
+    rc = serviceDispatchOut(&service, protocol::RuntimeStatusCommandId, *out);
     serviceClose(&service);
     return rc;
 }
