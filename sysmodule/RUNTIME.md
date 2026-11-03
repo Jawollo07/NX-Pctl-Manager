@@ -132,3 +132,37 @@ requirements, and firmware-specific behavior still need a source-level and
 hardware-compatible validation. Therefore `service_access` remains empty and
 network code remains disabled; no ACL or kernel capability is inferred from
 the names above.
+
+## Network service permissions and implementation audit
+
+The pinned Atmosphere source contains a Horizon socket backend in
+`libraries/libstratosphere/source/socket/impl/socket_api.os.horizon.cpp`.
+It initializes BSD through libnx using the system-client mode when
+`socket::SystemConfigDefault` is selected. Its resolver entry points are
+provided by libnx's `getaddrinfo` implementation and call the
+`sfdnsres` service. The pinned libnx SSL implementation requests `ssl`
+when using its default service type.
+
+Based on those concrete call paths, the NPDM `service_access` list now
+contains only:
+
+- `bsd:s` — system BSD socket session used by the Atmosphere socket backend.
+- `sfdnsres` — hostname resolution used by libnx `getaddrinfo`.
+- `ssl` — libnx system SSL context/connection service.
+
+NIFM is intentionally not requested: the audited socket initialization path
+does not call `nifmInitialize`. No additional kernel syscalls were added by
+this permission change. The permissions are not yet hardware-validated and
+must be checked against the exact target firmware and service-manager policy
+before installation.
+
+The production transport contract is HTTPS only: TCP port 443, DNS resolution
+through the platform resolver, TLS SNI and hostname equal to the configured
+public API hostname, peer-CA + hostname + certificate-date validation, no
+redirect following, no proxy challenges, bounded request/response buffers,
+bounded connection/read timeouts, and connection closure after each request.
+The HTTP builder/parser are framing helpers only; they do not establish TLS or
+prove server identity. The TLS client must not disable the SSL service's
+default peer/hostname checks. No credentials or policy may be sent until the
+TLS handshake has succeeded and all required verification checks are
+confirmed.
