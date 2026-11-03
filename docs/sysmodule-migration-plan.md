@@ -157,8 +157,8 @@ Prefer documented Atmosphere/Stratosphere interfaces and narrowly scoped version
 ### Phase 2 — lifecycle and local IPC
 - [x] Add a versioned, read-only local HIPC endpoint for protocol version, worker state, heartbeat and policy revision.
 - [x] Add a bounded worker thread, dedicated stack, atomic health counters and cooperative stop event.
-- [ ] Add PSC-based suspend/resume handling after the module identity/dependency registration is validated.
-- [ ] Add worker failure supervision and bounded restart/backoff.
+- [ ] Add PSC-based suspend/resume handling only after a valid project-owned module identity/dependency registration is established. The pinned Atmosphere PmModuleId enum has no project-owned ID; gaps/reserved values must not be guessed or reused. See `sysmodule/RUNTIME.md`.
+- [ ] Add worker failure supervision and bounded restart/backoff. The pinned libstratosphere API exposes `os::TryWaitThread`; use it only in a dedicated supervisor design that cannot race the server lifecycle.
 - [ ] Add a companion-client IPC test and verify service access on the declared firmware.
 - Acceptance remains pending: IPC health queries must work; repeated start/stop and sleep/wake must not leak handles or threads.
 
