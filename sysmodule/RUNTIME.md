@@ -67,7 +67,7 @@ They are not a transport implementation: there is no DNS lookup, socket,
 TLS handshake, certificate validation, redirect handling, retry policy or
 credential provisioning yet.
 
-## Cloudflare deployment requirement
+## End-to-end encrypted HTTP payload protocol\n\nThe selected transport is HTTP with an application-layer authenticated-encryption envelope. `docs/secure-http-protocol.md` defines AES-128-GCM, HKDF-SHA-256 key domains, 96-bit nonces, 128-bit tags, and associated data binding each message to its direction, HTTP method, path, and device ID. The Python reference primitive is in `server/secure_transport.py` and is host-tested. It is not yet integrated into FastAPI routes or the Horizon sysmodule; therefore the current API still accepts plaintext and is **not safe to expose over public HTTP**. The remaining work includes encrypted one-time enrollment bootstrap, recoverable server-side device-key protection, Switch-side AES-GCM and HKDF, request sequencing/replay rejection, and cross-language known-answer tests.\n\n## Cloudflare deployment requirement
 
 The intended public deployment is Switch → HTTPS on Cloudflare-proxied
 hostname (port 443) → Cloudflare → HTTPS origin in Full (strict) mode →
