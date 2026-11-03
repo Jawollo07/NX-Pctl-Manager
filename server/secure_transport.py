@@ -22,7 +22,6 @@ KEY_BYTES = 16
 NONCE_BYTES = 12
 TAG_BYTES = 16
 MAX_PLAINTEXT_BYTES = 64 * 1024
-MAX_ENVELOPE_BYTES = 96 * 1024
 _DEVICE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 _METHOD = re.compile(r"^(GET|POST)$")
 _DIRECTION = re.compile(r"^(request|response)$")
@@ -128,9 +127,22 @@ def seal_json(value: object, key: bytes, context: MessageContext) -> dict[str, o
     return seal(raw, key, context)
 
 
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise SecureMessageError("duplicate decrypted JSON field")
+        result[key] = value
+    return result
+
+
+def _reject_json_number(_: str) -> object:
+    raise SecureMessageError("non-integer JSON numbers are not accepted")
+
+
 def open_json(envelope: object, key: bytes, context: MessageContext) -> object:
     plaintext = open_message(envelope, key, context)
     try:
-        return json.loads(plaintext.decode("ascii"))
+        return json.loads(plaintext.decode("ascii"), object_pairs_hook=_unique_json_object, parse_float=_reject_json_number, parse_constant=_reject_json_number)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise SecureMessageError("decrypted payload is not valid JSON") from exc
