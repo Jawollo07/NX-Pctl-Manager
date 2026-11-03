@@ -36,7 +36,7 @@ namespace {
             }
             const bool lsb = (v[15] & 1) != 0;
             ShiftRightOne(v);
-            if (lsb) v[0] ^= 0xe1;
+            v[0] ^= static_cast<u8>(0xe1 & static_cast<u8>(0 - static_cast<u8>(lsb)));
         }
         std::memcpy(out, z, sizeof(z));
         std::memset(z, 0, sizeof(z));
