@@ -47,6 +47,7 @@
         "svcSetThreadCoreMask": "0x0f",
         "svcSignalEvent": "0x11",
         "svcClearEvent": "0x12",
+        "svcCreateTransferMemory": "0x15",
         "svcCloseHandle": "0x16",
         "svcWaitSynchronization": "0x18",
         "svcGetSystemTick": "0x1e",
