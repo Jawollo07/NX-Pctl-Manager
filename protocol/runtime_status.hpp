@@ -15,6 +15,7 @@ enum class WorkerState : std::uint32_t {
     Starting = 1,
     Running = 2,
     Stopping = 3,
+    Failed = 4,
 };
 
 struct alignas(8) RuntimeStatus {
@@ -31,6 +32,7 @@ struct alignas(8) RuntimeStatus {
         case WorkerState::Starting:
         case WorkerState::Running:
         case WorkerState::Stopping:
+        case WorkerState::Failed:
             return true;
         default:
             return false;
