@@ -55,8 +55,8 @@ def test_nonce_and_key_domains_are_validated():
 def test_envelope_schema_and_size_are_strict():
     key = derive_key(b"x" * 32, "switch-test")
     with pytest.raises(SecureMessageError):
-        open_message({"v": 1, "n": "AA", "c": "AA", "extra": 1}, key, context())
+        open_message({"v": 1, "s": 0, "n": "AA", "c": "AA", "extra": 1}, key, context())
     with pytest.raises(SecureMessageError):
-        open_message({"v": 2, "n": "AA", "c": "AA"}, key, context())
+        open_message({"v": 2, "s": 0, "n": "AA", "c": "AA"}, key, context())
     with pytest.raises(SecureMessageError):
         seal(b"x" * (64 * 1024 + 1), key, context())
