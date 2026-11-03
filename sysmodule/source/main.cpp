@@ -7,9 +7,12 @@
  * access persistent storage, or communicate over the network.
  */
 #include <stratosphere.hpp>
+#include <cstring>
 #include "../../protocol/runtime_status.hpp"
 #include "../../protocol/worker_supervision.hpp"
 #include "../../protocol/policy.hpp"
+#include "../../protocol/provisioning.hpp"
+#include "secure_sync.hpp"
 #include "http_transport.hpp"
 
 #define AMS_NXPCTL_I_RUNTIME_INTERFACE_INFO(C, H) \
@@ -44,6 +47,8 @@ namespace ams {
 
         void WorkerThreadMain(void *) {
             g_worker_state = static_cast<u32>(::nxpctl::protocol::WorkerState::Running);
+            u64 uptime_seconds = 0;
+            u32 sync_countdown = 0;
 
             /*
              * The timed wait is both the worker's idle cadence and its
@@ -54,6 +59,14 @@ namespace ams {
                 std::addressof(g_worker_stop_event),
                 TimeSpan::FromNanoSeconds(WorkerPollIntervalNs))) {
                 ++g_worker_heartbeat;
+                ++uptime_seconds;
+                if (sync_countdown == 0) {
+                    if (::nxpctl::sync::IsConfigured()) {
+                        ::nxpctl::sync::RunCycle(g_policy_store, uptime_seconds);
+                    }
+                    sync_countdown = 60;
+                }
+                --sync_countdown;
             }
 
             g_worker_state = static_cast<u32>(::nxpctl::protocol::WorkerState::Stopped);
@@ -168,6 +181,21 @@ namespace ams {
                     *out_policy_revision = g_policy_store.GetRevision();
                     R_SUCCEED();
                 }
+
+                Result ConfigureEnrollment(sf::InBuffer request) {
+                    if (request.GetSize() != sizeof(::nxpctl::protocol::ProvisioningRequest)) {
+                        R_THROW(0xD401);
+                    }
+                    ::nxpctl::protocol::ProvisioningRequest config{};
+                    std::memcpy(&config, request.GetPointer(), sizeof(config));
+                    if (!::nxpctl::protocol::IsValidProvisioningRequest(config)) {
+                        std::memset(&config, 0, sizeof(config));
+                        R_THROW(0xD402);
+                    }
+                    ::nxpctl::sync::Configure(config);
+                    std::memset(&config, 0, sizeof(config));
+                    R_SUCCEED();
+                }
         };
 
         static_assert(impl::IsIRuntime<RuntimeService>);
@@ -210,6 +238,7 @@ namespace ams {
             /* Stop supervision first so an intentional shutdown is not restarted. */
             StopSupervisorThread();
             StopWorkerThread();
+            ::nxpctl::sync::Clear();
             ::nxpctl::net::Finalize();
             os::FinalizeEvent(std::addressof(g_supervisor_stop_event));
             os::FinalizeEvent(std::addressof(g_worker_stop_event));
@@ -230,9 +259,9 @@ namespace ams {
         StartSupervisorThread();
 
         /*
-         * This HIPC endpoint is deliberately read-only. It exposes only
-         * runtime diagnostics; policy mutation and enforcement are not
-         * available through this protocol version.
+         * HIPC exposes runtime diagnostics plus a narrowly-scoped enrollment
+         * bootstrap. It accepts only bounded host/device/code data; it has no
+         * general-purpose policy mutation or enforcement command.
          */
         R_ABORT_UNLESS(g_runtime_server_manager.RegisterObjectForServer(
             g_runtime_service.GetShared(),
