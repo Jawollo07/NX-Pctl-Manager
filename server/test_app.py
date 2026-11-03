@@ -87,6 +87,7 @@ def test_auth_policy_and_device_scope(client):
     response = client.get("/v1/devices/switch-test/policy", headers=headers)
     assert response.status_code == 200
     assert response.json()["revision"] == 1
+    assert abs(response.json()["server_time"] - int(time.time())) <= 2
     assert client.get("/v1/devices/another-device/policy", headers=headers).status_code == 403
     assert client.get("/v1/devices/switch-test/policy").status_code == 401
 
