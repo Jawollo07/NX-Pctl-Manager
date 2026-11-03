@@ -496,10 +496,6 @@ async def policy_ack(device_id: str, request: Request):
     return {"accepted": True}
 
 
-def _secure_scope(secret_digest: bytes, purpose: str, device_id: str) -> str:
-    return f"{purpose}:{device_id}:{secret_digest.hex()}"
-
-
 def _accept_secure_sequence(scope: str, sequence: int) -> None:
     """Atomically consume a random 64-bit request ID for this key epoch."""
     now = int(time.time())
@@ -642,7 +638,11 @@ async def secure_device_api(device_id: str, operation: str, request: Request):
                 row = db.execute("SELECT credential_hash,revoked_at FROM devices WHERE device_id=?", (device_id,)).fetchone()
             if row is None or row["revoked_at"] is not None:
                 raise HTTPException(401, "unknown or revoked device")
-            digest = bytes.fromhex(str(row["credential_hash"]))
+            key_id = envelope.get("k")
+            stored_hash = str(row["credential_hash"])
+            if not isinstance(key_id, str) or not re.fullmatch(r"[0-9a-f]{64}", key_id) or not hmac.compare_digest(key_id, stored_hash):
+                raise SecureMessageError("device key identifier mismatch")
+            digest = bytes.fromhex(stored_hash)
             key = derive_key_from_digest(digest, device_id, "device")
             purpose = "device"
 
