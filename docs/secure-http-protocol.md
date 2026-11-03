@@ -20,11 +20,11 @@ untrusted network.
 The JSON wire envelope is exactly:
 
 ```json
-{"v":1,"n":"BASE64URL_NONCE","c":"BASE64URL_CIPHERTEXT_AND_TAG"}
+{"v":1,"s":42,"n":"BASE64URL_NONCE","c":"BASE64URL_CIPHERTEXT_AND_TAG"}
 ```
 
 - AES-128-GCM, 16-byte key, 12-byte nonce, 16-byte authentication tag.
-- Base64url without padding; no additional envelope fields.
+- `s` is an unsigned 64-bit per-device request sequence, authenticated as AAD. Responses echo the request sequence.\n- Base64url without padding; no additional envelope fields.
 - Maximum plaintext: 64 KiB.
 - The GCM associated data is the ASCII string
   `NX-PCTL-AEAD/1\n{direction}\n{method}\n{path}\n{device_id}`.
