@@ -85,7 +85,7 @@ jobs:
               make -C deps/libnx install
 
               # Compile the NRO-side HIPC client against the same pinned libnx.
-              aarch64-none-elf-g++ -std=gnu++17 -Wall -Wextra \
+              "$DEVKITPRO/devkitA64/bin/aarch64-none-elf-g++" -std=gnu++17 -Wall -Wextra \
                 -I"$DEVKITPRO/libnx/include" \
                 -c source/util/sysmodule_client.cpp \
                 -o /tmp/nxpctl-sysmodule-client.o
