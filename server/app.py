@@ -596,7 +596,7 @@ async def secure_device_api(device_id: str, operation: str, request: Request):
             # known device-bound outstanding code record below.
             with database() as db:
                 enrollment_rows = db.execute(
-                    "SELECT code_hash FROM enrollment_codes WHERE device_id=? AND used_at IS NULL AND expires_at>?",
+                    "SELECT code_hash FROM enrollment_codes WHERE device_id=? AND expires_at>?",
                     (device_id, int(time.time())),
                 ).fetchall()
             # The invitation code itself is not present outside ciphertext;
