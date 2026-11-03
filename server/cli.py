@@ -22,7 +22,8 @@ def create_enrollment(args: argparse.Namespace) -> int:
     now = int(time.time())
     code = secrets.token_urlsafe(24)
     with database() as db:
-        if db.execute("SELECT 1 FROM devices WHERE device_id=?", (args.device_id,)).fetchone():
+        existing = db.execute("SELECT revoked_at FROM devices WHERE device_id=?", (args.device_id,)).fetchone()
+        if existing is not None and existing["revoked_at"] is None:
             print("device is already enrolled; revoke it before re-enrollment", file=sys.stderr)
             return 2
         db.execute("DELETE FROM enrollment_codes WHERE device_id=?", (args.device_id,))
