@@ -12,6 +12,7 @@
 #include "activity/pin_gate_activity.hpp"
 #include "util/pctl_ops_c.hpp"
 #include "util/totp.hpp"
+#include "util/sysmodule_client.hpp"
 #include "view/pt_state_header.hpp"
 #include "view/status_panel.hpp"
 
@@ -45,6 +46,22 @@ int run()
     // we show a dedicated InitErrorActivity (the only thing the user can do
     // is press B to exit).
     if (app::init()) {
+        // Optional read-only diagnostics probe. The NRO remains usable if the
+        // resident sysmodule is not installed or its service is unavailable.
+        nxpctl::RuntimeStatus runtime_status{};
+        const Result sysmodule_rc = nxpctl::get_runtime_status(&runtime_status);
+        if (R_SUCCEEDED(sysmodule_rc)) {
+            brls::Logger::info(
+                "nxpctl sysmodule: protocol={}, worker_state={}, heartbeat={}, policy_revision={}",
+                runtime_status.protocol_version,
+                runtime_status.worker_state,
+                runtime_status.worker_heartbeat,
+                runtime_status.policy_revision);
+        } else {
+            brls::Logger::info("nxpctl sysmodule unavailable (0x{:08X}); continuing in standalone mode",
+                               static_cast<uint32_t>(sysmodule_rc));
+        }
+
         // A registered PIN guards the whole tool (it can lift every restriction).
         PctlStatus st;
         pctl_status_fetch(&st);
