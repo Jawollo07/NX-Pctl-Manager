@@ -56,3 +56,7 @@ A successful host-side compile is not evidence that the module is safe to load.
 Hardware installation/testing is intentionally not part of this phase.
 
 The exact schema-v1 JSON profile is documented in [`docs/policy-schema-v1.md`](../docs/policy-schema-v1.md).
+
+## Policy processing status
+
+The current branch includes a bounded schema-v1 decoder and a pure policy evaluator. Both are host-tested foundations only: no authenticated network path feeds them, and the evaluator is not connected to title monitoring or enforcement.
