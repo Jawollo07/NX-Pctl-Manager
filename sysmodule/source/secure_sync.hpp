@@ -4,6 +4,8 @@
 #include <stratosphere.hpp>
 
 namespace nxpctl::sync {
+    bool Initialize();
+    void Finalize();
     void Configure(const protocol::ProvisioningRequest& request);
     bool IsConfigured();
     bool IsEnrolled();
