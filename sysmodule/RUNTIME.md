@@ -22,6 +22,10 @@ The HIPC interface is read-only. It does not inspect running titles, change pare
 4. Add policy validation and in-memory policy snapshots.
 5. Implement enforcement only after the required Horizon services, permissions, firmware compatibility, and recovery behavior have been validated.
 
+## Power-state integration gate
+
+The pinned Atmosphere revision exposes suspend/resume notifications through `ams::psc::PmModule`. Its `PmModuleId` enum assigns named IDs to platform modules (including PCTL and other system services), but it does not provide a project-owned ID for this sysmodule. The gaps and reserved value are not safe allocation points. This project must not claim one of those IDs or register as another system service. PSC integration remains blocked until a valid module identity/dependency registration is established for the target firmware. Until then, no PSC request is acknowledged and no suspend/resume behavior is implemented.
+
 ## Safety boundary
 
 The NPDM title ID remains provisional. Do not install or launch this artifact on a console until the title ID, service permissions, kernel capabilities, firmware compatibility, and recovery procedure have been reviewed. CI packaging does not constitute hardware validation.
