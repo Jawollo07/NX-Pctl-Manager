@@ -13,14 +13,16 @@
   "address_space_type": 3,
   "disable_device_address_space_merge": true,
   "filesystem_access": {
-    "permissions": "0x0000000000000000"
+    "permissions": "0x0000000800040000"
   },
   "service_host": [
     "nxpctl"
   ],
   "service_access": [
     "bsd:s",
-    "sfdnsres"
+    "sfdnsres",
+    "fsp-srv",
+    "spl:crypto"
   ],
   "kernel_capabilities": [
     {
