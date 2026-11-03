@@ -23,7 +23,7 @@ Every secure endpoint accepts and returns exactly this outer JSON shape:
 ```
 
 - `v`: protocol version 1.
-- `s`: fresh random unsigned 64-bit request identifier. The Switch generates
+- `s`: fresh random 63-bit request identifier (kept within SQLite's signed INTEGER range). The Switch generates
   a new cryptographically random value for each request; it is not a counter
   and requires no persistent storage. The response echoes it.
 - `k`: SHA-256 digest of the invitation code or device credential, encoded as
