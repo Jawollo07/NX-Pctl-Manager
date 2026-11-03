@@ -6,7 +6,7 @@
 
 namespace nxpctl::http {
 
-inline constexpr std::size_t MaxRequestBodyBytes = 16 * 1024;
+inline constexpr std::size_t MaxRequestBodyBytes = 96 * 1024;
 
 enum class RequestError : std::uint8_t {
     None = 0, NullArgument, InvalidMethod, InvalidHost, InvalidPath,
