@@ -59,13 +59,13 @@ The evaluator is host-tested. It is not yet called by the sysmodule worker and d
 allocation-free HTTP framing with 96 KiB body limits, strict Content-Length
 handling, and rejection of chunked/compressed responses.
 
-`source/http_transport.cpp` initializes Atmosphere's system BSD client,
+`sysmodule/source/http_transport.cpp` initializes Atmosphere's system BSD client,
 resolves IPv4 hostnames through the platform resolver, and performs nonblocking
 TCP connects with a five-second timeout. Send and receive waits are capped at
 eight seconds per wait. Connections are closed after each request. DNS lookup
 is synchronous and does not yet have a project-enforced deadline.
 
-`source/secure_http_client.cpp` builds the exact v1 envelope, derives the
+`sysmodule/source/secure_http_client.cpp` builds the exact v1 envelope, derives the
 AES-128 key and SHA-256 key selector, generates a fresh 63-bit request ID and
 96-bit nonce, binds request/response direction and path in AAD, and verifies
 the response selector, echoed request ID and GCM tag before exposing plaintext.
@@ -73,10 +73,15 @@ The AES-GCM NIST vector and backend-matched HKDF vector are run before the first
 secure POST. Large transport buffers are static BSS allocations, not worker
 stack allocations.
 
-The callable client is not yet invoked by the worker: the trusted enrollment
-code/API-host provisioning channel and device credential lifecycle are not
-implemented. Do not expose the backend publicly until cross-language envelope
-fixtures, provisioning and real-device validation are complete.
+The NRO supplies the API hostname, device ID and one-time enrollment code
+through HIPC command 65001. The worker invokes the secure client to enroll,
+authenticate, refresh its short-lived token, send heartbeats, retrieve and
+validate policy snapshots, publish accepted snapshots to the RAM-only store,
+and acknowledge their revisions. The enrollment code is erased after a
+successful enrollment. Device credentials and tokens are currently RAM-only:
+a sysmodule restart requires a new enrollment. Protected persistence and
+recovery remain unimplemented. Do not expose the backend publicly until
+cross-language fixtures and real-device validation are complete.
 
 ## HTTP and Cloudflare deployment decision
 
@@ -112,9 +117,10 @@ does not call `nifmInitialize`. The NPDM syscall list includes
 `svcCreateTransferMemory` (`0x15`) because the BSD client shares its
 configured socket memory pool with `bsd:s`.
 
-The transport and secure envelope client are now implemented, but the worker
-does not invoke them yet. Trusted API-host and one-time enrollment-code
-provisioning, device credential lifecycle, token refresh, cross-language
-envelope fixtures and real-device validation remain required before public
-deployment. The policy store is not populated from the network and no
-restrictions are enforced.
+The worker now invokes the transport and secure envelope client after
+local provisioning. Enrollment, authentication, token refresh, heartbeat,
+policy retrieval, policy validation/publication and policy acknowledgement
+are implemented. Credentials remain volatile and must be provisioned again
+after a module restart. Cross-language fixture coverage and real-device
+validation remain required before public deployment. No restrictions are
+enforced on the console yet.
