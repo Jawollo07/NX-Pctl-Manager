@@ -136,7 +136,10 @@ configured socket memory pool with `bsd:s`.
 The worker now invokes the transport and secure envelope client after
 local provisioning. Enrollment, authentication, token refresh, heartbeat,
 policy retrieval, policy validation/publication and policy acknowledgement
-are implemented. Credentials remain volatile and must be provisioned again
-after a module restart. Cross-language fixture coverage and real-device
+are implemented, including protected device-credential persistence. The API
+host, device ID and long-lived credential are stored in alternating
+AES-GCM-authenticated records in this sysmodule's own device save data. After
+a restart, the newest valid record is restored and a fresh access token is
+obtained. Cross-language fixture coverage and real-device
 validation remain required before public deployment. No restrictions are
 enforced on the console yet.
