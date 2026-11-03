@@ -70,28 +70,34 @@ credential provisioning yet.
 ## End-to-end encrypted HTTP payload protocol\n\nThe selected transport is HTTP with an application-layer authenticated-encryption envelope. `docs/secure-http-protocol.md` defines AES-128-GCM, HKDF-SHA-256 key domains, 96-bit nonces, 128-bit tags, and associated data binding each message to its direction, HTTP method, path, and device ID. The Python reference primitive is in `server/secure_transport.py` and is host-tested. It is not yet integrated into FastAPI routes or the Horizon sysmodule; therefore the current API still accepts plaintext and is **not safe to expose over public HTTP**. The remaining work includes encrypted one-time enrollment bootstrap, recoverable server-side device-key protection, Switch-side AES-GCM and HKDF, request sequencing/replay rejection, and cross-language known-answer tests.\n\n## HTTP and Cloudflare deployment decision
 
 The selected device-facing transport is HTTP with end-to-end AES-128-GCM
-payload encryption between Switch and backend. Cloudflare may proxy ciphertext,
-but sees hostnames, IP addresses, paths, headers, sizes and timing and can
-still block or replay traffic. API paths must bypass caching, body
-transformations, HTTP redirects and interactive Access/JavaScript challenges.
-The origin must remain private.
+payload encryption. The FastAPI backend now exposes
+`POST /v1/secure/{device_id}/{operation}`; legacy plaintext device routes are
+disabled by default. The envelope binds request/response direction, exact
+path, device ID and a random request identifier as GCM associated data.
+Access tokens are carried only inside ciphertext.
 
-The Python reference primitive is in `server/secure_transport.py`.
-It is not yet integrated into the API routes or the Horizon sysmodule, so
-current endpoints still transmit plaintext and are not approved for public
-HTTP. Do not enable the public Cloudflare route until encrypted enrollment,
-all encrypted API request/response bodies, Switch-side AES-GCM/HKDF,
-transactional replay rejection, and cross-language test vectors are complete.
+The backend derives the device key from the SHA-256 hash already stored for
+the device credential. Enrollment uses the one-time invitation-code hash as
+the bootstrap key. The Switch must hash the raw UTF-8 secret first, then use
+HKDF-SHA-256 with salt `NX-PCTL-AEAD-1` and info
+`NX-PCTL-AEAD/1/{purpose}/{device_id}`.
 
-## Pinned Atmosphere cryptography audit
+The new `source/secure_crypto.cpp` implements AES-128-GCM using the pinned
+libnx AES-ECB hardware primitive plus a project GHASH implementation. It also
+uses libnx SHA-256, HMAC-SHA-256 and OS-seeded random generation for HKDF,
+nonces and request identifiers. Its self-test includes NIST SP 800-38D AES-GCM
+known-answer vectors and a backend-matched HKDF vector. This source is built
+with the sysmodule, but is not yet called by the worker or connected to the
+HTTP client. It must pass CI compilation and a real-device self-test before
+the network code may use it.
 
-The pinned Atmosphere revision contains AES-GCM headers in libvapours, but its
-ARM64 GCM implementation explicitly leaves the EL0/Stratosphere implementation
-as a TODO. The sysmodule must not call this as if it were a working
-cryptographic implementation. A supported, maintained EL0 crypto dependency
-or a separately audited implementation is required before adding Switch-side
-AES-GCM. This is why the current change deliberately adds the tested backend
-primitive first and does not fake a working Switch crypto path.
+Cloudflare can proxy ciphertext but still sees IP addresses, hostname, URL
+paths, headers, packet sizes and timing and can block or delay traffic. API
+paths must bypass caching and body transformations; do not apply redirects,
+Access login or browser challenges. Keep the origin private. The Python
+backend routes are integrated, but public use remains blocked until the
+Switch-side wire encoder/decoder, HTTP client, cross-language vectors and
+full device workflow are tested.
 
 ## Network service permissions and implementation audit
 
@@ -119,13 +125,11 @@ socket memory pool with `bsd:s`. The audited path does not call
 not added. The permissions are not yet hardware-validated and must be checked
 against the exact target firmware and service-manager policy before installation.
 
-The production transport contract is HTTPS only: TCP port 443, DNS resolution
-through the platform resolver, TLS SNI and hostname equal to the configured
-public API hostname, peer-CA + hostname + certificate-date validation, no
-redirect following, no proxy challenges, bounded request/response buffers,
-bounded connection/read timeouts, and connection closure after each request.
-The HTTP builder/parser are framing helpers only; they do not establish TLS or
-prove server identity. The TLS client must not disable the SSL service's
-default peer/hostname checks. No credentials or policy may be sent until the
-TLS handshake has succeeded and all required verification checks are
-confirmed.
+The production transport contract is HTTP POST to the configured public API
+hostname, with all device-specific request and response bodies protected by
+the application-layer AES-GCM envelope. DNS resolution uses the platform
+resolver; sockets require bounded connect/read timeouts, bounded request and
+response buffers, and connection closure after each request. The HTTP
+framing/parser helpers and crypto primitives do not yet constitute a complete
+network client. No credentials or policy are sent until the end-to-end
+encryption, replay checks and response authentication are active.
