@@ -49,12 +49,11 @@ under the same bootstrap key. Both sides then derive the long-term device key
 from the device credential. Authentication, token exchange, policy delivery,
 heartbeats, event batches and acknowledgements must use that device key.
 
-The backend must retain a recoverable copy of the device credential for
-decryption, protected at rest by a separately provisioned server master key;
-a one-way hash alone is insufficient for AEAD decryption. The master key must
-come from a secret manager or protected environment injection, never from the
-repository or SQLite plaintext. Re-enrollment rotates the credential and
-invalidates all prior device keys and sessions.
+The server derives the same key from the already stored SHA-256 hash of the
+enrollment code or device credential: the Switch hashes its raw secret first,
+then both sides apply identical HKDF-SHA-256 parameters. This avoids storing a
+recoverable device credential or adding a server master key. Re-enrollment
+rotates the credential and invalidates all prior device keys and sessions.
 
 ## Replay protection still required
 
