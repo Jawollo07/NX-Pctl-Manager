@@ -677,6 +677,7 @@ async def secure_device_api(device_id: str, operation: str, request: Request):
             response_payload = {"error": exc.detail}
         response_context = MessageContext(device_id, "POST", path, "response", sequence)
         response_envelope = seal_json(response_payload, key, response_context)
+        response_envelope["k"] = envelope["k"]
         return JSONResponse(
             status_code=status_code,
             content=response_envelope,
