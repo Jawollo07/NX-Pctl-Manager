@@ -22,7 +22,7 @@
     "bsd:s",
     "sfdnsres",
     "fsp-srv",
-    "spl:crypto"
+    "spl:"
   ],
   "kernel_capabilities": [
     {

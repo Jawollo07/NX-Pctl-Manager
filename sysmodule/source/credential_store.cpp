@@ -8,6 +8,10 @@
 namespace nxpctl::credential_store {
 namespace {
 
+    namespace fs = ams::fs;
+    namespace hos = ams::hos;
+    namespace spl = ams::spl;
+
     constexpr char MountName[] = "nxpctl";
     constexpr char Slot0Path[] = "nxpctl:/credential0.bin";
     constexpr char Slot1Path[] = "nxpctl:/credential1.bin";
@@ -64,7 +68,7 @@ namespace {
             return false;
         }
 
-        const Result kek_result = spl::GenerateAesKek(
+        const ams::Result kek_result = spl::GenerateAesKek(
             &access_key, &CredentialKeySource, sizeof(CredentialKeySource),
             static_cast<s32>(generation), 1);
         if (R_FAILED(kek_result)) {
@@ -72,7 +76,7 @@ namespace {
             return false;
         }
 
-        const Result key_result = spl::GenerateAesKey(
+        const ams::Result key_result = spl::GenerateAesKey(
             out_key, crypto::Aes128KeySize, access_key,
             &CredentialKeySource, sizeof(CredentialKeySource));
         Wipe(&access_key, sizeof(access_key));
@@ -126,8 +130,8 @@ namespace {
         }
 
         s64 file_size = 0;
-        const Result size_result = fs::GetFileSize(&file_size, file);
-        Result read_result = size_result;
+        const ams::Result size_result = fs::GetFileSize(&file_size, file);
+        ams::Result read_result = size_result;
         if (R_SUCCEEDED(size_result) && file_size == static_cast<s64>(sizeof(record))) {
             read_result = fs::ReadFile(
                 &bytes_read, file, 0, &record, sizeof(record), fs::ReadOption::None);
@@ -183,7 +187,7 @@ namespace {
         if (R_SUCCEEDED(fs::CreateFile(path, sizeof(record)))) {
             fs::FileHandle file{};
             if (R_SUCCEEDED(fs::OpenFile(&file, path, fs::OpenMode_Write))) {
-                const Result write_result = fs::WriteFile(
+                const ams::Result write_result = fs::WriteFile(
                     file, 0, &record, sizeof(record), fs::WriteOption::Flush);
                 fs::CloseFile(file);
                 success = R_SUCCEEDED(write_result);

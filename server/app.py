@@ -492,7 +492,7 @@ async def policy_ack(device_id: str, request: Request):
     body = _require_object(await read_json(request))
     revision, status = body.get("revision"), body.get("status")
     message = body.get("message", "")
-    if not _is_int(revision) or revision < 1:
+    if not _is_int(revision) or revision < 1: # type: ignore
         raise HTTPException(422, "invalid revision")
     if status not in ("accepted", "rejected", "applied", "failed"):
         raise HTTPException(422, "invalid status")
@@ -595,7 +595,7 @@ async def _dispatch_secure_operation(operation: str, device_id: str, request: Re
         if isinstance(response, JSONResponse):
             if response.status_code >= 400:
                 raise HTTPException(response.status_code, "policy request failed")
-            return json.loads(response.body)
+            return json.loads(response.body) # type: ignore
         return response
     synthetic = _synthetic_request(request, f"/v1/devices/{device_id}/{operation}", {
         **payload, "access_token": token,

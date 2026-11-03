@@ -66,7 +66,7 @@ device key ladder. Two alternating records provide recovery from interrupted
 writes. The short-lived access token and one-time enrollment code remain
 RAM-only; after restart, the sysmodule restores the device credential and
 authenticates again for a fresh access token. The NPDM requests the device-save
-data and own-save-data capabilities plus `fsp-srv` and `spl:crypto`. There is
+data and own-save-data capabilities plus `fsp-srv` and `spl:`. There is
 still no PCTL mutation, title monitoring or system-wide enforcement. Hardware
 validation has not been performed.
 
