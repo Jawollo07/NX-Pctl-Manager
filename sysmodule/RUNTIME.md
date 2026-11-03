@@ -53,21 +53,32 @@ The accepted schema uses printable ASCII strings without escapes, integer-only n
 The evaluator is host-tested. It is not yet called by the sysmodule worker and does not observe title launches, track playtime, mutate PCTL state, or block anything on a console. Monotonic accounting and a verified system integration point remain separate work.
 
 
-## HTTP request construction (framing only)
+## HTTP transport and secure envelope client
 
-`protocol/http_request.hpp` builds bounded HTTP/1.1 GET/POST requests into a
-caller-owned buffer. It validates the method, DNS host, request path and bearer
-token against header/path injection, emits a single `Host`, `Content-Length`,
-`Connection: close` and `Accept-Encoding: identity`, and caps request bodies
-at 16 KiB. The builder performs no allocation and does not own the output
-buffer.
+`protocol/http_request.hpp` and `protocol/http_response.hpp` provide
+allocation-free HTTP framing with 96 KiB body limits, strict Content-Length
+handling, and rejection of chunked/compressed responses.
 
-The request builder and response parser are tested independently on the host.
-They are not a transport implementation: there is no DNS lookup, socket,
-TLS handshake, certificate validation, redirect handling, retry policy or
-credential provisioning yet.
+`source/http_transport.cpp` initializes Atmosphere's system BSD client,
+resolves IPv4 hostnames through the platform resolver, and performs nonblocking
+TCP connects with a five-second timeout. Send and receive waits are capped at
+eight seconds per wait. Connections are closed after each request. DNS lookup
+is synchronous and does not yet have a project-enforced deadline.
 
-## End-to-end encrypted HTTP payload protocol\n\nThe selected transport is HTTP with an application-layer authenticated-encryption envelope. `docs/secure-http-protocol.md` defines AES-128-GCM, HKDF-SHA-256 key domains, 96-bit nonces, 128-bit tags, and associated data binding each message to its direction, HTTP method, path, and device ID. The Python reference primitive is in `server/secure_transport.py` and is host-tested. It is not yet integrated into FastAPI routes or the Horizon sysmodule; therefore the current API still accepts plaintext and is **not safe to expose over public HTTP**. The remaining work includes encrypted one-time enrollment bootstrap, recoverable server-side device-key protection, Switch-side AES-GCM and HKDF, request sequencing/replay rejection, and cross-language known-answer tests.\n\n## HTTP and Cloudflare deployment decision
+`source/secure_http_client.cpp` builds the exact v1 envelope, derives the
+AES-128 key and SHA-256 key selector, generates a fresh 63-bit request ID and
+96-bit nonce, binds request/response direction and path in AAD, and verifies
+the response selector, echoed request ID and GCM tag before exposing plaintext.
+The AES-GCM NIST vector and backend-matched HKDF vector are run before the first
+secure POST. Large transport buffers are static BSS allocations, not worker
+stack allocations.
+
+The callable client is not yet invoked by the worker: the trusted enrollment
+code/API-host provisioning channel and device credential lifecycle are not
+implemented. Do not expose the backend publicly until cross-language envelope
+fixtures, provisioning and real-device validation are complete.
+
+## HTTP and Cloudflare deployment decision
 
 The selected device-facing transport is HTTP with end-to-end AES-128-GCM
 payload encryption. The FastAPI backend now exposes
