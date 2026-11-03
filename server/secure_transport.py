@@ -129,9 +129,9 @@ def open_message(envelope: object, key: bytes, context: MessageContext) -> bytes
         raise SecureMessageError("message authentication failed") from exc
 
 
-def seal_json(value: object, key: bytes, context: MessageContext) -> dict[str, object]:
+def seal_json(value: object, key: bytes, context: MessageContext, *, nonce: bytes | None = None) -> dict[str, object]:
     raw = json.dumps(value, separators=(",", ":"), sort_keys=True, ensure_ascii=True).encode("ascii")
-    return seal(raw, key, context)
+    return seal(raw, key, context, nonce=nonce)
 
 
 def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
