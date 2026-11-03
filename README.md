@@ -121,3 +121,17 @@ GPLv3 (see [`LICENSE`](LICENSE)).
 ### Third-party
 
 The graphical UI (v3.0.0+) is built on **[borealis](https://github.com/xfangfang/borealis)** — a Horizon-system-style UI library for Switch homebrew — under the Apache License 2.0. The pinned commit lives at `extern/borealis/`; see its `LICENSE` and `NOTICE`. The text-console v2 line did not depend on borealis.
+
+
+## Experimental headless sysmodule and server backend
+
+The experimental headless Atmosphère sysmodule migration is developed on
+[`feature/headless-sysmodule-migration`](https://github.com/Jawollo07/NX-Pctl-Manager/tree/feature/headless-sysmodule-migration).
+That branch includes a reference FastAPI/SQLite server for device enrollment,
+policy delivery, heartbeats and event ingestion. See
+[`server/README.md`](server/README.md) and
+[`docs/server-api.md`](docs/server-api.md).
+
+The backend is implemented independently of the legacy NRO. The Switch-side
+HTTP client and secure credential provisioning are still pending; this
+experimental branch does not yet connect the sysmodule to the backend.
