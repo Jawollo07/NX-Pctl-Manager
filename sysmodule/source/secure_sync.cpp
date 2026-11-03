@@ -18,6 +18,7 @@ namespace {
     bool g_pending_configured = false;
     std::atomic<bool> g_configured{false};
     std::atomic<bool> g_enrolled{false};
+    std::atomic<bool> g_enrollment_in_progress{false};
     char g_device_credential[129]{};
     char g_access_token[257]{};
     u32 g_cycles_since_auth = AuthRefreshCycles;
@@ -197,7 +198,8 @@ void Configure(const protocol::ProvisioningRequest& request) {
      * cycle. The lock is held only for this fixed-size memory operation.
      */
     Guard guard;
-    if (g_enrolled.load(std::memory_order_acquire)) return;
+    if (g_enrolled.load(std::memory_order_acquire) ||
+        g_enrollment_in_progress.load(std::memory_order_acquire)) return;
     Wipe(&g_pending_config, sizeof(g_pending_config));
     g_pending_config = request;
     g_pending_configured = true;
@@ -209,7 +211,8 @@ bool IsConfigured() {
 }
 
 bool IsEnrolled() {
-    return g_enrolled.load(std::memory_order_acquire);
+    return g_enrolled.load(std::memory_order_acquire) ||
+           g_enrollment_in_progress.load(std::memory_order_acquire);
 }
 
 void RunCycle(policy::PolicyStore& store, u64 uptime_seconds) {
@@ -232,7 +235,12 @@ void RunCycle(policy::PolicyStore& store, u64 uptime_seconds) {
     }
     if (!g_configured.load(std::memory_order_acquire)) return;
 
-    if (!g_enrolled.load(std::memory_order_acquire) && !Enroll()) return;
+    if (!g_enrolled.load(std::memory_order_acquire)) {
+        g_enrollment_in_progress.store(true, std::memory_order_release);
+        const bool enrolled = Enroll();
+        g_enrollment_in_progress.store(false, std::memory_order_release);
+        if (!enrolled) return;
+    }
     if (g_access_token[0] == '\0' || g_cycles_since_auth >= AuthRefreshCycles) {
         Wipe(g_access_token, sizeof(g_access_token));
         if (!Authenticate()) return;
@@ -255,6 +263,7 @@ void Clear() {
     g_pending_configured = false;
     g_configured.store(false, std::memory_order_release);
     g_enrolled.store(false, std::memory_order_release);
+    g_enrollment_in_progress.store(false, std::memory_order_release);
     g_cycles_since_auth = AuthRefreshCycles;
 }
 
