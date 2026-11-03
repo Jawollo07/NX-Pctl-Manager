@@ -7,7 +7,7 @@
 namespace nxpctl::http {
 
 inline constexpr std::size_t MaxHeaderBytes = 8 * 1024;
-inline constexpr std::size_t MaxBodyBytes = 16 * 1024;
+inline constexpr std::size_t MaxBodyBytes = 96 * 1024;
 inline constexpr std::size_t MaxHeaderCount = 32;
 
 enum class Error : std::uint8_t {
