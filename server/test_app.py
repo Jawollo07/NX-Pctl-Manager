@@ -172,7 +172,10 @@ def secure_post(client, device_id, operation, payload, secret, purpose="device",
     response_context = MessageContext(device_id, "POST", path, "response", sequence)
     if response.headers.get("content-type", "").startswith("application/json") and response.status_code != 400:
         try:
-            decoded = open_json(response.json(), key, response_context)
+            response_envelope = response.json()
+            assert response_envelope.get("k") == _hash_secret(secret)
+            response_envelope.pop("k")
+            decoded = open_json(response_envelope, key, response_context)
             return response, decoded
         except Exception:
             pass
