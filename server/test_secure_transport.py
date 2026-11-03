@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import pytest
+import hashlib\n\nimport pytest
 
 from server.secure_transport import (
-    MessageContext, SecureMessageError, derive_key, open_json, open_message, seal, seal_json,
+    MessageContext, SecureMessageError, derive_key, derive_key_from_digest, open_json, open_message, seal, seal_json,
 )
 
 
@@ -69,3 +69,9 @@ def test_decrypted_json_rejects_duplicate_keys_and_floats():
         envelope = seal(raw, key, context(), nonce=(raw[:12]).ljust(12, b"_"))
         with pytest.raises(SecureMessageError):
             open_json(envelope, key, context())
+
+
+def test_server_can_derive_same_key_from_existing_one_way_secret_hash():
+    secret = b"same-enrollment-or-device-secret"
+    digest = hashlib.sha256(secret).digest()
+    assert derive_key(secret, "switch-test") == derive_key_from_digest(digest, "switch-test")
