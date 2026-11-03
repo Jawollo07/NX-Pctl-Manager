@@ -18,7 +18,9 @@
 #define AMS_NXPCTL_I_RUNTIME_INTERFACE_INFO(C, H) \
     AMS_SF_METHOD_INFO(C, H, 65000, Result, GetRuntimeStatus, \
         (sf::Out<u32> out_protocol_version, sf::Out<u32> out_worker_state, sf::Out<u32> out_worker_heartbeat, sf::Out<u32> out_worker_restart_count, sf::Out<u64> out_policy_revision), \
-        (out_protocol_version, out_worker_state, out_worker_heartbeat, out_worker_restart_count, out_policy_revision))
+        (out_protocol_version, out_worker_state, out_worker_heartbeat, out_worker_restart_count, out_policy_revision)) \
+    AMS_SF_METHOD_INFO(C, H, 65001, Result, ConfigureEnrollment, \
+        (sf::InBuffer request), (request))
 
 AMS_SF_DEFINE_INTERFACE(ams::nxpctl::impl, IRuntime, AMS_NXPCTL_I_RUNTIME_INTERFACE_INFO, 0x00000000)
 
