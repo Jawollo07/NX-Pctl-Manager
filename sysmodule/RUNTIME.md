@@ -80,67 +80,41 @@ fixtures, provisioning and real-device validation are complete.
 
 ## HTTP and Cloudflare deployment decision
 
-The selected device-facing transport is HTTP with end-to-end AES-128-GCM
-payload encryption. The FastAPI backend now exposes
-`POST /v1/secure/{device_id}/{operation}`; legacy plaintext device routes are
-disabled by default. The envelope binds request/response direction, exact
-path, device ID and a random request identifier as GCM associated data.
-Access tokens are carried only inside ciphertext.
+The device API uses HTTP POST with AES-128-GCM-encrypted request and response
+bodies. The FastAPI backend exposes `POST /v1/secure/{device_id}/{operation}`;
+legacy plaintext device routes are disabled by default. The outer envelope
+contains the version, 63-bit random request identifier, SHA-256 key selector,
+96-bit nonce and ciphertext-plus-tag. The request ID is bound into AAD and
+echoed by the response. Completed duplicate requests are replayed from the
+backend's cached encrypted response; an in-flight duplicate receives 409.
 
-The backend derives the device key from the SHA-256 hash already stored for
-the device credential. Enrollment uses the one-time invitation-code hash as
-the bootstrap key. The Switch must hash the raw UTF-8 secret first, then use
-HKDF-SHA-256 with salt `NX-PCTL-AEAD-1` and info
-`NX-PCTL-AEAD/1/{purpose}/{device_id}`.
-
-The new `source/secure_crypto.cpp` implements AES-128-GCM using the pinned
-libnx AES-ECB hardware primitive plus a project GHASH implementation. It also
-uses libnx SHA-256, HMAC-SHA-256 and OS-seeded random generation for HKDF,
-nonces and request identifiers. Its self-test includes NIST SP 800-38D AES-GCM
-known-answer vectors and a backend-matched HKDF vector. This source is built
-with the sysmodule, but is not yet called by the worker or connected to the
-HTTP client. It must pass CI compilation and a real-device self-test before
-the network code may use it.
+The Switch-side client derives the same AES key as the backend, creates the
+exact request AAD, sends the encrypted envelope over HTTP, and verifies the
+response key selector, request ID and GCM tag before returning plaintext.
+The first secure POST is gated by NIST AES-GCM and backend-matched HKDF
+self-tests. Transport buffers are static and bounded. TCP connect is
+nonblocking with a five-second timeout; send/receive waits are capped at eight
+seconds each. DNS resolution is synchronous and does not yet have a project
+deadline.
 
 Cloudflare can proxy ciphertext but still sees IP addresses, hostname, URL
 paths, headers, packet sizes and timing and can block or delay traffic. API
 paths must bypass caching and body transformations; do not apply redirects,
-Access login or browser challenges. Keep the origin private. The Python
-backend routes are integrated, but public use remains blocked until the
-Switch-side wire encoder/decoder, HTTP client, cross-language vectors and
-full device workflow are tested.
+Access login or browser challenges. Keep the origin private.
 
 ## Network service permissions and implementation audit
 
-The pinned Atmosphere source contains a Horizon socket backend in
-`libraries/libstratosphere/source/socket/impl/socket_api.os.horizon.cpp`.
-It initializes BSD through libnx using the system-client mode when
-`socket::SystemConfigDefault` is selected. Its resolver entry points are
-provided by libnx's `getaddrinfo` implementation and call the
-`sfdnsres` service. The pinned libnx SSL implementation requests `ssl`
-when using its default service type.
-
-Based on those concrete call paths, the NPDM `service_access` list now
-contains only:
-
-- `bsd:s` — system BSD socket session used by the Atmosphere socket backend.
-- `sfdnsres` — hostname resolution used by libnx `getaddrinfo`.
-- `ssl` — libnx system SSL context/connection service.
-
+The pinned Atmosphere socket backend initializes libnx BSD in system-client
+mode. The sysmodule uses `bsd:s` for sockets and `sfdnsres` for hostname
+resolution. It does not request `ssl` and does not perform a TLS handshake.
 NIFM is intentionally not requested: the audited socket initialization path
-does not call `nifmInitialize`. The NPDM syscall list now also includes
-`svcCreateTransferMemory` (`0x15`): the pinned BSD client calls
-`tmemCreateFromMemory`, which invokes this syscall to share its configured
-socket memory pool with `bsd:s`. The audited path does not call
-`svcMapTransferMemory`/`svcUnmapTransferMemory`, so those capabilities were
-not added. The permissions are not yet hardware-validated and must be checked
-against the exact target firmware and service-manager policy before installation.
+does not call `nifmInitialize`. The NPDM syscall list includes
+`svcCreateTransferMemory` (`0x15`) because the BSD client shares its
+configured socket memory pool with `bsd:s`.
 
-The production transport contract is HTTP POST to the configured public API
-hostname, with all device-specific request and response bodies protected by
-the application-layer AES-GCM envelope. DNS resolution uses the platform
-resolver; sockets require bounded connect/read timeouts, bounded request and
-response buffers, and connection closure after each request. The HTTP
-framing/parser helpers and crypto primitives do not yet constitute a complete
-network client. No credentials or policy are sent until the end-to-end
-encryption, replay checks and response authentication are active.
+The transport and secure envelope client are now implemented, but the worker
+does not invoke them yet. Trusted API-host and one-time enrollment-code
+provisioning, device credential lifecycle, token refresh, cross-language
+envelope fixtures and real-device validation remain required before public
+deployment. The policy store is not populated from the network and no
+restrictions are enforced.
