@@ -39,3 +39,12 @@ The NPDM title ID remains provisional. Do not install or launch this artifact on
 The store uses fixed-size memory and performs no allocation, file I/O, database access, or network access. The HIPC status endpoint reports the store's active revision (zero until a future authenticated policy-delivery path publishes a snapshot). The model is not yet populated by the worker and does not enforce restrictions.
 
 The host test covers validation failures, device/revision binding, full-snapshot replacement, and preservation of the previous snapshot after rejection. This stage does **not** parse JSON, verify signatures/MACs, authenticate a server, or establish that a received policy is trustworthy; those checks must precede calls to `PolicyStore::TryReplace`. The fixed UTC offset is not an IANA timezone/DST implementation.
+
+
+## Bounded policy JSON decoding
+
+`protocol/policy_json.hpp` adds a fixed-buffer parser for schema v1. It accepts documents up to 16 KiB, uses a fixed token array, bounds nesting and string length, rejects unknown and duplicate root fields, requires every schema field, checks array lengths and integer ranges, and rejects malformed numbers and unsupported string escapes. No heap allocation is performed.
+
+The accepted schema uses printable ASCII strings without escapes, integer-only numeric fields, numeric enum values, exactly seven weekday limits, and title-rule objects containing exactly `title_id` and `action`. This deliberately strict subset must match the server serializer. JSON decoding is followed by the existing policy validator through `DecodeAndValidate`; only a fully decoded and structurally valid candidate is returned.
+
+CI now exercises valid decoding plus malformed/oversized input, unknown/duplicate keys, escapes, fractional values, incorrect arrays and invalid enum values. The decoder does not authenticate its input, verify signatures, or publish to the active store. The worker must not call `PolicyStore::TryReplace` until authenticated transport and message integrity are implemented.

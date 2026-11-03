@@ -32,6 +32,8 @@ jobs:
           "$RUNNER_TEMP/worker-supervision-test"
           c++ -std=c++17 -Wall -Wextra -Werror project/tests/policy_engine_test.cpp -o "$RUNNER_TEMP/policy-engine-test"
           "$RUNNER_TEMP/policy-engine-test"
+          c++ -std=c++17 -Wall -Wextra -Werror project/tests/policy_json_test.cpp -o "$RUNNER_TEMP/policy-json-test"
+          "$RUNNER_TEMP/policy-json-test"
 
       - name: Checkout pinned libnx submodule
         run: git -C project submodule update --init deps/libnx

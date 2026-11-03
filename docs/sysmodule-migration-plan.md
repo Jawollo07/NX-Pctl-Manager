@@ -131,7 +131,7 @@ Reject unknown critical schema versions, invalid bounds, stale revisions, cross-
 
 `PolicyStore` holds only one fixed-size snapshot in RAM. It validates a candidate while holding a short spin lock against the currently active revision and replaces the complete structure only on success. A rejected candidate cannot partially mutate the active snapshot. Host tests exercise these rules. The sysmodule exposes the active revision through its read-only status command, but no worker/network path can publish a policy yet.
 
-This is deliberately not a complete trust boundary: there is no bounded JSON decoder, signature/MAC verification, authenticated transport, device credential provisioning, or server clock bootstrap. Callers must not pass untrusted data to the store until those layers exist. Timezone support currently means a fixed UTC offset only, not IANA/DST handling. No policy is persisted.
+A bounded fixed-buffer JSON decoder now accepts the exact schema-v1 fields and rejects unknown/duplicate fields, oversized documents, excessive nesting, unsupported escapes, malformed numbers, invalid array sizes and wrong types. It uses no heap allocation and is host-tested. The decoder is still not a trust boundary: it does not authenticate its input, verify signatures/MACs, provide authenticated transport, provision device credentials, or bootstrap trusted server time. Callers must not pass untrusted data to the store until those layers exist. Timezone support currently means a fixed UTC offset only, not IANA/DST handling. No policy is persisted.
 
 ## 8. Full system integration: feasibility gate
 
@@ -179,7 +179,7 @@ Prefer documented Atmosphere/Stratosphere interfaces and narrowly scoped version
 - [x] Add a versioned fixed-size policy model and strict structural/range validation.
 - [x] Bind snapshots to one device and require strictly increasing revisions.
 - [x] Add a bounded RAM-only snapshot store; validate under lock and replace the complete snapshot or leave the previous one untouched.
-- [ ] Add bounded JSON decoding and reject unknown critical fields before constructing the model.
+- [x] Add bounded fixed-buffer JSON decoding; reject unknown/duplicate fields, malformed values and oversized documents.
 - [ ] Add authenticated transport and policy integrity verification before publication.
 - [ ] Connect worker/network lifecycle to policy publication, offline retention and restricted bootstrap.
 - [ ] Add evaluator tests for schedules, title rules and playtime accounting.
