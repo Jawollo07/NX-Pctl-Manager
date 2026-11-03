@@ -20,7 +20,7 @@ untrusted network.
 The JSON wire envelope is exactly:
 
 ```json
-{"v":1,"s":42,"n":"BASE64URL_NONCE","c":"BASE64URL_CIPHERTEXT_AND_TAG"}
+{"v":1,"s":42,"k":"SHA256_SECRET_HEX","n":"BASE64URL_NONCE","c":"BASE64URL_CIPHERTEXT_AND_TAG"}
 ```
 
 - AES-128-GCM, 16-byte key, 12-byte nonce, 16-byte authentication tag.
