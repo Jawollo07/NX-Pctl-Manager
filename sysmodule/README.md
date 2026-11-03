@@ -54,3 +54,5 @@ filesystem permissions and no system-wide enforcement.
 
 A successful host-side compile is not evidence that the module is safe to load.
 Hardware installation/testing is intentionally not part of this phase.
+
+The exact schema-v1 JSON profile is documented in [`docs/policy-schema-v1.md`](../docs/policy-schema-v1.md).
