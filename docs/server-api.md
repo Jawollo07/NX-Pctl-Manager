@@ -1,12 +1,14 @@
 # NX-Pctl-Manager HTTP API
 
-Status: the reference backend is implemented in `server/`. The Switch-side
-HTTP transport, enrollment UI/provisioning flow and policy publication into
-the running sysmodule are **not implemented yet**.
+The backend implements the server side of the device protocol. All device
+operations use an authenticated encrypted envelope over HTTP:
+`POST /v1/secure/{device_id}/{operation}`. Legacy plaintext device routes are
+disabled by default. The Switch sysmodule does not yet contain the matching
+network client, so the end-to-end system is not yet ready for public use.
 
 ## Run locally
 
-Python 3.11+ is recommended (CI uses 3.12).
+Python 3.11+ is recommended.
 
 ```sh
 python -m venv .venv
@@ -16,164 +18,123 @@ export NXPCTL_DATABASE="$PWD/data/nxpctl.sqlite3"
 uvicorn server.app:app --host 127.0.0.1 --port 8080
 ```
 
-Health check: `GET http://127.0.0.1:8080/healthz`.
+Health check: `GET /healthz`. It contains no device secrets and is intentionally
+not encrypted.
 
-The default bind address is loopback. For a remote Switch, put the service
-behind a firewall and a TLS reverse proxy, or explicitly expose the HTTP
-listener only on a trusted, isolated LAN. **Plain HTTP exposes enrollment
-codes, device credentials, bearer tokens, policies and telemetry to anyone
-able to observe or modify that network traffic.** HTTP is supported for
-development and trusted private networks, not presented as secure transport.
-Do not forward port 8080 directly to the public internet.
+## Encrypted device API
 
-## Docker Compose
+Every device operation is an HTTP POST with the envelope specified in
+[secure-http-protocol.md](secure-http-protocol.md). The outer envelope carries
+version, a random request identifier, a SHA-256 secret key selector, a random
+GCM nonce and ciphertext. The key selector is not a secret; the underlying
+invitation code or device credential is.
 
-```sh
-cd server
-docker compose up -d --build
-```
+Operations:
 
-The service binds to host loopback port 8080 and stores SQLite data in the
-persistent `nxpctl-data` volume. Put a TLS reverse proxy in front if clients
-connect over an untrusted network. Back up the volume regularly.
+| Operation | Path | Encrypted plaintext |
+|---|---|---|
+| Enrollment | `/v1/secure/{id}/enroll` | `{"enrollment_code":"..."}` |
+| Authentication | `/v1/secure/{id}/auth` | `{"device_credential":"..."}` |
+| Policy | `/v1/secure/{id}/policy` | `{"access_token":"..."}` |
+| Heartbeat | `/v1/secure/{id}/heartbeat` | Token plus heartbeat fields |
+| Events | `/v1/secure/{id}/events` | Token plus `events` array |
+| Policy ack | `/v1/secure/{id}/policy-ack` | Token plus revision/status/message |
 
-## Device enrollment
+The HTTP path, method, device ID, direction and random request identifier are
+bound into AES-GCM associated data. Responses use the same request identifier
+and a response-direction AAD value. Access tokens are carried inside the
+encrypted plaintext, never in the Authorization header.
 
-Create a one-time invitation locally on the server:
+### Enrollment bootstrap
+
+Create a one-time invitation locally:
 
 ```sh
 python -m server.cli create-enrollment --device-id switch-livingroom
 ```
 
-The CLI prints a random enrollment code once. Give it to the device through a
-trusted provisioning path. The Switch calls:
+The CLI prints the invitation code once. Provision it to the Switch through a
+trusted local process. The Switch hashes the code with SHA-256, derives the
+enrollment AES key using HKDF-SHA-256, and sends the encrypted enrollment
+request. The SHA-256 digest is sent as the non-secret `k` key selector. The
+backend looks up the outstanding invitation hash and derives the same key.
+The newly generated device credential is returned only inside the encrypted
+response. The database stores only its SHA-256 hash.
 
-```http
-POST /v1/devices/enroll
-Content-Type: application/json
+### Authentication and device key
 
-{"device_id":"switch-livingroom","enrollment_code":"ONE_TIME_CODE"}
+The Switch hashes the device credential and derives the device AES key. The
+encrypted authentication operation exchanges the credential for a bearer
+token with a 15-minute lifetime. The backend stores only the token hash. All
+subsequent device requests include the bearer token inside the encrypted
+payload. The token must remain in Switch RAM and be refreshed by another
+encrypted auth request after expiry.
+
+### Replay protection
+
+The Switch generates a fresh random 64-bit request identifier for every
+request; no persistent counter is required. The backend atomically stores
+identifiers in SQLite, scoped to the credential or access-token epoch, and
+rejects duplicates. Authentication replay identifiers are retained for the
+lifetime of the device credential. Session identifiers are pruned after the
+15-minute token lifetime plus a short grace period. Enrollment identifiers
+are pruned after the invitation lifetime. A random collision returns HTTP 409;
+the client retries with a new identifier. The 96-bit GCM nonce must also be
+fresh for every encryption under a given key.
+
+## Local compatibility endpoints
+
+The original plaintext endpoints under `/v1/devices/*` are disabled by
+default. They exist only for isolated development and backward-compatibility
+tests. To enable them explicitly:
+
+```sh
+NXPCTL_ALLOW_LEGACY_API=1 uvicorn server.app:app --host 127.0.0.1 --port 8080
 ```
 
-The response contains a random per-device `device_credential`. It is returned
-only once; the database stores only its SHA-256 hash. Provisioning and secure
-persistent storage of that credential on Horizon are still a separate,
-unimplemented Switch-side task. Never commit credentials or invitation codes.
+Never enable this setting on an untrusted network or on the Cloudflare public
+hostname. A request to these routes returns 404 by default.
 
-The device exchanges the credential for a short-lived bearer token:
+## Policy administration
 
-```http
-POST /v1/devices/auth
-Content-Type: application/json
-
-{"device_id":"switch-livingroom","device_credential":"DEVICE_CREDENTIAL"}
-```
-
-The response contains `access_token`, `expires_at`, `device_id` and
-`server_time`. Tokens expire after 15 minutes. Only their SHA-256 hashes are
-stored. The device must keep the raw token in RAM and authenticate again after
-expiry.
-
-## Device endpoints
-
-All endpoints below except health and enrollment require
-`Authorization: Bearer ACCESS_TOKEN`. A token is scoped to exactly one device;
-the path device ID must match its authenticated subject.
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| GET | `/healthz` | Liveness |
-| POST | `/v1/devices/enroll` | Consume one-time invitation |
-| POST | `/v1/devices/auth` | Exchange device credential for token |
-| GET | `/v1/devices/{id}/policy` | Fetch complete raw policy JSON |
-| POST | `/v1/devices/{id}/heartbeat` | Store bounded health snapshot |
-| POST | `/v1/devices/{id}/events:batch` | Store/deduplicate event batch |
-| POST | `/v1/devices/{id}/policy-ack` | Record policy processing result |
-
-Event batches accept 1–100 events. Each event has exactly
-`event_id`, `sequence`, `timestamp`, `type` and `payload`. Event IDs and
-per-device sequence numbers are unique; retries are safely deduplicated.
-Payloads are limited to 4 KiB each. Legacy plaintext JSON bodies are limited to 64 KiB; the encrypted envelope transport allows up to 96 KiB on the wire for base64 and tag overhead.
-
-Heartbeat fields are intentionally forward-compatible, with protocol version,
-uptime and policy revision range-checked when present. The service does not
-accept remote shell commands or arbitrary code.
-
-## Publish a policy
-
-Create a JSON file matching the exact schema in
-[`policy-schema-v1.md`](policy-schema-v1.md), then run:
+Create a JSON file matching [policy-schema-v1.md](policy-schema-v1.md), then:
 
 ```sh
 python -m server.cli set-policy --device-id switch-livingroom --file policy.json
-```
-
-The CLI overwrites `server_time` with the current server clock, validates all
-18 required fields, title rules, schedule bounds, device binding and validity
-interval, and rejects a revision that is not newer than the stored one. The
-policy endpoint returns the raw JSON object (not an envelope). The backend
-does not claim the policy is authenticated end-to-end to the Switch over
-plaintext HTTP.
-
-## Administration
-
-```sh
 python -m server.cli list-devices
 python -m server.cli revoke-device --device-id switch-livingroom
 ```
 
-Revocation invalidates all active bearer tokens immediately. Re-enrollment
-requires an administrator to create a new invitation after revocation. Re-enrollment rotates the credential and clears the previous policy, tokens, event epoch and acknowledgements.
+The CLI validates the exact schema, device binding, time bounds, title rules,
+limits and monotonically increasing policy revision. Revocation invalidates
+all bearer tokens. Re-enrollment requires a new one-time invitation and
+rotates the device credential, policy epoch, event history and acknowledgements.
 
-The backend intentionally has no unauthenticated browser-admin API. Device
-provisioning, revocation and policy publishing are local CLI operations.
+## Cloudflare deployment
 
-## Persistence and security boundaries
+Cloudflare may proxy the HTTP ciphertext, but HTTP metadata remains visible:
+IP addresses, hostname, URL path, headers, packet sizes and timing. Cloudflare
+can block, delay or replay traffic; authenticated encryption and replay
+rejection protect message contents and authenticity, not availability or
+metadata privacy.
 
-- SQLite is server-side authoritative storage for devices, token hashes,
-  policy snapshots, heartbeats, events and policy acknowledgements.
-- Raw device credentials, enrollment codes and access tokens are never stored.
-- Policy documents are strictly parsed; duplicate JSON object keys, floats,
-  unknown/missing policy fields, cross-device policy and invalid ranges fail.
-- No policy/usage/event database is added to the Switch.
-- Database access is local to the service. Protect the data directory and
-  include it in server backup/restore procedures.
-- The backend currently supports HTTP. TLS termination can be provided by a
-  reverse proxy without changing the API contract. The Switch-side transport
-  must still validate server identity before treating responses as trusted.
+For device API paths:
+- Disable caching and body transformations.
+- Do not apply HTTP-to-HTTPS redirects or interactive Cloudflare Access,
+  browser challenges or JavaScript challenges.
+- Keep the origin service bound to a private/loopback listener and firewall
+  direct public access.
+- Do not expose the legacy plaintext routes.
 
-## Current implementation boundary
+## Persistence and current limitations
 
-The backend routes and CLI exist and are covered by automated tests. There is
-not yet a Switch HTTP client, secure device-credential provisioning/storage,
-automatic authentication/refresh, policy fetch scheduling, event queue, or
-worker integration. Until those are implemented and tested, the sysmodule does
-not contact this server and no policy is enforced on-console.
+SQLite stores device credential hashes, enrollment-code hashes, access-token
+hashes, policies, events, acknowledgements and secure replay identifiers.
+Raw credentials, invitation codes and bearer tokens are never stored.
+Protect and back up the database directory.
 
-
-## HTTP with end-to-end encrypted payloads
-
-The selected device transport is HTTP, with application-layer AES-128-GCM
-encryption between the Switch and backend. The protocol and current
-implementation boundary are documented in
-[secure-http-protocol.md](secure-http-protocol.md).
-
-Cloudflare may proxy the HTTP requests, but it must only receive ciphertext
-in device-specific request and response bodies. URL paths, hostnames, IP
-addresses, HTTP headers, packet sizes and timing remain visible. Cloudflare
-can still block, delay or replay traffic; authenticated sequence numbers and
-server-side replay rejection are therefore mandatory.
-
-**Important current limitation:** `server/secure_transport.py` currently
-contains the tested cryptographic primitive only. FastAPI routes still accept
-and return the legacy plaintext JSON format, and the Switch has no matching
-AES-GCM implementation or secure enrollment client yet. Do not expose the
-current API on public HTTP. The end-to-end protocol is not production-ready
-until route enforcement, bootstrap enrollment, protected server key storage,
-Switch-side cryptography, and transactional replay checks are complete.
-
-Do not enable Cloudflare caching, body transformations, HTTP-to-HTTPS redirects
-or interactive Access/JavaScript challenges on device API paths. Keep the
-origin service private and firewall direct origin access. HTTP encryption
-protects payload content and authenticity; it does not provide transport
-metadata privacy or availability.
+The Python backend now implements encrypted device routes and replay
+protection. The Switch-side AES-GCM/HKDF implementation, HTTP client,
+cross-language known-answer tests, secure credential provisioning, token
+refresh, policy scheduling and worker integration remain outstanding. Until
+those are completed and tested, do not expose the API publicly over HTTP.
