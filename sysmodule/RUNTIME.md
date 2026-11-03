@@ -69,6 +69,17 @@ The store uses fixed-size memory and performs no allocation, file I/O, database 
 
 The accepted schema uses printable ASCII strings without escapes, integer-only numeric fields, numeric enum values, exactly seven weekday limits, and title-rule objects containing exactly `title_id` and `action`. This deliberately strict subset must match the server serializer. JSON decoding is followed by the existing policy validator through `DecodeAndValidate`; only a fully decoded and structurally valid candidate is returned. The decoder does not authenticate its input; the secure sync worker verifies the AEAD envelope before calling it and publishes only a fully validated snapshot.
 
+## Daily usage accounting primitive (not yet connected)
+
+`protocol/usage_tracker.hpp` provides a host-testable, allocation-free daily
+usage counter. It consumes observations containing a title ID, monotonic
+seconds and a local-day key. It rounds started minutes up, resets on a forward
+day transition, does not erase accumulated usage on a backward wall-clock
+correction, and ignores observation gaps longer than two seconds rather than
+assuming continuous playtime. The tracker is RAM-only and is not yet wired to a
+Horizon title source, a trusted clock anchor, suspend/resume handling or
+persistent storage. It must not be treated as active console enforcement.
+
 ## Deterministic policy evaluation (not enforcement)
 
 `protocol/policy_evaluator.hpp` evaluates a supplied immutable policy and context without Horizon calls or side effects. It covers parent-authentication gating, offline behavior, explicit title blocks, allow-all versus allow-list-only title modes, fixed-offset weekday budgets and quiet hours including intervals that cross midnight. Explicit title allows do not override global quiet hours, daily budgets, parent authentication or offline restrictions.
