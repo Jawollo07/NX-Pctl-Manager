@@ -217,9 +217,11 @@ bool IsEnrolled() {
 
 void RunCycle(policy::PolicyStore& store, u64 uptime_seconds) {
     /*
-     * Adopt provisioning atomically, then release the lock before any network
-     * operation. All credential/session state below is worker-thread-owned.
+     * Adopt provisioning and reserve the enrollment transition atomically.
+     * The lock is released before DNS/TCP/HTTP, so HIPC remains responsive.
      */
+    bool should_enroll = false;
+    bool configured = false;
     {
         Guard guard;
         if (g_pending_configured) {
@@ -232,11 +234,15 @@ void RunCycle(policy::PolicyStore& store, u64 uptime_seconds) {
             g_enrolled.store(false, std::memory_order_release);
             g_cycles_since_auth = AuthRefreshCycles;
         }
+        configured = g_configured.load(std::memory_order_acquire);
+        if (configured && !g_enrolled.load(std::memory_order_acquire)) {
+            g_enrollment_in_progress.store(true, std::memory_order_release);
+            should_enroll = true;
+        }
     }
-    if (!g_configured.load(std::memory_order_acquire)) return;
+    if (!configured) return;
 
-    if (!g_enrolled.load(std::memory_order_acquire)) {
-        g_enrollment_in_progress.store(true, std::memory_order_release);
+    if (should_enroll) {
         const bool enrolled = Enroll();
         g_enrollment_in_progress.store(false, std::memory_order_release);
         if (!enrolled) return;
