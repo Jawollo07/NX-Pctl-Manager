@@ -60,10 +60,14 @@ allocation-free HTTP framing with 96 KiB body limits, strict Content-Length
 handling, and rejection of chunked/compressed responses.
 
 `sysmodule/source/http_transport.cpp` initializes Atmosphere's system BSD client,
-resolves IPv4 hostnames through the platform resolver, and performs nonblocking
-TCP connects with a five-second timeout. Send and receive waits are capped at
-eight seconds per wait. Connections are closed after each request. DNS lookup
-is synchronous and does not yet have a project-enforced deadline.
+resolves IPv4 hostnames through the platform resolver on one dedicated,
+single-flight resolver thread. The HTTP worker waits at most five seconds for
+DNS. If the platform resolver has not returned, the worker receives a timeout;
+the resolver thread is not forcibly cancelled and retains its static state
+until it exits. Further lookups fail fast while that thread remains active,
+and a completed late result is discarded before the next lookup. TCP connects
+are nonblocking with a five-second timeout. Send and receive waits are capped
+at eight seconds per wait. Connections are closed after each request.
 
 `sysmodule/source/secure_http_client.cpp` builds the exact v1 envelope, derives the
 AES-128 key and SHA-256 key selector, generates a fresh 63-bit request ID and
@@ -106,8 +110,9 @@ response key selector, request ID and GCM tag before returning plaintext.
 The first secure POST is gated by NIST AES-GCM and backend-matched HKDF
 self-tests. Transport buffers are static and bounded. TCP connect is
 nonblocking with a five-second timeout; send/receive waits are capped at eight
-seconds each. DNS resolution is synchronous and does not yet have a project
-deadline.
+seconds each. DNS has a five-second caller deadline and a single-flight
+resolver thread; a timed-out resolver is allowed to finish safely in the
+background and prevents overlapping resolver calls.
 
 Cloudflare can proxy ciphertext but still sees IP addresses, hostname, URL
 paths, headers, packet sizes and timing and can block or delay traffic. API
@@ -119,7 +124,7 @@ Access login or browser challenges. Keep the origin private.
 The pinned Atmosphere socket backend initializes libnx BSD in system-client
 mode. The sysmodule uses `bsd:s` for sockets and `sfdnsres` for hostname
 resolution. Credential persistence additionally uses `fsp-srv` to mount its
-own device save data and `spl:` to derive a console-bound storage key.
+own device save data and `spl:crypto` to derive a console-bound storage key.
 The NPDM filesystem capability mask grants only `DeviceSaveData` and
 `CreateOwnSaveData`; it does not grant SD-card, BIS or other-save-data access.
 It does not request `ssl` and does not perform a TLS handshake.
