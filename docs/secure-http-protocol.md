@@ -1,79 +1,122 @@
-# End-to-end HTTP payload encryption (protocol v1)
+# End-to-end encrypted HTTP protocol v1
 
-## Security contract
+## Security boundary
 
-The API transport may use HTTP, but **every device-specific request and response
-body must be an authenticated-encryption envelope** before it is sent over the
-network. The cryptographic boundary is Switch ↔ backend; Cloudflare is not
-given a decryption key. AES-128-GCM provides confidentiality and integrity.
-This does not hide IP addresses, hostnames, URL paths, HTTP headers, packet
-sizes or timing, and it cannot prevent blocking or traffic analysis.
+Device requests and responses use AES-128-GCM envelopes over HTTP. Encryption
+and authentication are end-to-end between the Switch and backend; Cloudflare
+does not receive the key. This protects message bodies, not IP addresses,
+hostnames, URL paths, HTTP headers, packet sizes, timing, availability or
+traffic analysis.
 
-The first implementation increment adds the Python cryptographic primitive
-and host tests. It is not yet wired into the FastAPI routes or the Horizon
-worker. Until those integrations and matching cross-language test vectors
-land, the existing endpoints remain plaintext and must not be exposed on an
-untrusted network.
+FastAPI implements `POST /v1/secure/{device_id}/{operation}`. Legacy
+plaintext `/v1/devices/*` routes are disabled unless
+`NXPCTL_ALLOW_LEGACY_API=1` is explicitly set for isolated development.
+The Switch-side network client and matching cryptography are not implemented
+yet, so public deployment remains blocked.
 
-## Envelope
+## Wire envelope
 
-The JSON wire envelope is exactly:
+Every secure endpoint accepts and returns exactly this outer JSON shape:
 
 ```json
-{"v":1,"s":42,"k":"SHA256_SECRET_HEX","n":"BASE64URL_NONCE","c":"BASE64URL_CIPHERTEXT_AND_TAG"}
+{"v":1,"s":42,"k":"64_LOWERCASE_HEX_CHARS","n":"BASE64URL_NONCE","c":"BASE64URL_CIPHERTEXT_AND_TAG"}
 ```
 
-- AES-128-GCM, 16-byte key, 12-byte nonce, 16-byte authentication tag.
-- `s` is an unsigned 64-bit per-device request sequence, authenticated as AAD. Responses echo the request sequence.\n- Base64url without padding; no additional envelope fields.
-- Maximum plaintext: 64 KiB.
-- The GCM associated data is the ASCII string
-  `NX-PCTL-AEAD/1\n{direction}\n{method}\n{path}\n{device_id}`.
-- Direction is `request` or `response`; method is currently GET or POST.
-  Thus a valid ciphertext cannot be moved to another endpoint, device, HTTP
-  method or direction.
-- A fresh cryptographically random nonce is mandatory for every encryption
-  under a given key. Nonce reuse with AES-GCM is catastrophic.
+- `v`: protocol version 1.
+- `s`: fresh random unsigned 64-bit request identifier. The Switch generates
+  a new cryptographically random value for each request; it is not a counter
+  and requires no persistent storage. The response echoes it.
+- `k`: SHA-256 digest of the invitation code or device credential, encoded as
+  64 lowercase hex characters. This is a key selector, not a secret. The
+  high-entropy original secret is never sent outside ciphertext.
+- `n`: fresh 96-bit random GCM nonce, Base64url without padding.
+- `c`: ciphertext followed by the 128-bit GCM tag, Base64url without padding.
+- Maximum plaintext is 64 KiB; the encoded HTTP envelope is bounded by the
+  backend's 96 KiB request limit.
 
-## Key derivation and bootstrap
+AES-128-GCM uses a 16-byte key. The associated data is the ASCII encoding of:
 
-HKDF-SHA-256 derives a 128-bit AES key from secret material, using salt
-`NX-PCTL-AEAD-1` and info
-`NX-PCTL-AEAD/1/{purpose}/{device_id}`. The purpose is either
-`enrollment` or `device`, preventing cross-protocol key reuse.
+```text
+NX-PCTL-AEAD/1
+{direction}
+{method}
+{path}
+{device_id}
+{sequence}
+```
 
-Enrollment must not send the invitation code in cleartext. The Switch derives
-the enrollment key from the one-time invitation code and device ID, then sends
-an encrypted enrollment envelope. The backend validates/decrypts it and
-returns the newly generated device credential inside a response envelope
-under the same bootstrap key. Both sides then derive the long-term device key
-from the device credential. Authentication, token exchange, policy delivery,
-heartbeats, event batches and acknowledgements must use that device key.
+The fields are separated by single LF bytes (no CR). Direction is
+`request` or `response`; method is always `POST`; path is the exact
+`/v1/secure/{device_id}/{operation}` path. This binds ciphertext to its
+operation, device, direction and request identifier. AAD is not encrypted,
+but is authenticated.
 
-The server derives the same key from the already stored SHA-256 hash of the
-enrollment code or device credential: the Switch hashes its raw secret first,
-then both sides apply identical HKDF-SHA-256 parameters. This avoids storing a
-recoverable device credential or adding a server master key. Re-enrollment
-rotates the credential and invalidates all prior device keys and sessions.
+## Key derivation
 
-## Replay protection still required
+1. Compute `secret_digest = SHA256(secret_utf8)`.
+2. HKDF-Extract with HMAC-SHA-256:
+   `PRK = HMAC-SHA256(key="NX-PCTL-AEAD-1", data=secret_digest)`.
+3. HKDF-Expand for one block:
+   `OKM = HMAC-SHA256(key=PRK, data=info || 0x01)`.
+4. Use the first 16 bytes of OKM as the AES-128 key.
 
-AEAD authenticates a message but does not itself prevent replay. Before route
-integration is considered complete, the backend must persist a per-device
-monotonic request sequence (or unique nonce ledger) and reject repeats and
-out-of-window values transactionally. Responses must carry a request nonce or
-sequence in their authenticated plaintext so the Switch can correlate them.
-The existing event sequence is not a substitute for a transport request
-counter.
+The exact ASCII `info` string is
+`NX-PCTL-AEAD/1/{purpose}/{device_id}`; purpose is `enrollment` or
+`device`. The backend derives from the already stored SHA-256 hash, so raw
+credentials do not need to be stored recoverably.
+
+## Operations
+
+All operations are HTTP POST. The access token is inside the encrypted JSON
+plaintext, never in an Authorization header.
+
+| Operation | Encrypted request plaintext |
+|---|---|
+| `enroll` | `{"enrollment_code":"..."}` |
+| `auth` | `{"device_credential":"..."}` |
+| `policy` | `{"access_token":"..."}` |
+| `heartbeat` | `{"access_token":"...","protocol_version":1,...}` |
+| `events` | `{"access_token":"...","events":[...]}` |
+| `policy-ack` | `{"access_token":"...","revision":1,"status":"accepted"}` |
+
+### Enrollment bootstrap
+
+The Switch receives the one-time invitation code through a trusted local
+provisioning path. It computes its SHA-256 digest, derives the enrollment key,
+and encrypts the code in the request body. The digest is included as `k` so
+the backend can locate the outstanding invitation and derive the same key.
+After decrypting and verifying the code, the backend returns the new random
+device credential only inside the encrypted response. The invitation is
+single-use.
+
+### Authentication and device operations
+
+The Switch derives the device key from the device credential. The encrypted
+`auth` operation exchanges that credential for a 15-minute bearer token.
+The token is stored only as a hash by the backend and is sent only inside
+encrypted request bodies. Policy, heartbeat, event and policy-ack operations
+use the same device key and include the bearer token in their encrypted
+plaintext.
+
+## Replay protection
+
+AES-GCM alone does not prevent replay. The backend atomically inserts each
+random request identifier into SQLite, scoped to the credential or session
+key epoch, and rejects duplicates. Authentication identifiers are retained
+for the lifetime of the credential. Enrollment identifiers are pruned after
+the invitation lifetime. Session identifiers are pruned after the token TTL
+plus a grace period; an expired token is independently rejected. A random
+collision returns HTTP 409 and the client must retry with a new random
+identifier. The GCM nonce must also be fresh for every encryption under a key.
 
 ## Deployment
 
-Cloudflare can proxy the HTTP ciphertext without seeing its contents, but
-port 80 remains susceptible to metadata observation and connection blocking.
-Disable caching and all automatic body transformations for API paths. Do not
-enable HTTP-to-HTTPS redirects or Cloudflare Access/JS challenges on the
-device API unless the client explicitly implements them. Keep the origin
-backend private and firewall it from direct public access.
+Cloudflare may proxy the ciphertext, but sees metadata and can block or delay
+requests. For device API paths, disable caching and body transformations, do
+not apply HTTP redirects or interactive Access/browser challenges, and keep
+the origin private. Do not enable the legacy plaintext API on the public
+listener.
 
-A production deployment is not approved until route-level envelope enforcement,
-Switch-side AES-GCM, nonce/replay persistence, server-key protection, bootstrap
-provisioning, and cross-language known-answer tests are all complete.
+Production use remains blocked until Switch-side AES-GCM/HKDF, secure random
+generation, cross-language known-answer tests and full device workflow tests
+are complete.
