@@ -2,9 +2,9 @@
  * NX-Pctl-Manager — headless Stratosphere sysmodule runtime.
  *
  * Project-authored code, licensed under GPL-2.0-or-later.
- * This phase provides a resident worker and a read-only local HIPC status
- * service. It does not enforce policies, inspect titles, mutate PCTL state,
- * access persistent storage, or communicate over the network.
+ * This phase provides a resident worker, local HIPC provisioning/status service,
+ * and encrypted HTTP policy synchronization. It does not yet enforce policies,
+ * inspect running titles, mutate PCTL state, or access persistent storage.
  */
 #include <stratosphere.hpp>
 #include <cstring>
