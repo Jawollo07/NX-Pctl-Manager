@@ -1,9 +1,8 @@
 """NX-Pctl-Manager reference backend.
 
-SQLite is authoritative server-side storage. The Switch is expected to keep
-policy snapshots and access tokens in RAM only. This service deliberately
-supports plain HTTP for isolated development networks; use a trusted TLS
-reverse proxy for any untrusted network.
+SQLite is authoritative server-side storage. The Switch keeps policy snapshots,
+device credentials and access tokens in RAM only. Device API payloads use
+end-to-end AES-GCM encryption over HTTP; HTTP metadata remains visible.
 """
 from __future__ import annotations
 
@@ -22,10 +21,16 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from secure_transport import (
-    MessageContext, SecureMessageError, derive_key, derive_key_from_digest,
-    open_json, seal_json,
-)
+try:  # Support both package imports and direct execution from server/.
+    from .secure_transport import (
+        MessageContext, SecureMessageError, derive_key, derive_key_from_digest,
+        open_json, seal_json,
+    )
+except ImportError:  # pragma: no cover - direct module execution
+    from secure_transport import (
+        MessageContext, SecureMessageError, derive_key, derive_key_from_digest,
+        open_json, seal_json,
+    )
 
 APP_VERSION = "0.1.0"
 PROTOCOL_VERSION = 1
