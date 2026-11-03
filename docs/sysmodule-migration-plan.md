@@ -1,11 +1,11 @@
 # Headless Atmosphere Sysmodule Migration Plan
 
-Status: Phase 0 reference pinned; Phase 1 build target committed; Phase 2 runtime and read-only IPC scaffold added; Phase 4 policy model, validation and RAM snapshot store added as a host-tested foundation. Policy delivery, authentication, enforcement and hardware validation remain unimplemented.
+Status: Phase 0 reference pinned; Phase 1 build target committed; Phase 2 runtime and read-only IPC scaffold added; Phase 4 policy model, validation and RAM snapshot store added as a host-tested foundation. A FastAPI/SQLite HTTP backend is now implemented and host-tested. Switch-side HTTP transport, credential provisioning, policy delivery into the sysmodule, enforcement and hardware validation remain unimplemented.
 
 ## 1. Accepted decisions
 
 - Offline: keep the last verified policy in RAM and continue enforcing it while the network is unavailable.
-- Communication: hybrid. HTTPS REST handles enrollment, authentication, full policy snapshots, heartbeats, event batches and reconciliation. WSS handles low-latency policy updates and events. REST polling is the fallback.
+- Communication: REST is the baseline for enrollment, authentication, full policy snapshots, heartbeats, event batches and reconciliation. The backend accepts HTTP for isolated trusted networks and can sit behind HTTPS termination; TLS is strongly recommended on any untrusted network. WSS is deferred until REST works end-to-end. REST polling remains the fallback.
 - Scope: full system-wide enforcement is the target, not merely a PCTL settings editor.
 - Authority: the server owns durable policies, schedules, usage records and audit history. The Switch keeps only the active verified policy in RAM and the minimum persistent device credential/configuration needed to authenticate.
 
@@ -78,7 +78,7 @@ The current NPDM title ID `0x010000000000D7A1` is a development placeholder only
 
 1. Initialise required Horizon services, register the local IPC endpoint and start bounded workers.
 2. Load the provisioned device identity. Missing/invalid credentials mean provisioning-required, never a shared default key.
-3. Establish TLS with certificate and hostname validation; authenticate the device.
+3. Establish HTTP(S) and authenticate the device. On untrusted networks, require TLS with certificate and hostname validation. Plain HTTP is only for isolated trusted networks and provides no confidentiality or transport integrity.
 4. Fetch a complete policy snapshot over REST. Validate protocol version, device binding, revision, timestamps, limits, schedules and integrity metadata.
 5. Atomically publish the verified policy as an immutable in-memory snapshot.
 6. Connect WSS and subscribe using device ID and last accepted revision. Reject stale revisions and messages with an incorrect device scope.
@@ -171,9 +171,12 @@ Prefer documented Atmosphere/Stratosphere interfaces and narrowly scoped version
 - Acceptance remains pending: IPC health queries must work; repeated start/stop and sleep/wake must not leak handles or threads.
 
 ### Phase 3 — network and server protocol
-- Add TLS REST, per-device credential provisioning, WSS, reconnect/backoff, heartbeat and bounded RAM event queue.
+- [x] Add the server-side FastAPI/SQLite REST API: one-time enrollment, per-device credentials, short-lived bearer tokens, policy snapshots, heartbeat, deduplicated event batches and policy acknowledgements.
+- [x] Add local administrator CLI for enrollment codes, policy publication, device listing and revocation.
+- [x] Add backend contract/security tests and a dedicated CI job.
+- [ ] Add Switch-side HTTP(S) transport, per-device credential provisioning/storage, token refresh, WSS (optional later), reconnect/backoff, heartbeat and bounded RAM event queue.
 - Bound JSON body size, nesting, strings and arrays.
-- Acceptance: authenticated connection, certificate failure rejection, WSS reconnect, REST reconciliation and secret-free logs.
+- Acceptance pending for the Switch client: authenticated connection, TLS certificate failure rejection when TLS is used, reconnect/backoff, REST reconciliation and secret-free logs. Backend-only tests do not prove Switch connectivity.
 
 ### Phase 4 — policy engine and RAM cache
 - [x] Add a versioned fixed-size policy model and strict structural/range validation.
