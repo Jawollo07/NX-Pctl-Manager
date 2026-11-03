@@ -1,4 +1,4 @@
-// Monotonic, Horizon-independent daily playtime accounting.
+// Monotonic, Horizon-independent global daily playtime accounting.
 #pragma once
 
 #include <cstdint>
@@ -6,7 +6,6 @@
 
 namespace nxpctl::usage {
 
-inline constexpr std::uint64_t NoActiveTitle = 0;
 inline constexpr std::uint64_t MaxObservationGapSeconds = 2;
 inline constexpr std::uint16_t MaxDailyUsageMinutes = 24 * 60;
 
@@ -20,18 +19,18 @@ enum class ObserveResult : std::uint8_t {
 
 class DailyUsageTracker {
 public:
+    // Counts total console application-active time, not time per title.
+    // application_active is true while any game/application is running.
     // local_day_key is a monotonically increasing local calendar-day number
-    // (for example, Unix days after applying the policy's fixed UTC offset).
-    // monotonic_seconds must come from a monotonic clock, never wall time.
+    // after applying the policy timezone offset. monotonic_seconds must come
+    // from a monotonic clock, never wall time.
     [[nodiscard]] ObserveResult Observe(
-        std::uint64_t title_id,
+        bool application_active,
         std::uint64_t monotonic_seconds,
         std::int64_t local_day_key) noexcept {
-        const bool title_active = title_id != NoActiveTitle;
-
         if (!initialized_) {
             initialized_ = true;
-            previous_title_was_active_ = title_active;
+            previous_application_was_active_ = application_active;
             last_monotonic_seconds_ = monotonic_seconds;
             local_day_key_ = local_day_key;
             return ObserveResult::BaselineEstablished;
@@ -41,7 +40,7 @@ public:
             // Do not charge an interval spanning midnight to either day.
             active_seconds_ = 0;
             local_day_key_ = local_day_key;
-            previous_title_was_active_ = title_active;
+            previous_application_was_active_ = application_active;
             last_monotonic_seconds_ = monotonic_seconds;
             return ObserveResult::DayRolledOver;
         }
@@ -49,8 +48,7 @@ public:
         if (local_day_key < local_day_key_ ||
             monotonic_seconds < last_monotonic_seconds_) {
             // A wall-clock correction must not roll the usage counter back.
-            // Refresh the monotonic baseline without changing the day bucket.
-            previous_title_was_active_ = title_active;
+            previous_application_was_active_ = application_active;
             last_monotonic_seconds_ = monotonic_seconds;
             return ObserveResult::ClockRegressed;
         }
@@ -61,11 +59,11 @@ public:
         if (elapsed > MaxObservationGapSeconds) {
             // A stalled worker, suspend, or missed observation is not
             // assumed to be continuous playtime.
-            previous_title_was_active_ = title_active;
+            previous_application_was_active_ = application_active;
             return ObserveResult::ObservationGapTooLarge;
         }
 
-        if (previous_title_was_active_) {
+        if (previous_application_was_active_) {
             if (std::numeric_limits<std::uint64_t>::max() - active_seconds_ < elapsed) {
                 active_seconds_ = std::numeric_limits<std::uint64_t>::max();
             } else {
@@ -73,13 +71,13 @@ public:
             }
         }
 
-        previous_title_was_active_ = title_active;
+        previous_application_was_active_ = application_active;
         return ObserveResult::Accumulated;
     }
 
     void Reset() noexcept {
         initialized_ = false;
-        previous_title_was_active_ = false;
+        previous_application_was_active_ = false;
         last_monotonic_seconds_ = 0;
         local_day_key_ = 0;
         active_seconds_ = 0;
@@ -107,7 +105,7 @@ public:
 
 private:
     bool initialized_ = false;
-    bool previous_title_was_active_ = false;
+    bool previous_application_was_active_ = false;
     std::uint64_t last_monotonic_seconds_ = 0;
     std::int64_t local_day_key_ = 0;
     std::uint64_t active_seconds_ = 0;
