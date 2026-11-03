@@ -12,8 +12,6 @@
 namespace nxpctl::crypto {
 namespace {
 
-    using Block = u8[16];
-
     void XorBlock(u8 dst[16], const u8 src[16]) {
         for (size_t i = 0; i < 16; ++i) dst[i] ^= src[i];
     }
@@ -160,7 +158,6 @@ bool DeriveAes128Key(u8 out_key[Aes128KeySize], const char *secret, size_t secre
     if (out_key == nullptr || secret == nullptr || device_id == nullptr || purpose == nullptr ||
         secret_size < 16 || secret_size > 128) return false;
     const size_t device_size = std::strlen(device_id);
-    const size_t purpose_size = std::strlen(purpose);
     if (device_size < 1 || device_size > 64 ||
         (std::strcmp(purpose, "enrollment") != 0 && std::strcmp(purpose, "device") != 0)) return false;
     for (size_t i = 0; i < device_size; ++i) {
@@ -260,7 +257,18 @@ bool RunAesGcmSelfTest() {
     if (!ConstantTimeEqual(decrypted, plaintext, sizeof(plaintext))) return false;
     tag[0] ^= 1;
     if (Aes128GcmDecrypt(key, nonce, nullptr, 0, ciphertext, sizeof(ciphertext), tag, decrypted)) return false;
-    return true;
+
+    static constexpr char TestSecret[] = "enrollment-secret-material-32-bytes";
+    static constexpr u8 ExpectedDerivedKey[16] = {
+        0x6f,0xda,0x1b,0xce,0xf6,0x7c,0x28,0xa8,
+        0x2b,0x47,0xcc,0x84,0x07,0x87,0xa4,0x1b
+    };
+    u8 derived_key[16];
+    if (!DeriveAes128Key(derived_key, TestSecret, sizeof(TestSecret) - 1,
+                         "switch-test", "device")) return false;
+    const bool kdf_ok = ConstantTimeEqual(derived_key, ExpectedDerivedKey, sizeof(derived_key));
+    std::memset(derived_key, 0, sizeof(derived_key));
+    return kdf_ok;
 }
 
 }
