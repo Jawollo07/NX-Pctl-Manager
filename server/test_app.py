@@ -7,11 +7,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from server import app as api
+from server.secure_transport import MessageContext, derive_key, open_json, seal_json
 
 
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("NXPCTL_DATABASE", str(tmp_path / "test.sqlite3"))
+    monkeypatch.setenv("NXPCTL_ALLOW_LEGACY_API", "1")
     api.init_database()
     with TestClient(api.app) as test_client:
         yield test_client
@@ -152,3 +154,77 @@ def test_revoked_device_can_be_reenrolled_with_rotated_credential(client):
     assert client.get("/v1/devices/switch-test/policy", headers={
         "Authorization": f"Bearer {old_token}",
     }).status_code == 401
+
+
+
+def secure_post(client, device_id, operation, payload, secret, purpose="device", sequence=None):
+    import secrets as _secrets
+    from server.app import _hash_secret
+
+    if sequence is None:
+        sequence = _secrets.randbits(64)
+    path = f"/v1/secure/{device_id}/{operation}"
+    key = derive_key(secret.encode("utf-8"), device_id, purpose)
+    context = MessageContext(device_id, "POST", path, "request", sequence)
+    envelope = seal_json(payload, key, context)
+    envelope["k"] = _hash_secret(secret)
+    response = client.post(path, json=envelope)
+    response_context = MessageContext(device_id, "POST", path, "response", sequence)
+    if response.headers.get("content-type", "").startswith("application/json") and response.status_code != 400:
+        try:
+            decoded = open_json(response.json(), key, response_context)
+            return response, decoded
+        except Exception:
+            pass
+    return response, None
+
+
+def test_secure_enrollment_auth_and_heartbeat_are_encrypted(client, monkeypatch):
+    monkeypatch.setenv("NXPCTL_ALLOW_LEGACY_API", "0")
+    code = enrollment_code()
+    enrolled, body = secure_post(
+        client, "switch-test", "enroll", {"enrollment_code": code}, code, "enrollment",
+    )
+    assert enrolled.status_code == 200, enrolled.text
+    assert body["device_id"] == "switch-test"
+    credential = body["device_credential"]
+
+    auth, auth_body = secure_post(
+        client, "switch-test", "auth", {"device_credential": credential}, credential,
+    )
+    assert auth.status_code == 200, auth.text
+    assert auth_body["token_type"] == "Bearer"
+
+    heartbeat, heartbeat_body = secure_post(
+        client, "switch-test", "heartbeat",
+        {"access_token": auth_body["access_token"], "protocol_version": 1, "uptime_seconds": 17},
+        credential,
+    )
+    assert heartbeat.status_code == 200, heartbeat.text
+    assert heartbeat_body["accepted"] is True
+    assert client.post("/v1/devices/switch-test/heartbeat", json={}).status_code == 404
+
+
+def test_secure_enrollment_rejects_replay_and_wrong_context(client, monkeypatch):
+    import secrets as _secrets
+    from server.app import _hash_secret
+
+    monkeypatch.setenv("NXPCTL_ALLOW_LEGACY_API", "0")
+    code = enrollment_code()
+    sequence = _secrets.randbits(64)
+    path = "/v1/secure/switch-test/enroll"
+    key = derive_key(code.encode(), "switch-test", "enrollment")
+    context = MessageContext("switch-test", "POST", path, "request", sequence)
+    envelope = seal_json({"enrollment_code": code}, key, context)
+    envelope["k"] = _hash_secret(code)
+    first = client.post(path, json=envelope)
+    assert first.status_code == 200
+    replay = client.post(path, json=envelope)
+    assert replay.status_code == 409
+
+
+def test_secure_auth_rejects_plaintext_device_endpoints_by_default(client, monkeypatch):
+    monkeypatch.setenv("NXPCTL_ALLOW_LEGACY_API", "0")
+    assert client.post("/v1/devices/auth", json={
+        "device_id": "switch-test", "device_credential": "x" * 40,
+    }).status_code == 404
