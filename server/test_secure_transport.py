@@ -61,3 +61,11 @@ def test_envelope_schema_and_size_are_strict():
         open_message({"v": 2, "s": 0, "n": "AA", "c": "AA"}, key, context())
     with pytest.raises(SecureMessageError):
         seal(b"x" * (64 * 1024 + 1), key, context())
+
+
+def test_decrypted_json_rejects_duplicate_keys_and_floats():
+    key = derive_key(b"x" * 32, "switch-test")
+    for raw in (b'{"x":1,"x":2}', b'{"x":1.5}'):
+        envelope = seal(raw, key, context(), nonce=(raw[:12]).ljust(12, b"_"))
+        with pytest.raises(SecureMessageError):
+            open_json(envelope, key, context())
