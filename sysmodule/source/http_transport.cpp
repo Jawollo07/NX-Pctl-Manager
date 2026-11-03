@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <cerrno>
 #include <cstring>
+#include <cstdio>
 
 namespace nxpctl::net {
 namespace {
