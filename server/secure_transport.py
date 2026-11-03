@@ -8,6 +8,7 @@ implementation are tracked separately.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 import re
@@ -57,9 +58,16 @@ class MessageContext:
 
 
 def derive_key(secret: bytes, device_id: str, purpose: str = "device") -> bytes:
-    """Derive a 128-bit AES key; purpose separates bootstrap/device domains."""
+    """Derive a key from raw secret bytes using SHA-256 then HKDF-SHA-256."""
     if not isinstance(secret, bytes) or len(secret) < 16 or len(secret) > 128:
         raise SecureMessageError("secret must contain 16..128 bytes")
+    return derive_key_from_digest(hashlib.sha256(secret).digest(), device_id, purpose)
+
+
+def derive_key_from_digest(secret_digest: bytes, device_id: str, purpose: str = "device") -> bytes:
+    """Derive the same key from a stored SHA-256 secret hash (server-side)."""
+    if not isinstance(secret_digest, bytes) or len(secret_digest) != 32:
+        raise SecureMessageError("32-byte SHA-256 digest required")
     if not _DEVICE_ID.fullmatch(device_id):
         raise SecureMessageError("invalid device id")
     if purpose not in ("enrollment", "device"):
@@ -70,8 +78,7 @@ def derive_key(secret: bytes, device_id: str, purpose: str = "device") -> bytes:
         length=KEY_BYTES,
         salt=b"NX-PCTL-AEAD-1",
         info=info,
-    ).derive(secret)
-
+    ).derive(secret_digest)
 
 def _b64encode(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
