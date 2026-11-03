@@ -9,6 +9,7 @@ int main() {
 
     static_assert(RuntimeStatusCommandId == 65000);
     static_assert(RuntimeProtocolVersion == 1);
+    static_assert(offsetof(RuntimeStatus, reserved) == 12);
     static_assert(IsKnownWorkerState(static_cast<std::uint32_t>(WorkerState::Stopped)));
     static_assert(IsKnownWorkerState(static_cast<std::uint32_t>(WorkerState::Starting)));
     static_assert(IsKnownWorkerState(static_cast<std::uint32_t>(WorkerState::Running)));
