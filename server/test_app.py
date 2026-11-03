@@ -121,6 +121,10 @@ def test_policy_validator_rejects_unknown_duplicate_or_cross_device_fields():
     raw = b'{"device_id":"a","device_id":"b"}'
     with pytest.raises(api.InvalidJSON):
         api.strict_json_loads(raw)
+    with pytest.raises(api.InvalidJSON):
+        api.strict_json_loads(b'{"value":1.25}')
+    with pytest.raises(api.InvalidJSON):
+        api.strict_json_loads(b'{"a":{"b":{"c":{"d":{"e":{"f":{"g":{"h":{"i":1}}}}}}}}}')
 
 
 def test_policy_validator_rejects_duplicate_title_ids():
