@@ -7,8 +7,8 @@ static_assert(offsetof(RuntimeStatus, worker_state) == 4,
               "RuntimeStatus worker_state CMIF offset changed");
 static_assert(offsetof(RuntimeStatus, worker_heartbeat) == 8,
               "RuntimeStatus worker_heartbeat CMIF offset changed");
-static_assert(offsetof(RuntimeStatus, reserved) == 12,
-              "RuntimeStatus reserved CMIF offset changed");
+static_assert(offsetof(RuntimeStatus, worker_restart_count) == 12,
+              "RuntimeStatus worker_restart_count CMIF offset changed");
 static_assert(offsetof(RuntimeStatus, policy_revision) == 16,
               "RuntimeStatus policy_revision CMIF alignment changed");
 static_assert(sizeof(RuntimeStatus) == 24,
