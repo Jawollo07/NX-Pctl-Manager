@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from server.secure_transport import (
-    MessageContext, SecureMessageError, derive_key, open_json, open_message, seal,
+    MessageContext, SecureMessageError, derive_key, open_json, open_message, seal, seal_json,
 )
 
 
@@ -16,7 +16,7 @@ def context(**overrides):
 def test_aes_gcm_json_round_trip_and_context_binding():
     secret = b"enrollment-secret-material-32-bytes"
     key = derive_key(secret, "switch-test", "device")
-    envelope = seal({"uptime_seconds": 123}, key, context(), nonce=b"n" * 12)
+    envelope = seal_json({"uptime_seconds": 123}, key, context(), nonce=b"n" * 12)
     assert open_json(envelope, key, context()) == {"uptime_seconds": 123}
     with pytest.raises(SecureMessageError):
         open_message(envelope, key, context(path="/v1/devices/switch-test/events:batch"))
@@ -35,6 +35,7 @@ def test_direction_method_device_and_path_are_authenticated():
     key = derive_key(b"x" * 32, "switch-test")
     envelope = seal(b"payload", key, context(), nonce=b"q" * 12)
     for altered in (
+        context(sequence=1),
         context(direction="response"),
         context(method="GET"),
         context(device_id="other-device"),
