@@ -49,8 +49,8 @@ class MessageContext:
         if not _DIRECTION.fullmatch(self.direction):
             raise SecureMessageError("invalid message direction")
         return (
-            "NX-PCTL-AEAD/1\\n"
-            f"{self.direction}\\n{self.method}\\n{self.path}\\n{self.device_id}"
+            "NX-PCTL-AEAD/1\n"
+            f"{self.direction}\n{self.method}\n{self.path}\n{self.device_id}"
         ).encode("ascii")
 
 
