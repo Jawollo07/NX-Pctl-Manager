@@ -122,9 +122,11 @@ namespace {
 
         s64 file_size = 0;
         const Result size_result = fs::GetFileSize(&file_size, file);
-        const Result read_result = R_SUCCEEDED(size_result) && file_size == static_cast<s64>(sizeof(record))
-            ? fs::ReadFile(&bytes_read, file, 0, &record, sizeof(record), fs::ReadOption::None)
-            : ResultSuccess();
+        Result read_result = size_result;
+        if (R_SUCCEEDED(size_result) && file_size == static_cast<s64>(sizeof(record))) {
+            read_result = fs::ReadFile(
+                &bytes_read, file, 0, &record, sizeof(record), fs::ReadOption::None);
+        }
         fs::CloseFile(file);
 
         if (R_SUCCEEDED(size_result) && file_size == static_cast<s64>(sizeof(record)) &&
