@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-import hashlib\n\nimport pytest
+import hashlib
+
+import pytest
 
 from server.secure_transport import (
     MessageContext, SecureMessageError, derive_key, derive_key_from_digest, open_json, open_message, seal, seal_json,
