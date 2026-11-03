@@ -14,7 +14,8 @@ int main() {
     static_assert(IsKnownWorkerState(static_cast<std::uint32_t>(WorkerState::Starting)));
     static_assert(IsKnownWorkerState(static_cast<std::uint32_t>(WorkerState::Running)));
     static_assert(IsKnownWorkerState(static_cast<std::uint32_t>(WorkerState::Stopping)));
-    static_assert(!IsKnownWorkerState(4));
+    static_assert(IsKnownWorkerState(static_cast<std::uint32_t>(WorkerState::Failed)));
+    static_assert(!IsKnownWorkerState(5));
 
     assert(std::strcmp(ServiceName, "nxpctl") == 0);
 
