@@ -93,7 +93,7 @@ the path device ID must match its authenticated subject.
 Event batches accept 1–100 events. Each event has exactly
 `event_id`, `sequence`, `timestamp`, `type` and `payload`. Event IDs and
 per-device sequence numbers are unique; retries are safely deduplicated.
-Payloads are limited to 4 KiB each. Request bodies are limited to 64 KiB.
+Payloads are limited to 4 KiB each. Legacy plaintext JSON bodies are limited to 64 KiB; the encrypted envelope transport allows up to 96 KiB on the wire for base64 and tag overhead.
 
 Heartbeat fields are intentionally forward-compatible, with protocol version,
 uptime and policy revision range-checked when present. The service does not
