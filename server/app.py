@@ -324,14 +324,27 @@ async def enroll(request: Request):
         if enrollment is None or enrollment["device_id"] != device_id or enrollment["used_at"] is not None or enrollment["expires_at"] <= now:
             db.rollback()
             raise HTTPException(403, "enrollment code invalid, expired, or already used")
-        existing = db.execute("SELECT 1 FROM devices WHERE device_id = ?", (device_id,)).fetchone()
-        if existing:
+        existing = db.execute("SELECT revoked_at FROM devices WHERE device_id = ?", (device_id,)).fetchone()
+        if existing is not None and existing["revoked_at"] is None:
             db.rollback()
-            raise HTTPException(409, "device_id already enrolled")
-        db.execute(
-            "INSERT INTO devices(device_id, credential_hash, created_at) VALUES(?,?,?)",
-            (device_id, _hash_secret(credential), now),
-        )
+            raise HTTPException(409, "device_id is already enrolled")
+        if existing is not None:
+            # Re-enrollment rotates identity and starts a clean policy/event epoch.
+            db.execute("DELETE FROM access_tokens WHERE device_id = ?", (device_id,))
+            db.execute("DELETE FROM policies WHERE device_id = ?", (device_id,))
+            db.execute("DELETE FROM events WHERE device_id = ?", (device_id,))
+            db.execute("DELETE FROM policy_acks WHERE device_id = ?", (device_id,))
+            db.execute(
+                """UPDATE devices SET credential_hash=?,created_at=?,revoked_at=NULL,
+                   last_auth_at=NULL,last_seen_at=NULL,last_heartbeat_json=NULL
+                   WHERE device_id=?""",
+                (_hash_secret(credential), now, device_id),
+            )
+        else:
+            db.execute(
+                "INSERT INTO devices(device_id, credential_hash, created_at) VALUES(?,?,?)",
+                (device_id, _hash_secret(credential), now),
+            )
         db.execute("UPDATE enrollment_codes SET used_at = ? WHERE code_hash = ?", (now, _hash_secret(code)))
         db.commit()
     return {"device_id": device_id, "device_credential": credential, "created_at": now}
