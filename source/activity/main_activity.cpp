@@ -21,13 +21,16 @@ using namespace brls::literals;   // for "key"_i18n
 
 namespace
 {
-bool prompt_network_field(const char* guide, char* output, std::size_t capacity)
+bool prompt_network_field(const char* guide, char* output, std::size_t capacity, u32 minimum_length)
 {
     SwkbdConfig config{};
     Result rc = swkbdCreate(&config, 0);
     if (R_FAILED(rc)) return false;
     swkbdConfigMakePresetDefault(&config);
+    swkbdConfigSetHeaderText(&config, "NX-Pctl-Manager network setup");
     swkbdConfigSetGuideText(&config, guide);
+    swkbdConfigSetStringLenMin(&config, minimum_length);
+    swkbdConfigSetStringLenMax(&config, static_cast<u32>(capacity - 1));
     rc = swkbdShow(&config, output, capacity);
     swkbdClose(&config);
     return R_SUCCEEDED(rc) && output[0] != '\0';
@@ -82,11 +85,11 @@ void MainActivity::onContentAvailable()
     this->item_network->registerClickAction([](brls::View*) {
         nxpctl::protocol::ProvisioningRequest request{};
         const bool host_ok = prompt_network_field(
-            "API hostname (DNS name only; HTTP port 80)", request.api_host, sizeof(request.api_host));
+            "API hostname (DNS name only; HTTP port 80)", request.api_host, sizeof(request.api_host), 1);
         const bool device_ok = host_ok && prompt_network_field(
-            "Device ID assigned in the NX-Pctl server", request.device_id, sizeof(request.device_id));
+            "Device ID assigned in the NX-Pctl server", request.device_id, sizeof(request.device_id), 1);
         const bool code_ok = device_ok && prompt_network_field(
-            "One-time enrollment code", request.enrollment_code, sizeof(request.enrollment_code));
+            "One-time enrollment code", request.enrollment_code, sizeof(request.enrollment_code), 20);
         if (!code_ok) {
             wipe_bytes(&request, sizeof(request));
             brls::Application::notify("Network enrollment cancelled.");
