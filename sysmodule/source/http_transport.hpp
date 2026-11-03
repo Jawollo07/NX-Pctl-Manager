@@ -28,6 +28,7 @@ namespace nxpctl::net {
      * DNS resolution uses the platform sfdnsres resolver.
      */
     Error Initialize();
+    void Finalize();
 
     /*
      * Sends one complete HTTP request and reads one complete response until
