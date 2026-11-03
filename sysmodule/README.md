@@ -46,14 +46,24 @@ on a Switch until the title ID, service permissions, kernel capabilities,
 firmware compatibility and boot/recovery procedure have been reviewed.
 
 The current experimental module initializes the service-manager client,
-starts a resident worker and supervisor, and exposes the read-only `nxpctl`
-HIPC diagnostics service. It also contains a fixed-size RAM-only policy
-snapshot store and a bounded schema-v1 JSON decoder, but no code currently
-loads a policy into the store. It now includes an HTTP-only Horizon BSD transport and a Switch-side
-AES-128-GCM/HKDF secure-envelope client. The worker does not invoke API
-operations yet because trusted API-host/enrollment-code provisioning and
-credential lifecycle are not implemented. There is still no PCTL mutation,
-filesystem permission or system-wide enforcement.
+starts a resident worker and supervisor, and exposes the `nxpctl` HIPC
+service. HIPC command 65000 reports runtime status; command 65001 accepts a
+validated, fixed-size API-host/device-ID/one-time-code provisioning request.
+The NRO client exposes the matching enrollment configuration call.
+
+The worker performs encrypted enrollment, device authentication, short-lived
+token refresh, heartbeats, policy retrieval, schema/clock/device/revision
+validation, RAM-only policy publication and policy acknowledgements. The
+HTTP-only Horizon BSD transport and AES-128-GCM/HKDF envelope client verify
+response authenticity before plaintext reaches the policy decoder. The
+provisioning lock is held only for bounded memory copies, never across network
+I/O, so local HIPC requests are not blocked by DNS/TCP/HTTP waits.
+
+Device credentials and tokens currently exist only in RAM. A sysmodule restart
+therefore requires a fresh enrollment; protected credential persistence and
+recovery are not implemented. There is still no PCTL mutation, title
+monitoring, filesystem permission or system-wide enforcement. Hardware
+validation has not been performed.
 
 A successful host-side compile is not evidence that the module is safe to load.
 Hardware installation/testing is intentionally not part of this phase.
