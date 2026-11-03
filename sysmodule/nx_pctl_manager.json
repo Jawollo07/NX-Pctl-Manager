@@ -37,12 +37,16 @@
         "svcExitThread": "0x0a",
         "svcSleepThread": "0x0b",
         "svcGetThreadPriority": "0x0c",
+        "svcSignalEvent": "0x11",
+        "svcClearEvent": "0x12",
         "svcCloseHandle": "0x16",
+        "svcWaitSynchronization": "0x18",
         "svcGetSystemTick": "0x1e",
         "svcConnectToNamedPort": "0x1f",
         "svcSendSyncRequest": "0x21",
         "svcBreak": "0x26",
-        "svcGetInfo": "0x29"
+        "svcGetInfo": "0x29",
+        "svcCreateEvent": "0x45"
       }
     },
     {
