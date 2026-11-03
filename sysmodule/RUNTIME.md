@@ -20,7 +20,7 @@ The HIPC interface is read-only. It does not inspect running titles, change pare
 
 1. Verify live HIPC session establishment and command dispatch on supported hardware/CFW; the current CI test validates the shared ABI, not the Horizon IPC transport.
 2. [x] Add worker failure supervision and bounded restart attempts. [ ] Add explicit suspend/resume state transitions after the PSC identity gate is resolved.
-3. Implement a Horizon network transport, enrollment/credential provisioning and authentication refresh. Plain HTTP is supported by the backend for trusted isolated LAN use, but it does not provide confidentiality or integrity; never treat policy data as trusted on plaintext transport without a separate authenticated integrity mechanism. HTTPS server-identity validation is required on untrusted networks.
+3. Implement a Horizon network transport, enrollment/credential provisioning and authentication refresh. HTTP is the selected device transport. The encrypted-message layer must be integrated and replay-protected before public deployment; until then the existing plaintext endpoints must remain private.
 4. [x] Add bounded policy validation and in-memory policy snapshots.
 5. [x] Add bounded schema-v1 JSON decoding and host tests.
 6. [x] Add bounded HTTP response framing parser and host tests. [ ] Add authenticated message integrity verification and connect only verified full snapshots to the RAM store.
@@ -67,71 +67,31 @@ They are not a transport implementation: there is no DNS lookup, socket,
 TLS handshake, certificate validation, redirect handling, retry policy or
 credential provisioning yet.
 
-## End-to-end encrypted HTTP payload protocol\n\nThe selected transport is HTTP with an application-layer authenticated-encryption envelope. `docs/secure-http-protocol.md` defines AES-128-GCM, HKDF-SHA-256 key domains, 96-bit nonces, 128-bit tags, and associated data binding each message to its direction, HTTP method, path, and device ID. The Python reference primitive is in `server/secure_transport.py` and is host-tested. It is not yet integrated into FastAPI routes or the Horizon sysmodule; therefore the current API still accepts plaintext and is **not safe to expose over public HTTP**. The remaining work includes encrypted one-time enrollment bootstrap, recoverable server-side device-key protection, Switch-side AES-GCM and HKDF, request sequencing/replay rejection, and cross-language known-answer tests.\n\n## Cloudflare deployment requirement
+## End-to-end encrypted HTTP payload protocol\n\nThe selected transport is HTTP with an application-layer authenticated-encryption envelope. `docs/secure-http-protocol.md` defines AES-128-GCM, HKDF-SHA-256 key domains, 96-bit nonces, 128-bit tags, and associated data binding each message to its direction, HTTP method, path, and device ID. The Python reference primitive is in `server/secure_transport.py` and is host-tested. It is not yet integrated into FastAPI routes or the Horizon sysmodule; therefore the current API still accepts plaintext and is **not safe to expose over public HTTP**. The remaining work includes encrypted one-time enrollment bootstrap, recoverable server-side device-key protection, Switch-side AES-GCM and HKDF, request sequencing/replay rejection, and cross-language known-answer tests.\n\n## HTTP and Cloudflare deployment decision
 
-The intended public deployment is Switch → HTTPS on Cloudflare-proxied
-hostname (port 443) → Cloudflare → HTTPS origin in Full (strict) mode →
-reverse proxy → loopback-only backend HTTP listener. The device must validate
-the Cloudflare edge's public certificate chain and requested hostname. A
-Cloudflare Origin CA certificate is for the Cloudflare-to-origin connection;
-it is not a trust anchor for the Switch's edge connection. API paths must
-bypass caching and interactive Cloudflare Access/challenge pages.
+The selected device-facing transport is HTTP with end-to-end AES-128-GCM
+payload encryption between Switch and backend. Cloudflare may proxy ciphertext,
+but sees hostnames, IP addresses, paths, headers, sizes and timing and can
+still block or replay traffic. API paths must bypass caching, body
+transformations, HTTP redirects and interactive Access/JavaScript challenges.
+The origin must remain private.
 
-Plain HTTP remains useful only for isolated development. It is not a
-production fallback when the hostname is proxied. Cloudflare terminates TLS,
-so TLS alone does not provide cryptographic integrity against Cloudflare
-itself; signed policy snapshots with a pinned public verification key remain
-a future hardening step.
+The Python reference primitive is in `server/secure_transport.py`.
+It is not yet integrated into the API routes or the Horizon sysmodule, so
+current endpoints still transmit plaintext and are not approved for public
+HTTP. Do not enable the public Cloudflare route until encrypted enrollment,
+all encrypted API request/response bodies, Switch-side AES-GCM/HKDF,
+transactional replay rejection, and cross-language test vectors are complete.
 
+## Pinned Atmosphere cryptography audit
 
-## Pinned libnx TLS API audit
-
-The pinned libnx submodule revision `b156b4774fb2df7b93402169509266da7547fc4c`
-contains the Switch SSL service client API (`sslInitialize`, SSL context and
-connection objects, hostname setup, socket descriptor binding, handshake,
-read/write, and certificate verification error reporting). The API documents
-the default peer-CA and hostname verification flags and use of the system
-certificate store. This is the intended TLS implementation path for the
-Cloudflare-proxied hostname; a custom TLS stack or a Cloudflare Origin CA
-trust anchor is not planned.
-
-The next transport implementation must explicitly retain peer-CA, hostname
-and certificate-date verification, set the TLS SNI/hostname to the configured
-public API hostname, and fail closed on any certificate-verification error.
-It must not use `SslOptionType_SkipDefaultVerify` or disable verification.
-The socket must connect to the DNS-resolved Cloudflare address while the TLS
-connection and HTTP `Host` header use the configured hostname.
-
-The service ACL/NPDM requirements for the sysmodule's NIFM, BSD socket and SSL
-service access have not yet been validated against the pinned Atmosphere
-runtime. Do not add guessed service ACL entries or start network access until
-those requirements and the target firmware compatibility are verified.
-
-## Network service API audit (pinned libnx)
-
-The pinned libnx revision was inspected directly at
-`b156b4774fb2df7b93402169509266da7547fc4c`:
-
-- `nifmInitialize(NifmServiceType_User)` requests `nifm:u`.
-- BSD initialization selects `bsd:s` when the system-service flag is supplied;
-  it can fall back to `bsd:u` only when the user-service flag is also supplied.
-  The project must choose the least-privileged mode supported by the target
-  firmware and must not assume either mode is available to a sysmodule.
-- SSL's default service selection requests `ssl`. The explicit system service
-  selection requests `ssl:s` on Horizon 15.0.0 and newer; older firmware falls
-  back to the default `ssl` service.
-- libnx documents the default SSL verification bitmask as peer-CA plus hostname.
-  Date validation is a separate `SslVerifyOption_DateCheck` bit and must be
-  explicitly included by the client. The API requires peer-CA and hostname
-  verification to remain enabled; do not use `SslOptionType_SkipDefaultVerify`.
-
-These are the service names selected by the pinned client library, not proof
-that the proposed sysmodule is authorized to access them. The NPDM
-`service_access` entries, service-manager policy, socket initialization
-requirements, and firmware-specific behavior still need a source-level and
-hardware-compatible validation. Therefore `service_access` remains empty and
-network code remains disabled; no ACL or kernel capability is inferred from
-the names above.
+The pinned Atmosphere revision contains AES-GCM headers in libvapours, but its
+ARM64 GCM implementation explicitly leaves the EL0/Stratosphere implementation
+as a TODO. The sysmodule must not call this as if it were a working
+cryptographic implementation. A supported, maintained EL0 crypto dependency
+or a separately audited implementation is required before adding Switch-side
+AES-GCM. This is why the current change deliberately adds the tested backend
+primitive first and does not fake a working Switch crypto path.
 
 ## Network service permissions and implementation audit
 
