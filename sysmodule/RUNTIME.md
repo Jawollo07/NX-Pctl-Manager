@@ -106,3 +106,29 @@ The service ACL/NPDM requirements for the sysmodule's NIFM, BSD socket and SSL
 service access have not yet been validated against the pinned Atmosphere
 runtime. Do not add guessed service ACL entries or start network access until
 those requirements and the target firmware compatibility are verified.
+
+## Network service API audit (pinned libnx)
+
+The pinned libnx revision was inspected directly at
+`b156b4774fb2df7b93402169509266da7547fc4c`:
+
+- `nifmInitialize(NifmServiceType_User)` requests `nifm:u`.
+- BSD initialization selects `bsd:s` when the system-service flag is supplied;
+  it can fall back to `bsd:u` only when the user-service flag is also supplied.
+  The project must choose the least-privileged mode supported by the target
+  firmware and must not assume either mode is available to a sysmodule.
+- SSL's default service selection requests `ssl`. The explicit system service
+  selection requests `ssl:s` on Horizon 15.0.0 and newer; older firmware falls
+  back to the default `ssl` service.
+- libnx documents the default SSL verification bitmask as peer-CA plus hostname.
+  Date validation is a separate `SslVerifyOption_DateCheck` bit and must be
+  explicitly included by the client. The API requires peer-CA and hostname
+  verification to remain enabled; do not use `SslOptionType_SkipDefaultVerify`.
+
+These are the service names selected by the pinned client library, not proof
+that the proposed sysmodule is authorized to access them. The NPDM
+`service_access` entries, service-manager policy, socket initialization
+requirements, and firmware-specific behavior still need a source-level and
+hardware-compatible validation. Therefore `service_access` remains empty and
+network code remains disabled; no ACL or kernel capability is inferred from
+the names above.
