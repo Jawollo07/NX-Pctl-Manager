@@ -10,7 +10,6 @@ on:
 permissions:
   contents: read
 
-# Keep only the newest branch build active; each Atmosphere build is expensive.
 concurrency:
   group: sysmodule-build-${{ github.ref }}
   cancel-in-progress: true
@@ -45,16 +44,11 @@ jobs:
 
       - name: Verify shared runtime protocol ABI
         run: |
-          c++ -std=c++17 -Wall -Wextra -Werror project/tests/runtime_protocol_test.cpp -o "$RUNNER_TEMP/runtime-protocol-test"
-          "$RUNNER_TEMP/runtime-protocol-test"
-          c++ -std=c++17 -Wall -Wextra -Werror project/tests/worker_supervision_test.cpp -o "$RUNNER_TEMP/worker-supervision-test"
-          "$RUNNER_TEMP/worker-supervision-test"
-          c++ -std=c++17 -Wall -Wextra -Werror project/tests/policy_engine_test.cpp -o "$RUNNER_TEMP/policy-engine-test"
-          "$RUNNER_TEMP/policy-engine-test"
-          c++ -std=c++17 -Wall -Wextra -Werror project/tests/policy_json_test.cpp -o "$RUNNER_TEMP/policy-json-test"
-          "$RUNNER_TEMP/policy-json-test"
-          c++ -std=c++17 -Wall -Wextra -Werror project/tests/policy_evaluator_test.cpp -o "$RUNNER_TEMP/policy-evaluator-test"
-          "$RUNNER_TEMP/policy-evaluator-test"
+          set -euo pipefail
+          for test in runtime_protocol worker_supervision policy_engine policy_json policy_evaluator http_response; do
+            c++ -std=c++17 -Wall -Wextra -Werror "project/tests/${test}_test.cpp" -o "$RUNNER_TEMP/${test}-test"
+            "$RUNNER_TEMP/${test}-test"
+          done
 
       - name: Checkout pinned libnx submodule
         run: git -C project submodule update --init deps/libnx
@@ -95,28 +89,15 @@ jobs:
               export PATH="/host-switch-tools:$PATH"
               git config --global --add safe.directory /work/project
               git config --global --add safe.directory /work/atmosphere
-
-              test -n "${DEVKITPRO:-}" || {
-                echo "DEVKITPRO is not set in the devkitPro container" >&2
-                exit 1
-              }
-
+              test -n "${DEVKITPRO:-}" || { echo "DEVKITPRO is not set" >&2; exit 1; }
               for tool in npdmtool elf2nso build_pfs0; do
-                command -v "$tool" >/dev/null || {
-                  echo "Missing required Switch packaging tool: $tool" >&2
-                  exit 1
-                }
+                command -v "$tool" >/dev/null || { echo "Missing required Switch packaging tool: $tool" >&2; exit 1; }
               done
-
               make -C deps/libnx -j"$(nproc)"
               make -C deps/libnx install
-
-              # Compile the NRO-side HIPC client against the same pinned libnx.
               "$DEVKITPRO/devkitA64/bin/aarch64-none-elf-g++" -std=gnu++17 -Wall -Wextra \
-                -I"$DEVKITPRO/libnx/include" \
-                -c source/util/sysmodule_client.cpp \
+                -I"$DEVKITPRO/libnx/include" -c source/util/sysmodule_client.cpp \
                 -o /tmp/nxpctl-sysmodule-client.o
-
               make -C sysmodule ATMOSPHERE_ROOT=/work/atmosphere nx_release
             '
 
