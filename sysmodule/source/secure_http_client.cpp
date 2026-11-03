@@ -271,7 +271,10 @@ Error Post(const char *host, u16 port,
     if (!g_crypto_valid) return Error::CryptoSelfTestFailed;
 
     const std::size_t device_length = std::strlen(device_id);
-    if (device_length == 0 || device_length > 64 || !IsOperation(operation))
+    if (device_length == 0 || device_length > 64 ||
+        !((device_id[0] >= 'A' && device_id[0] <= 'Z') ||
+          (device_id[0] >= 'a' && device_id[0] <= 'z') ||
+          (device_id[0] >= '0' && device_id[0] <= '9')) || !IsOperation(operation))
         return Error::InvalidPath;
     for (std::size_t i = 0; i < device_length; ++i)
         if (!IsDeviceIdChar(device_id[i])) return Error::InvalidPath;
