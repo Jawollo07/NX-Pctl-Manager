@@ -98,11 +98,11 @@ def seal(plaintext: bytes, key: bytes, context: MessageContext, *, nonce: bytes 
     if not isinstance(nonce, bytes) or len(nonce) != NONCE_BYTES:
         raise SecureMessageError("96-bit nonce required")
     ciphertext = AESGCM(key).encrypt(nonce, plaintext, context.aad())
-    return {"v": PROTOCOL_VERSION, "n": _b64encode(nonce), "c": _b64encode(ciphertext)}
+    return {"v": PROTOCOL_VERSION, "s": context.sequence, "n": _b64encode(nonce), "c": _b64encode(ciphertext)}
 
 
 def open_message(envelope: object, key: bytes, context: MessageContext) -> bytes:
-    if not isinstance(envelope, dict) or set(envelope) != {"v", "n", "c"}:
+    if not isinstance(envelope, dict) or set(envelope) != {"v", "s", "n", "c"}:
         raise SecureMessageError("invalid envelope fields")
     if type(envelope["v"]) is not int or envelope["v"] != PROTOCOL_VERSION:
         raise SecureMessageError("unsupported secure-message version")
