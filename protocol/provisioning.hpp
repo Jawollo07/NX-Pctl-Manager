@@ -13,7 +13,9 @@ inline constexpr std::size_t EnrollmentCodeCapacity = 129;
 /*
  * One-time, volatile provisioning request sent over the local nxpctl HIPC
  * service. The sysmodule copies it into private RAM and wipes the IPC buffer
- * copy in the NRO immediately after dispatch. No filesystem persistence.
+ * copy in the NRO immediately after dispatch. The enrollment code is never
+ * persisted; only the returned device credential and routing identity are
+ * stored later in the protected credential store.
  */
 struct ProvisioningRequest {
     char api_host[ApiHostCapacity]{};
