@@ -22,6 +22,11 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from .secure_transport import (
+    MessageContext, SecureMessageError, derive_key, derive_key_from_digest,
+    open_json, seal_json,
+)
+
 APP_VERSION = "0.1.0"
 PROTOCOL_VERSION = 1
 MAX_REQUEST_BYTES = 96 * 1024
@@ -247,6 +252,12 @@ def init_database() -> None:
             received_at INTEGER NOT NULL,
             PRIMARY KEY(device_id, revision)
         );
+        CREATE TABLE IF NOT EXISTS secure_replays (
+            key_scope TEXT NOT NULL,
+            sequence TEXT NOT NULL,
+            seen_at INTEGER NOT NULL,
+            PRIMARY KEY(key_scope, sequence)
+        );
         """)
 
 
@@ -256,12 +267,14 @@ app = FastAPI(title="NX-Pctl-Manager API", version=APP_VERSION)
 @app.on_event("startup")
 def startup() -> None:
     init_database()
-    if os.environ.get("NXPCTL_PUBLIC_HTTP", "0") == "1":
-        print("WARNING: public plaintext HTTP is enabled; device credentials and tokens are exposed in transit.")
+    if os.environ.get("NXPCTL_ALLOW_LEGACY_API", "0") == "1":
+        print("WARNING: legacy plaintext device API is enabled; do not expose it on an untrusted network.")
 
 
 @app.middleware("http")
 async def limit_request_size(request: Request, call_next):
+    if request.url.path.startswith("/v1/devices/") and os.environ.get("NXPCTL_ALLOW_LEGACY_API", "0") != "1":
+        return JSONResponse(status_code=404, content={"detail": "legacy plaintext API disabled"})
     length = request.headers.get("content-length")
     if length:
         try:
@@ -475,6 +488,182 @@ async def policy_ack(device_id: str, request: Request):
             (device_id, revision, status, message, int(time.time())),
         )
     return {"accepted": True}
+
+
+def _secure_scope(secret_digest: bytes, purpose: str, device_id: str) -> str:
+    return f"{purpose}:{device_id}:{secret_digest.hex()}"
+
+
+def _accept_secure_sequence(scope: str, sequence: int) -> None:
+    """Atomically consume a random 64-bit request ID for this key epoch."""
+    now = int(time.time())
+    with database() as db:
+        db.execute("BEGIN IMMEDIATE")
+        db.execute("DELETE FROM secure_replays WHERE seen_at < ?", (now - 24 * 60 * 60,))
+        try:
+            db.execute(
+                "INSERT INTO secure_replays(key_scope,sequence,seen_at) VALUES(?,?,?)",
+                (scope, str(sequence), now),
+            )
+        except sqlite3.IntegrityError as exc:
+            db.rollback()
+            raise HTTPException(409, "replayed secure message") from exc
+        db.commit()
+
+
+def _synthetic_request(request: Request, path: str, body: dict[str, Any]) -> Request:
+    raw = json.dumps(body, separators=(",", ":"), ensure_ascii=True).encode("ascii")
+    headers = [(b"content-type", b"application/json"), (b"content-length", str(len(raw)).encode("ascii"))]
+    token = body.get("access_token")
+    if isinstance(token, str) and token:
+        headers.append((b"authorization", f"Bearer {token}".encode("ascii")))
+    scope = dict(request.scope)
+    scope.update({"path": path, "raw_path": path.encode("ascii"), "method": "POST", "headers": headers})
+    sent = False
+
+    async def receive():
+        nonlocal sent
+        if sent:
+            return {"type": "http.request", "body": b"", "more_body": False}
+        sent = True
+        return {"type": "http.request", "body": raw, "more_body": False}
+
+    return Request(scope, receive)
+
+
+async def _dispatch_secure_operation(operation: str, device_id: str, request: Request, payload: dict[str, Any]):
+    if operation == "enroll":
+        if set(payload) != {"enrollment_code"}:
+            raise HTTPException(400, "invalid enrollment payload")
+        synthetic = _synthetic_request(request, f"/v1/devices/enroll", {
+            "device_id": device_id, "enrollment_code": payload["enrollment_code"],
+        })
+        return await enroll(synthetic)
+    if operation == "auth":
+        if set(payload) != {"device_credential"}:
+            raise HTTPException(400, "invalid authentication payload")
+        synthetic = _synthetic_request(request, "/v1/devices/auth", {
+            "device_id": device_id, "device_credential": payload["device_credential"],
+        })
+        return await authenticate(synthetic)
+    token = payload.pop("access_token", None)
+    if not isinstance(token, str) or not 32 <= len(token) <= 256:
+        raise HTTPException(401, "invalid device session")
+    if operation == "policy":
+        if payload:
+            raise HTTPException(400, "policy request must not contain extra fields")
+        synthetic = _synthetic_request(request, f"/v1/devices/{device_id}/policy", {"access_token": token})
+        response = get_policy(device_id, synthetic)
+        if isinstance(response, JSONResponse):
+            if response.status_code >= 400:
+                raise HTTPException(response.status_code, "policy request failed")
+            return json.loads(response.body)
+        return response
+    synthetic = _synthetic_request(request, f"/v1/devices/{device_id}/{operation}", {
+        **payload, "access_token": token,
+    })
+    if operation == "heartbeat":
+        return await heartbeat(device_id, synthetic)
+    if operation == "events":
+        return await events_batch(device_id, synthetic)
+    if operation == "policy-ack":
+        return await policy_ack(device_id, synthetic)
+    raise HTTPException(404, "unknown secure operation")
+
+
+@app.post("/v1/secure/{device_id}/{operation}")
+async def secure_device_api(device_id: str, operation: str, request: Request):
+    """All device API calls use one encrypted POST envelope and no auth headers."""
+    if not DEVICE_ID_RE.fullmatch(device_id):
+        raise HTTPException(404, "unknown device")
+    if operation not in {"enroll", "auth", "policy", "heartbeat", "events", "policy-ack"}:
+        raise HTTPException(404, "unknown secure operation")
+    path = request.url.path
+    try:
+        envelope = await read_json(request)
+        if not isinstance(envelope, dict) or type(envelope.get("s")) is not int:
+            raise SecureMessageError("invalid secure envelope")
+        sequence = envelope["s"]
+        if not 0 <= sequence <= 0xFFFFFFFFFFFFFFFF:
+            raise SecureMessageError("invalid secure sequence")
+
+        if operation == "enroll":
+            # The one-time code is the bootstrap secret; it is only disclosed
+            # inside the authenticated ciphertext.
+            # The key can be derived from the submitted code only after a
+            # bounded envelope parser has exposed no plaintext fields, so use
+            # the enrollment code's pre-provisioned hash lookup by trying the
+            # known device-bound outstanding code record below.
+            with database() as db:
+                enrollment_rows = db.execute(
+                    "SELECT code_hash FROM enrollment_codes WHERE device_id=? AND used_at IS NULL AND expires_at>?",
+                    (device_id, int(time.time())),
+                ).fetchall()
+            # The invitation code itself is not present outside ciphertext;
+            # each valid invitation maps to a different key. The server cannot
+            # select that key without an explicit key identifier. v1 therefore
+            # uses the stored code hash as a key id in the envelope.
+            key_id = envelope.get("k")
+            if not isinstance(key_id, str) or not re.fullmatch(r"[0-9a-f]{64}", key_id):
+                raise SecureMessageError("missing enrollment key identifier")
+            if key_id not in {row["code_hash"] for row in enrollment_rows}:
+                raise HTTPException(403, "invalid or expired enrollment")
+            digest = bytes.fromhex(key_id)
+            key = derive_key_from_digest(digest, device_id, "enrollment")
+            purpose = "enrollment"
+        elif operation == "auth":
+            # Auth bootstrap is keyed by the device credential hash. The
+            # credential is encrypted and is verified by the legacy handler.
+            payload_hint = envelope.get("k")
+            if not isinstance(payload_hint, str) or not re.fullmatch(r"[0-9a-f]{64}", payload_hint):
+                raise SecureMessageError("missing authentication key identifier")
+            digest = bytes.fromhex(payload_hint)
+            key = derive_key_from_digest(digest, device_id, "device")
+            with database() as db:
+                row = db.execute("SELECT credential_hash FROM devices WHERE device_id=?", (device_id,)).fetchone()
+            if row is None or not hmac.compare_digest(str(row["credential_hash"]), payload_hint):
+                raise HTTPException(401, "invalid device credentials")
+            purpose = "device"
+        else:
+            with database() as db:
+                row = db.execute("SELECT credential_hash,revoked_at FROM devices WHERE device_id=?", (device_id,)).fetchone()
+            if row is None or row["revoked_at"] is not None:
+                raise HTTPException(401, "unknown or revoked device")
+            digest = bytes.fromhex(str(row["credential_hash"]))
+            key = derive_key_from_digest(digest, device_id, "device")
+            purpose = "device"
+
+        context = MessageContext(device_id, "POST", path, "request", sequence)
+        payload = open_json({k: v for k, v in envelope.items() if k != "k"}, key, context)
+        if not isinstance(payload, dict):
+            raise SecureMessageError("secure payload must be an object")
+        if operation == "enroll":
+            supplied = payload.get("enrollment_code")
+            if not isinstance(supplied, str) or not hmac.compare_digest(_hash_secret(supplied), envelope["k"]):
+                raise SecureMessageError("enrollment key does not match payload")
+        if operation == "auth":
+            supplied = payload.get("device_credential")
+            if not isinstance(supplied, str) or not hmac.compare_digest(_hash_secret(supplied), envelope["k"]):
+                raise SecureMessageError("authentication key does not match payload")
+        _accept_secure_sequence(_secure_scope(digest, purpose, device_id), sequence)
+        try:
+            result = await _dispatch_secure_operation(operation, device_id, request, payload)
+            status_code = 200
+            response_payload = result
+        except HTTPException as exc:
+            status_code = exc.status_code
+            response_payload = {"error": exc.detail}
+        response_context = MessageContext(device_id, "POST", path, "response", sequence)
+        response_envelope = seal_json(response_payload, key, response_context)
+        return JSONResponse(
+            status_code=status_code,
+            content=response_envelope,
+            headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+        )
+    except SecureMessageError:
+        raise HTTPException(400, "invalid secure message")
+    except InvalidJSON:
+        raise HTTPException(400, "invalid secure envelope")
 
 
 # Administrative routes are intentionally absent. Provisioning and policy
