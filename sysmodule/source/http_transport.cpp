@@ -2,11 +2,12 @@
 
 #include <stratosphere/socket.hpp>
 
-#include <sys/socket.h>
+extern "C" {
+#include <switch/services/bsd.h>
+}
+
 #include <netdb.h>
 #include <poll.h>
-#include <fcntl.h>
-#include <unistd.h>
 #include <cerrno>
 #include <cstring>
 #include <cstdio>
@@ -15,6 +16,7 @@ namespace nxpctl::net {
 namespace {
 
     constexpr std::size_t SocketPoolSize = 512 * 1024;
+    constexpr int BsdNonBlockFlag = 0x800; // libnx maps O_NONBLOCK to this BSD flag.
     alignas(0x1000) u8 g_socket_memory[SocketPoolSize];
     bool g_initialized = false;
 
@@ -23,7 +25,7 @@ namespace {
         descriptor.fd = fd;
         descriptor.events = events;
         for (;;) {
-            const int result = ::poll(&descriptor, 1, timeout_ms);
+            const int result = ::bsdPoll(&descriptor, 1, timeout_ms);
             if (result > 0) {
                 if (descriptor.revents & (POLLERR | POLLNVAL)) return -1;
                 if (descriptor.revents & (events | POLLHUP)) return 1;
@@ -39,9 +41,12 @@ namespace {
         while (sent < size) {
             const int ready = WaitFor(fd, POLLOUT, 8000);
             if (ready <= 0) return false;
-            const ssize_t count = ::send(fd, data + sent, size - sent, 0);
+            const ssize_t count = ams::socket::Send(fd, data + sent, size - sent,
+                                                     ams::socket::MsgFlag::Msg_None);
             if (count < 0) {
-                if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
+                const auto error = ams::socket::GetLastError();
+                if (error == ams::socket::Errno::EIntr ||
+                    error == ams::socket::Errno::EAgain) continue;
                 return false;
             }
             if (count == 0) return false;
@@ -51,31 +56,39 @@ namespace {
     }
 
     Error ConnectAddress(const addrinfo *address, int *out_fd) {
-        const int fd = ::socket(address->ai_family, address->ai_socktype, address->ai_protocol);
+        const int fd = ams::socket::Socket(
+            static_cast<ams::socket::Family>(address->ai_family),
+            static_cast<ams::socket::Type>(address->ai_socktype),
+            static_cast<ams::socket::Protocol>(address->ai_protocol));
         if (fd < 0) return Error::ConnectFailed;
 
-        const int old_flags = ::fcntl(fd, F_GETFL, 0);
-        if (old_flags < 0 || ::fcntl(fd, F_SETFL, old_flags | O_NONBLOCK) < 0) {
-            ::close(fd);
+        const int old_flags = ::bsdFcntl(fd, F_GETFL, 0);
+        if (old_flags < 0 || ::bsdFcntl(fd, F_SETFL, old_flags | BsdNonBlockFlag) < 0) {
+            ams::socket::Close(fd);
             return Error::ConnectFailed;
         }
 
-        int result = ::connect(fd, address->ai_addr, address->ai_addrlen);
-        if (result < 0 && errno != EINPROGRESS && errno != EWOULDBLOCK) {
-            ::close(fd);
-            return Error::ConnectFailed;
-        }
+        const auto *sock_address =
+            reinterpret_cast<const ams::socket::SockAddr *>(address->ai_addr);
+        int result = ams::socket::Connect(fd, sock_address,
+                                          static_cast<ams::socket::SockLenT>(address->ai_addrlen));
         if (result < 0) {
+            const auto error = ams::socket::GetLastError();
+            if (error != ams::socket::Errno::EInProgress &&
+                error != ams::socket::Errno::EAgain) {
+                ams::socket::Close(fd);
+                return Error::ConnectFailed;
+            }
             const int ready = WaitFor(fd, POLLOUT, 5000);
             if (ready <= 0) {
-                ::close(fd);
+                ams::socket::Close(fd);
                 return ready == 0 ? Error::Timeout : Error::ConnectFailed;
             }
             int socket_error = 0;
             socklen_t error_size = sizeof(socket_error);
-            if (::getsockopt(fd, SOL_SOCKET, SO_ERROR, &socket_error, &error_size) < 0 ||
+            if (::bsdGetSockOpt(fd, SOL_SOCKET, SO_ERROR, &socket_error, &error_size) < 0 ||
                 socket_error != 0) {
-                ::close(fd);
+                ams::socket::Close(fd);
                 return Error::ConnectFailed;
             }
         }
@@ -151,11 +164,14 @@ Error HttpPost(const char *host, u16 port,
                 result = Error::ResponseTooLarge;
                 break;
             }
-            const ssize_t count = ::recv(fd, response + received,
-                                         response_capacity - received, 0);
+            const ssize_t count = ams::socket::Recv(
+                fd, response + received, response_capacity - received,
+                ams::socket::MsgFlag::Msg_None);
             if (count == 0) break;
             if (count < 0) {
-                if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
+                const auto error = ams::socket::GetLastError();
+                if (error == ams::socket::Errno::EIntr ||
+                    error == ams::socket::Errno::EAgain) continue;
                 result = Error::ReceiveFailed;
                 break;
             }
@@ -164,8 +180,8 @@ Error HttpPost(const char *host, u16 port,
         *out_response_size = received;
     }
 
-    ::shutdown(fd, SHUT_RDWR);
-    ::close(fd);
+    ams::socket::Shutdown(fd, ams::socket::ShutdownMethod::Shut_RdWr);
+    ams::socket::Close(fd);
     return result;
 }
 
