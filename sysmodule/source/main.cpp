@@ -25,7 +25,6 @@ namespace ams {
         constexpr s64 WorkerPollIntervalNs = 1'000'000'000LL;
         constexpr u64 InitialPolicyRevision = 0;
 
-        using ::nxpctl::protocol::WorkerState;
 
         alignas(os::ThreadStackAlignment) u8 g_worker_stack[WorkerStackSize];
         os::ThreadType g_worker_thread;
@@ -48,13 +47,13 @@ namespace ams {
                 ++g_worker_heartbeat;
             }
 
-            g_worker_state = static_cast<u32>(protocol::WorkerState::Stopped);
+            g_worker_state = static_cast<u32>(::nxpctl::protocol::WorkerState::Stopped);
         }
 
         void StartWorkerThread() {
             AMS_ASSERT(!g_worker_thread_created);
 
-            g_worker_state = static_cast<u32>(protocol::WorkerState::Starting);
+            g_worker_state = static_cast<u32>(::nxpctl::protocol::WorkerState::Starting);
             g_worker_heartbeat = 0;
 
             R_ABORT_UNLESS(os::CreateThread(
@@ -79,7 +78,7 @@ namespace ams {
                 return;
             }
 
-            g_worker_state = static_cast<u32>(protocol::WorkerState::Stopping);
+            g_worker_state = static_cast<u32>(::nxpctl::protocol::WorkerState::Stopping);
             os::SignalEvent(std::addressof(g_worker_stop_event));
             os::WaitThread(std::addressof(g_worker_thread));
             os::DestroyThread(std::addressof(g_worker_thread));
