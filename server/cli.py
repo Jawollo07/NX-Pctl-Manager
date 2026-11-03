@@ -8,7 +8,7 @@ import sys
 import time
 from pathlib import Path
 
-from .app import (
+from app import (
     DEVICE_ID_RE, _database_path, _hash_secret, _validate_policy,
     database, init_database, strict_json_loads,
 )

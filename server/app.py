@@ -22,7 +22,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from .secure_transport import (
+from secure_transport import (
     MessageContext, SecureMessageError, derive_key, derive_key_from_digest,
     open_json, seal_json,
 )
