@@ -45,7 +45,7 @@ jobs:
       - name: Verify shared runtime protocol ABI
         run: |
           set -euo pipefail
-          for test in runtime_protocol worker_supervision policy_engine policy_json policy_evaluator http_response http_request; do
+          for test in runtime_protocol worker_supervision policy_engine policy_json policy_evaluator http_response http_request provisioning; do
             c++ -std=c++17 -Wall -Wextra -Werror "project/tests/${test}_test.cpp" -o "$RUNNER_TEMP/${test}-test"
             "$RUNNER_TEMP/${test}-test"
           done
