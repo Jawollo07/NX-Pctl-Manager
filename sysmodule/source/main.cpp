@@ -194,6 +194,10 @@ namespace ams {
                         std::memset(&config, 0, sizeof(config));
                         R_THROW(0xD402);
                     }
+                    if (::nxpctl::sync::IsEnrolled()) {
+                        std::memset(&config, 0, sizeof(config));
+                        R_THROW(0xD403);
+                    }
                     ::nxpctl::sync::Configure(config);
                     std::memset(&config, 0, sizeof(config));
                     R_SUCCEED();
