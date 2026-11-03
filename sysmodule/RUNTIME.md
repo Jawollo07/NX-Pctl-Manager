@@ -151,10 +151,13 @@ contains only:
 - `ssl` — libnx system SSL context/connection service.
 
 NIFM is intentionally not requested: the audited socket initialization path
-does not call `nifmInitialize`. No additional kernel syscalls were added by
-this permission change. The permissions are not yet hardware-validated and
-must be checked against the exact target firmware and service-manager policy
-before installation.
+does not call `nifmInitialize`. The NPDM syscall list now also includes
+`svcCreateTransferMemory` (`0x15`): the pinned BSD client calls
+`tmemCreateFromMemory`, which invokes this syscall to share its configured
+socket memory pool with `bsd:s`. The audited path does not call
+`svcMapTransferMemory`/`svcUnmapTransferMemory`, so those capabilities were
+not added. The permissions are not yet hardware-validated and must be checked
+against the exact target firmware and service-manager policy before installation.
 
 The production transport contract is HTTPS only: TCP port 443, DNS resolution
 through the platform resolver, TLS SNI and hostname equal to the configured
