@@ -255,7 +255,7 @@ Error Post(const char *host, u16 port,
            const char *plaintext_json, std::size_t plaintext_size,
            char *out_plaintext, std::size_t out_capacity,
            std::size_t *out_size, u16 *out_http_status) {
-    if (!host || !device_id || !operation || !secret || !purpose ||
+    if (!host || port != net::DefaultHttpPort || !device_id || !operation || !secret || !purpose ||
         !plaintext_json || !out_plaintext || !out_size || !out_http_status ||
         plaintext_size == 0 || plaintext_size > crypto::MaxPlaintextSize ||
         out_capacity == 0) return Error::InvalidArgument;
