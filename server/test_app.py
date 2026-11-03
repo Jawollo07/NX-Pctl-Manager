@@ -20,6 +20,8 @@ def client(tmp_path, monkeypatch):
 def enrollment_code(device_id="switch-test"):
     code = "enroll-" + ("x" * 32)
     with api.database() as db:
+        # Mirror the CLI: only one outstanding enrollment code per device.
+        db.execute("DELETE FROM enrollment_codes WHERE device_id=?", (device_id,))
         db.execute(
             "INSERT INTO enrollment_codes(code_hash,device_id,expires_at) VALUES(?,?,?)",
             (api._hash_secret(code), device_id, int(time.time()) + 600),
