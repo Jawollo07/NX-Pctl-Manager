@@ -25,7 +25,7 @@ namespace ams {
         constexpr s64 WorkerPollIntervalNs = 1'000'000'000LL;
         constexpr u64 InitialPolicyRevision = 0;
 
-        using protocol::WorkerState;
+        using ::nxpctl::protocol::WorkerState;
 
         alignas(os::ThreadStackAlignment) u8 g_worker_stack[WorkerStackSize];
         os::ThreadType g_worker_thread;
@@ -35,7 +35,7 @@ namespace ams {
         bool g_worker_thread_created = false;
 
         void WorkerThreadMain(void *) {
-            g_worker_state = static_cast<u32>(protocol::WorkerState::Running);
+            g_worker_state = static_cast<u32>(::nxpctl::protocol::WorkerState::Running);
 
             /*
              * The timed wait is both the worker's idle cadence and its
@@ -97,7 +97,7 @@ namespace ams {
                     sf::Out<u32> out_worker_state,
                     sf::Out<u32> out_worker_heartbeat,
                     sf::Out<u64> out_policy_revision) {
-                    *out_protocol_version = protocol::RuntimeProtocolVersion;
+                    *out_protocol_version = ::nxpctl::protocol::RuntimeProtocolVersion;
                     *out_worker_state = g_worker_state;
                     *out_worker_heartbeat = g_worker_heartbeat;
                     *out_policy_revision = InitialPolicyRevision;
@@ -113,7 +113,7 @@ namespace ams {
 
         using RuntimeServerOptions = sf::hipc::DefaultServerManagerOptions;
 
-        constexpr sm::ServiceName RuntimeServiceName = sm::ServiceName::Encode(protocol::ServiceName);
+        constexpr sm::ServiceName RuntimeServiceName = sm::ServiceName::Encode(::nxpctl::protocol::ServiceName);
         constexpr size_t RuntimeMaxSessions = 4;
 
         sf::hipc::ServerManager<1, RuntimeServerOptions, RuntimeMaxSessions> g_runtime_server_manager;
