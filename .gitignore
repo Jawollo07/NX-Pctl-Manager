@@ -78,3 +78,6 @@ nx_pctl_probe.txt
 # Sysmodule build artifacts
 /sysmodule/build/
 /sysmodule/out/
+
+__pycache__
+data/
