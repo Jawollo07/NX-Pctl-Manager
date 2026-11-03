@@ -47,6 +47,13 @@ namespace ams {
         bool g_worker_thread_created = false;
         bool g_supervisor_thread_created = false;
 
+        void WipeProvisioningRequest(::nxpctl::protocol::ProvisioningRequest& request) {
+            volatile u8* bytes = reinterpret_cast<volatile u8*>(std::addressof(request));
+            for (std::size_t i = 0; i < sizeof(request); ++i) {
+                bytes[i] = 0;
+            }
+        }
+
         void WorkerThreadMain(void *) {
             g_worker_state = static_cast<u32>(::nxpctl::protocol::WorkerState::Running);
             u64 uptime_seconds = 0;
@@ -191,15 +198,15 @@ namespace ams {
                     ::nxpctl::protocol::ProvisioningRequest config{};
                     std::memcpy(&config, request.GetPointer(), sizeof(config));
                     if (!::nxpctl::protocol::IsValidProvisioningRequest(config)) {
-                        std::memset(&config, 0, sizeof(config));
+                        WipeProvisioningRequest(config);
                         R_THROW(0xD402);
                     }
                     if (::nxpctl::sync::IsEnrolled()) {
-                        std::memset(&config, 0, sizeof(config));
+                        WipeProvisioningRequest(config);
                         R_THROW(0xD403);
                     }
                     ::nxpctl::sync::Configure(config);
-                    std::memset(&config, 0, sizeof(config));
+                    WipeProvisioningRequest(config);
                     R_SUCCEED();
                 }
         };

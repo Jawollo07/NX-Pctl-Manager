@@ -138,6 +138,7 @@ namespace {
         ResponseWiper response_wiper;
         if (!g_enrolled || g_device_credential[0] == '\0') return false;
         char payload[256];
+        ScopedWipe payload_wiper(payload, sizeof(payload));
         const int n = std::snprintf(payload, sizeof(payload),
             "{\"device_credential\":\"%s\"}", g_device_credential);
         if (n <= 0 || static_cast<std::size_t>(n) >= sizeof(payload)) return false;
@@ -206,6 +207,7 @@ namespace {
         ResponseWiper response_wiper;
         if (!g_access_token[0] || revision == 0) return;
         char payload[512];
+        ScopedWipe payload_wiper(payload, sizeof(payload));
         const int n = std::snprintf(payload, sizeof(payload),
             "{\"access_token\":\"%s\",\"revision\":%llu,"
             "\"status\":\"accepted\",\"message\":\"validated\"}",
