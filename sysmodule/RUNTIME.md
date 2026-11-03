@@ -30,3 +30,12 @@ The pinned Atmosphere revision exposes suspend/resume notifications through `ams
 ## Safety boundary
 
 The NPDM title ID remains provisional. Do not install or launch this artifact on a console until the title ID, service permissions, kernel capabilities, firmware compatibility, and recovery procedure have been reviewed. CI packaging does not constitute hardware validation.
+
+
+## RAM-only policy model (validation stage)
+
+`protocol/policy.hpp` now defines the fixed-size, versioned policy model and a bounded in-memory `PolicyStore`. It validates device binding, protocol/schema versions, strictly increasing revisions, trusted-server clock skew, expiry and maximum lifetime, offline behavior, fixed UTC offset, daily limits, quiet hours, and bounded/unique title rules. A candidate is validated again while holding the store lock against the currently active revision, then copied as one complete snapshot. Invalid or stale candidates leave the previous snapshot unchanged.
+
+The store uses fixed-size memory and performs no allocation, file I/O, database access, or network access. The HIPC status endpoint reports the store's active revision (zero until a future authenticated policy-delivery path publishes a snapshot). The model is not yet populated by the worker and does not enforce restrictions.
+
+The host test covers validation failures, device/revision binding, full-snapshot replacement, and preservation of the previous snapshot after rejection. This stage does **not** parse JSON, verify signatures/MACs, authenticate a server, or establish that a received policy is trustworthy; those checks must precede calls to `PolicyStore::TryReplace`. The fixed UTC offset is not an IANA timezone/DST implementation.

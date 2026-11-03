@@ -1,6 +1,6 @@
 # Headless Atmosphere Sysmodule Migration Plan
 
-Status: Phase 0 reference pinned; Phase 1 build target committed; Phase 2 runtime and read-only IPC scaffold added. The latest CI build is pending, and no hardware validation has been performed.
+Status: Phase 0 reference pinned; Phase 1 build target committed; Phase 2 runtime and read-only IPC scaffold added; Phase 4 policy model, validation and RAM snapshot store added as a host-tested foundation. Policy delivery, authentication, enforcement and hardware validation remain unimplemented.
 
 ## 1. Accepted decisions
 
@@ -125,6 +125,14 @@ A policy needs at minimum:
 
 Reject unknown critical schema versions, invalid bounds, stale revisions, cross-device replay and malformed input. Use monotonic time for elapsed playtime; use server time only for wall-clock schedules, with explicit clock uncertainty handling. TLS validation is mandatory. Never log credentials, tokens, PINs, TOTP secrets or authentication payloads.
 
+### Policy model implementation boundary
+
+`protocol/policy.hpp` implements schema/protocol version 1 as a fixed-size C++ model. It includes device binding, monotonic revision, issue/expiry/server timestamps, enabled state, parent-authentication requirement, offline behavior, fixed UTC offset, global and weekday budgets, quiet hours, and up to 64 title allow/block rules. Validation rejects unsupported versions, device mismatch, stale revisions, invalid time bounds/clock skew, expired or overlong policies, invalid limits/schedules, invalid title IDs/actions, duplicate rules, and oversized rule sets.
+
+`PolicyStore` holds only one fixed-size snapshot in RAM. It validates a candidate while holding a short spin lock against the currently active revision and replaces the complete structure only on success. A rejected candidate cannot partially mutate the active snapshot. Host tests exercise these rules. The sysmodule exposes the active revision through its read-only status command, but no worker/network path can publish a policy yet.
+
+This is deliberately not a complete trust boundary: there is no bounded JSON decoder, signature/MAC verification, authenticated transport, device credential provisioning, or server clock bootstrap. Callers must not pass untrusted data to the store until those layers exist. Timezone support currently means a fixed UTC offset only, not IANA/DST handling. No policy is persisted.
+
 ## 8. Full system integration: feasibility gate
 
 A resident sysmodule alone does not prove that users cannot close, bypass or kill the enforcement surface. Full scope requires supported mechanisms for:
@@ -168,8 +176,14 @@ Prefer documented Atmosphere/Stratosphere interfaces and narrowly scoped version
 - Acceptance: authenticated connection, certificate failure rejection, WSS reconnect, REST reconciliation and secret-free logs.
 
 ### Phase 4 — policy engine and RAM cache
-- Add strict schema validation, immutable snapshots, revision checks and atomic replacement.
-- Acceptance: malformed/stale policy rejected; network loss retains last policy; reconnect catches up; restart offline enters restricted bootstrap.
+- [x] Add a versioned fixed-size policy model and strict structural/range validation.
+- [x] Bind snapshots to one device and require strictly increasing revisions.
+- [x] Add a bounded RAM-only snapshot store; validate under lock and replace the complete snapshot or leave the previous one untouched.
+- [ ] Add bounded JSON decoding and reject unknown critical fields before constructing the model.
+- [ ] Add authenticated transport and policy integrity verification before publication.
+- [ ] Connect worker/network lifecycle to policy publication, offline retention and restricted bootstrap.
+- [ ] Add evaluator tests for schedules, title rules and playtime accounting.
+- Acceptance remains pending: malformed/stale policy rejected; network loss retains last policy; reconnect catches up; restart offline enters restricted bootstrap.
 
 ### Phase 5 — PCTL adapter
 - Wrap existing PCTL operations behind PctlController.

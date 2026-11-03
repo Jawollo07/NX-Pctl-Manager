@@ -9,6 +9,7 @@
 #include <stratosphere.hpp>
 #include "../../protocol/runtime_status.hpp"
 #include "../../protocol/worker_supervision.hpp"
+#include "../../protocol/policy.hpp"
 
 #define AMS_NXPCTL_I_RUNTIME_INTERFACE_INFO(C, H) \
     AMS_SF_METHOD_INFO(C, H, 65000, Result, GetRuntimeStatus, \
@@ -26,8 +27,6 @@ namespace ams {
         constexpr s32 SupervisorThreadPriority = 31;
         constexpr size_t SupervisorStackSize = 0x4000;
         constexpr s64 WorkerPollIntervalNs = 1'000'000'000LL;
-        constexpr u64 InitialPolicyRevision = 0;
-
 
         alignas(os::ThreadStackAlignment) u8 g_worker_stack[WorkerStackSize];
         alignas(os::ThreadStackAlignment) u8 g_supervisor_stack[SupervisorStackSize];
@@ -38,6 +37,7 @@ namespace ams {
         util::Atomic<u32> g_worker_state;
         util::Atomic<u32> g_worker_heartbeat;
         util::Atomic<u32> g_worker_restart_count;
+        ::nxpctl::policy::PolicyStore g_policy_store;
         bool g_worker_thread_created = false;
         bool g_supervisor_thread_created = false;
 
@@ -164,7 +164,7 @@ namespace ams {
                     *out_worker_state = g_worker_state;
                     *out_worker_heartbeat = g_worker_heartbeat;
                     *out_worker_restart_count = g_worker_restart_count;
-                    *out_policy_revision = InitialPolicyRevision;
+                    *out_policy_revision = g_policy_store.GetRevision();
                     R_SUCCEED();
                 }
         };
