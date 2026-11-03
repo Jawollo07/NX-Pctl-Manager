@@ -118,7 +118,11 @@ Access login or browser challenges. Keep the origin private.
 
 The pinned Atmosphere socket backend initializes libnx BSD in system-client
 mode. The sysmodule uses `bsd:s` for sockets and `sfdnsres` for hostname
-resolution. It does not request `ssl` and does not perform a TLS handshake.
+resolution. Credential persistence additionally uses `fsp-srv` to mount its
+own device save data and `spl:crypto` to derive a console-bound storage key.
+The NPDM filesystem capability mask grants only `DeviceSaveData` and
+`CreateOwnSaveData`; it does not grant SD-card, BIS or other-save-data access.
+It does not request `ssl` and does not perform a TLS handshake.
 NIFM is intentionally not requested: the audited socket initialization path
 does not call `nifmInitialize`. The NPDM syscall list includes
 `svcCreateTransferMemory` (`0x15`) because the BSD client shares its
