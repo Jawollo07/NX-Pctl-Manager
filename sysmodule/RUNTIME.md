@@ -10,11 +10,11 @@ The experimental Stratosphere target now has a resident main thread, a separate 
 - Finalization stops and joins the supervisor before stopping the worker, preventing an intentional shutdown from being mistaken for a worker failure.
 - HIPC command 65000 (`GetRuntimeStatus`) returns protocol version, worker state, worker heartbeat, bounded worker restart count, and policy revision. The initial policy revision is zero.
 - `protocol/runtime_status.hpp` is the shared, Horizon-independent wire contract used by both the NRO client and sysmodule. `protocol/worker_supervision.hpp` contains the Horizon-independent three-restart budget used by the supervisor; CI tests that budget independently. `WorkerState::Failed` is a terminal health state after the bounded restart budget is exhausted. The CMIF output layout is four `u32` values at offsets 0/4/8/12 (protocol version, worker state, heartbeat, restart count), then the aligned `u64` policy revision at offset 16.
-- `protocol/http_response.hpp` now provides a bounded, allocation-free HTTP/1.0/1.1 response parser. It requires exactly one decimal `Content-Length`, rejects chunked/other transfer encodings, rejects compressed bodies, duplicate lengths, malformed CRLF framing, truncated bodies and trailing bytes, and caps headers/body at 8 KiB/16 KiB. It returns a view into the caller-owned receive buffer; it does not perform socket I/O or authenticate the peer.
+- `protocol/http_response.hpp` now provides a bounded, allocation-free HTTP/1.0/1.1 response parser. It requires exactly one decimal `Content-Length`, rejects chunked/other transfer encodings, rejects compressed bodies, duplicate lengths, malformed CRLF framing, truncated bodies and trailing bytes, and caps headers/body at 8 KiB/96 KiB. It returns a view into the caller-owned receive buffer; it does not perform socket I/O or authenticate the peer.
 - The existing NRO performs an optional read-only status request at startup. If the service is absent, it logs the condition and continues in standalone mode.
 - `FinalizeSystemModule` signals the worker, joins it, destroys its thread object, and finalizes the event.
 
-The HIPC interface is read-only. It does not inspect running titles, change parental-control state, apply restrictions, access persistent storage, or perform network I/O. No policy is persisted on the console.
+The HIPC interface is read-only. It does not inspect running titles, change parental-control state, apply restrictions or access persistent storage. The secure HTTP client is implemented as a callable transport primitive, but no host/device credential is provisioned and the worker does not yet invoke API operations.
 
 ## Next implementation phases
 
