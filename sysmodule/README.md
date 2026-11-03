@@ -45,9 +45,12 @@ not a registered or hardware-validated title ID. Do not install this package
 on a Switch until the title ID, service permissions, kernel capabilities,
 firmware compatibility and boot/recovery procedure have been reviewed.
 
-The current module only initializes the service-manager client and remains
-resident in an idle loop. It has no network access, no local IPC service, no
-PCTL mutation, no filesystem permissions and no system-wide enforcement.
+The current experimental module initializes the service-manager client,
+starts a resident worker and supervisor, and exposes the read-only `nxpctl`
+HIPC diagnostics service. It also contains a fixed-size RAM-only policy
+snapshot store and a bounded schema-v1 JSON decoder, but no code currently
+loads a policy into the store. It has no network access, no PCTL mutation, no
+filesystem permissions and no system-wide enforcement.
 
 A successful host-side compile is not evidence that the module is safe to load.
 Hardware installation/testing is intentionally not part of this phase.

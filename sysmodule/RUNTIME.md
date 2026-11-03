@@ -19,9 +19,11 @@ The HIPC interface is read-only. It does not inspect running titles, change pare
 
 1. Verify live HIPC session establishment and command dispatch on supported hardware/CFW; the current CI test validates the shared ABI, not the Horizon IPC transport.
 2. [x] Add worker failure supervision and bounded restart attempts. [ ] Add explicit suspend/resume state transitions after the PSC identity gate is resolved.
-3. Add authenticated HTTPS/WSS transport to the management server.
-4. Add policy validation and in-memory policy snapshots.
-5. Implement enforcement only after the required Horizon services, permissions, firmware compatibility, and recovery behavior have been validated.
+3. Add authenticated HTTPS transport and device credential provisioning; add WSS only after the REST trust boundary and reconnect behavior are proven.
+4. [x] Add bounded policy validation and in-memory policy snapshots.
+5. [x] Add bounded schema-v1 JSON decoding and host tests.
+6. Add authenticated message integrity verification and connect only verified full snapshots to the RAM store.
+7. Implement enforcement only after the required Horizon services, permissions, firmware compatibility, and recovery behavior have been validated.
 
 ## Power-state integration gate
 
