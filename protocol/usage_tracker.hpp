@@ -27,9 +27,11 @@ public:
         std::uint64_t title_id,
         std::uint64_t monotonic_seconds,
         std::int64_t local_day_key) noexcept {
+        const bool title_active = title_id != NoActiveTitle;
+
         if (!initialized_) {
             initialized_ = true;
-            last_title_id_ = title_id;
+            previous_title_was_active_ = title_active;
             last_monotonic_seconds_ = monotonic_seconds;
             local_day_key_ = local_day_key;
             return ObserveResult::BaselineEstablished;
@@ -39,32 +41,27 @@ public:
             // Do not charge an interval spanning midnight to either day.
             active_seconds_ = 0;
             local_day_key_ = local_day_key;
-            last_title_id_ = title_id;
+            previous_title_was_active_ = title_active;
             last_monotonic_seconds_ = monotonic_seconds;
             return ObserveResult::DayRolledOver;
         }
 
-        if (local_day_key < local_day_key_) {
+        if (local_day_key < local_day_key_ ||
+            monotonic_seconds < last_monotonic_seconds_) {
             // A wall-clock correction must not roll the usage counter back.
-            // Keep the current day bucket but refresh the monotonic baseline.
-            last_title_id_ = title_id;
-            last_monotonic_seconds_ = monotonic_seconds;
-            return ObserveResult::ClockRegressed;
-        }
-
-        if (monotonic_seconds < last_monotonic_seconds_) {
-            last_title_id_ = title_id;
+            // Refresh the monotonic baseline without changing the day bucket.
+            previous_title_was_active_ = title_active;
             last_monotonic_seconds_ = monotonic_seconds;
             return ObserveResult::ClockRegressed;
         }
 
         const std::uint64_t elapsed = monotonic_seconds - last_monotonic_seconds_;
-        last_title_id_ = title_id;
         last_monotonic_seconds_ = monotonic_seconds;
 
         if (elapsed > MaxObservationGapSeconds) {
             // A stalled worker, suspend, or missed observation is not
             // assumed to be continuous playtime.
+            previous_title_was_active_ = title_active;
             return ObserveResult::ObservationGapTooLarge;
         }
 
@@ -76,14 +73,13 @@ public:
             }
         }
 
-        previous_title_was_active_ = title_id != NoActiveTitle;
+        previous_title_was_active_ = title_active;
         return ObserveResult::Accumulated;
     }
 
     void Reset() noexcept {
         initialized_ = false;
         previous_title_was_active_ = false;
-        last_title_id_ = NoActiveTitle;
         last_monotonic_seconds_ = 0;
         local_day_key_ = 0;
         active_seconds_ = 0;
@@ -112,7 +108,6 @@ public:
 private:
     bool initialized_ = false;
     bool previous_title_was_active_ = false;
-    std::uint64_t last_title_id_ = NoActiveTitle;
     std::uint64_t last_monotonic_seconds_ = 0;
     std::int64_t local_day_key_ = 0;
     std::uint64_t active_seconds_ = 0;
