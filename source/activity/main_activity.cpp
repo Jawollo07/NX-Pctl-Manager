@@ -106,6 +106,8 @@ void MainActivity::onContentAvailable()
         wipe_bytes(&request, sizeof(request));
         if (R_SUCCEEDED(rc))
             brls::Application::notify("Enrollment request accepted by nxpctl. Check sysmodule diagnostics for synchronization.");
+        else if (static_cast<uint32_t>(rc) == 0xD403)
+            brls::Application::notify("This sysmodule already enrolled a device. Do not overwrite its volatile credentials.");
         else
             brls::Application::notify(fmt::format("Could not provision nxpctl (0x{:08X}).", (unsigned)rc));
         return true;
