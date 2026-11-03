@@ -204,6 +204,11 @@ bool IsConfigured() {
     return g_configured;
 }
 
+bool IsEnrolled() {
+    Guard guard;
+    return g_enrolled;
+}
+
 void RunCycle(policy::PolicyStore& store, u64 uptime_seconds) {
     Guard guard;
     if (!g_configured) return;
