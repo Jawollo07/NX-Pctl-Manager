@@ -151,75 +151,29 @@ worker integration. Until those are implemented and tested, the sysmodule does
 not contact this server and no policy is enforced on-console.
 
 
-## Cloudflare-proxied deployment (intended production topology)
+## HTTP with end-to-end encrypted payloads
 
-The Switch client is being designed to connect to the **public HTTPS hostname**,
-not to the origin address. Example topology:
+The selected device transport is HTTP, with application-layer AES-128-GCM
+encryption between the Switch and backend. The protocol and current
+implementation boundary are documented in
+[secure-http-protocol.md](secure-http-protocol.md).
 
-```text
-Nintendo Switch
-  └─ HTTPS :443 / api.example.net
-       └─ Cloudflare proxy (orange-cloud DNS, edge certificate)
-            └─ HTTPS :443 (Full strict, origin certificate)
-                 └─ reverse proxy on the Ubuntu host
-                      └─ HTTP 127.0.0.1:8080
-                           └─ nxpctl-api container
-```
+Cloudflare may proxy the HTTP requests, but it must only receive ciphertext
+in device-specific request and response bodies. URL paths, hostnames, IP
+addresses, HTTP headers, packet sizes and timing remain visible. Cloudflare
+can still block, delay or replay traffic; authenticated sequence numbers and
+server-side replay rejection are therefore mandatory.
 
-Replace `api.example.net` with the hostname you actually configure. Do not
-hard-code an origin IP in the Switch client: proxied DNS resolves to Cloudflare
-anycast addresses, and Cloudflare may change those addresses.
+**Important current limitation:** `server/secure_transport.py` currently
+contains the tested cryptographic primitive only. FastAPI routes still accept
+and return the legacy plaintext JSON format, and the Switch has no matching
+AES-GCM implementation or secure enrollment client yet. Do not expose the
+current API on public HTTP. The end-to-end protocol is not production-ready
+until route enforcement, bootstrap enrollment, protected server key storage,
+Switch-side cryptography, and transactional replay checks are complete.
 
-### Cloudflare and reverse-proxy settings
-
-- Set the API A/AAAA/CNAME record to **Proxied** (orange cloud).
-- Set SSL/TLS encryption to **Full (strict)**. The reverse proxy must present
-  an unexpired certificate whose SAN matches the origin hostname; a publicly
-  trusted certificate or Cloudflare Origin CA certificate is suitable for the
-  Cloudflare-to-origin leg.
-- Keep the application container bound to loopback (the Compose default
-  `127.0.0.1:8080`). Terminate TLS at the reverse proxy on port 443 and
-  proxy only the API path to the container.
-- The Switch validates the **Cloudflare edge certificate chain and hostname**.
-  It must not be configured to trust a Cloudflare Origin CA certificate as the
-  server certificate: that certificate is presented only by the origin to
-  Cloudflare, not by the Cloudflare edge to the Switch.
-- Do not use Flexible SSL, HTTP, or a redirect from HTTP as the device API
-  transport. Enrollment codes, device credentials, bearer tokens and policy
-  responses are sensitive.
-- Use the standard HTTPS port 443. Cloudflare also proxies selected alternate
-  HTTPS ports, but there is no benefit in adding that complexity here.
-- Disable caching for `/v1/*` and `/healthz`; send/retain
-  `Cache-Control: no-store` for device-specific responses. Do not let a
-  cache serve one device's policy to another.
-- Do not put Cloudflare Access browser login/challenge pages in front of the
-  device API. Device authentication is the backend's per-device bearer-token
-  scheme. A browser challenge is not an API response and cannot be completed
-  by the headless sysmodule.
-- Apply rate limits/WAF rules to enrollment and authentication endpoints while
-  allowing the device API's JSON POST/GET methods. Avoid interactive
-  JavaScript or managed challenge actions on `/v1/*`.
-
-Cloudflare's standard proxy accepts HTTPS on port 443 and selected alternate
-ports; the origin connection is separately protected by the chosen SSL/TLS
-mode. See the official [Cloudflare proxied network ports
-documentation](https://developers.cloudflare.com/fundamentals/reference/network-ports/)
-and [Full (strict) mode
-documentation](https://developers.cloudflare.com/ssl/origin-configuration/ssl-modes/full-strict/).
-
-### Trust boundary
-
-TLS from the Switch to Cloudflare protects credentials and policy data in
-transit and authenticates the public API hostname, provided the Switch TLS
-implementation performs normal certificate-chain and hostname validation.
-Cloudflare then establishes a separate TLS connection to the origin in Full
-(strict) mode. This is transport security, not end-to-end signing: Cloudflare
-terminates TLS and can technically inspect or modify proxied traffic. If
-cryptographic integrity against the proxy itself is later required, policy
-snapshots need a separate signed format and a pinned verification public key
-on the Switch.
-
-The request builder and response parser are protocol framing helpers only.
-They do not open sockets, perform TLS, validate certificates, follow redirects,
-or authenticate response content. No server data is trusted until those
-transport and policy-authentication steps exist.
+Do not enable Cloudflare caching, body transformations, HTTP-to-HTTPS redirects
+or interactive Access/JavaScript challenges on device API paths. Keep the
+origin service private and firewall direct origin access. HTTP encryption
+protects payload content and authenticity; it does not provide transport
+metadata privacy or availability.
