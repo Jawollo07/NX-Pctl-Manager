@@ -14,6 +14,7 @@ enum class DecisionReason : std::uint8_t {
     OfflineBlockAll,
     OfflineBlockNewTitle,
     TitleBlocked,
+    TitleNotAllowListed,
     QuietHours,
     DailyLimitReached,
     InvalidContext,
@@ -58,13 +59,10 @@ struct Decision {
     if (context.weekday >= 7 || context.minute_of_day >= 1440 || context.title_id == 0) {
         return {false, DecisionReason::InvalidContext};
     }
-
     if (!policy.enabled) return {true, DecisionReason::PolicyDisabled};
-
     if (policy.require_parent_authentication && !context.parent_authenticated) {
         return {false, DecisionReason::ParentAuthenticationRequired};
     }
-
     if (context.offline) {
         if (policy.offline_behavior == OfflineBehavior::BlockAllTitles) {
             return {false, DecisionReason::OfflineBlockAll};
@@ -75,8 +73,6 @@ struct Decision {
         }
     }
 
-    // An explicit block always wins. An explicit allow does not override
-    // global quiet hours, daily budgets, parent auth or offline restrictions.
     bool explicitly_allowed = false;
     for (std::size_t i = 0; i < policy.title_rule_count && i < MaxTitleRules; ++i) {
         const auto& rule = policy.title_rules[i];
@@ -86,17 +82,17 @@ struct Decision {
         }
         if (rule.action == TitleRuleAction::Allow) explicitly_allowed = true;
     }
+    if (policy.title_rule_mode == TitleRuleMode::AllowListedOnly && !explicitly_allowed) {
+        return {false, DecisionReason::TitleNotAllowListed};
+    }
 
     if (IsWithinQuietHours(policy, context.minute_of_day)) {
         return {false, DecisionReason::QuietHours};
     }
-
     const auto daily_limit = EffectiveDailyLimit(policy, context.weekday);
     if (daily_limit != NoDailyLimit && context.daily_usage_minutes >= daily_limit) {
         return {false, DecisionReason::DailyLimitReached};
     }
-
-    (void)explicitly_allowed; // Default title behavior is allow; the flag documents rule precedence.
     return {true, DecisionReason::Allowed};
 }
 
