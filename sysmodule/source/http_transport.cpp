@@ -20,6 +20,118 @@ namespace {
     alignas(0x1000) u8 g_socket_memory[SocketPoolSize];
     bool g_initialized = false;
 
+    /*
+     * getaddrinfo() is synchronous and its internal sfdnsres wait cannot be
+     * bounded with SO_RCVTIMEO/poll on the eventual TCP socket. Run exactly
+     * one resolver request on a dedicated thread instead. If it exceeds the
+     * caller's deadline, the request is left alive and owns all of its state;
+     * subsequent callers fail fast until it exits and can be reaped safely.
+     */
+    constexpr s64 DnsTimeoutNs = 5'000'000'000LL;
+    constexpr size_t ResolverStackSize = 0x8000;
+    alignas(os::ThreadStackAlignment) u8 g_resolver_stack[ResolverStackSize];
+    os::ThreadType g_resolver_thread;
+    os::EventType g_resolver_event;
+    bool g_resolver_event_initialized = false;
+    bool g_resolver_thread_created = false;
+    int g_resolver_result = EAI_FAIL;
+    addrinfo *g_resolver_addresses = nullptr;
+    char g_resolver_host[254]{};
+    char g_resolver_service[6]{};
+
+    void ResolverThreadMain(void *) {
+        addrinfo hints{};
+        hints.ai_family = AF_INET;
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_protocol = IPPROTO_TCP;
+
+        g_resolver_addresses = nullptr;
+        g_resolver_result = ::getaddrinfo(
+            g_resolver_host, g_resolver_service, &hints, &g_resolver_addresses);
+
+        /* Publish result and pointer before waking the waiting HTTP worker. */
+        os::SignalEvent(std::addressof(g_resolver_event));
+    }
+
+    void ReapResolverThread() {
+        if (!g_resolver_thread_created) return;
+
+        os::WaitThread(std::addressof(g_resolver_thread));
+        os::DestroyThread(std::addressof(g_resolver_thread));
+        g_resolver_thread_created = false;
+    }
+
+    Error ResolveAddresses(const char *host, const char *service, addrinfo **out) {
+        *out = nullptr;
+
+        if (g_resolver_thread_created) {
+            if (!os::TryWaitThread(std::addressof(g_resolver_thread))) {
+                /* A timed-out DNS call is still in flight; never spawn another. */
+                return Error::Timeout;
+            }
+
+            ReapResolverThread();
+            if (g_resolver_addresses != nullptr) {
+                ::freeaddrinfo(g_resolver_addresses);
+                g_resolver_addresses = nullptr;
+            }
+        }
+
+        const size_t host_length = std::strlen(host);
+        const size_t service_length = std::strlen(service);
+        if (host_length == 0 || host_length >= sizeof(g_resolver_host) ||
+            service_length == 0 || service_length >= sizeof(g_resolver_service)) {
+            return Error::InvalidArgument;
+        }
+
+        std::memset(g_resolver_host, 0, sizeof(g_resolver_host));
+        std::memset(g_resolver_service, 0, sizeof(g_resolver_service));
+        std::memcpy(g_resolver_host, host, host_length);
+        std::memcpy(g_resolver_service, service, service_length);
+        g_resolver_addresses = nullptr;
+        g_resolver_result = EAI_FAIL;
+        os::ClearEvent(std::addressof(g_resolver_event));
+
+        const Result create_result = os::CreateThread(
+            std::addressof(g_resolver_thread),
+            ResolverThreadMain,
+            nullptr,
+            g_resolver_stack,
+            sizeof(g_resolver_stack),
+            31,
+            3);
+        if (R_FAILED(create_result)) return Error::ResolutionFailed;
+
+        g_resolver_thread_created = true;
+        os::SetThreadNamePointer(
+            std::addressof(g_resolver_thread), "ams.NxPctlManager.DNS");
+        os::StartThread(std::addressof(g_resolver_thread));
+
+        if (!os::TimedWaitEvent(
+                std::addressof(g_resolver_event),
+                TimeSpan::FromNanoSeconds(DnsTimeoutNs))) {
+            /*
+             * Do not terminate a thread inside getaddrinfo(): its resolver
+             * internals may still own service/session memory. The thread and
+             * its static buffers remain valid until a later call reaps it.
+             */
+            return Error::Timeout;
+        }
+
+        ReapResolverThread();
+        if (g_resolver_result != 0 || g_resolver_addresses == nullptr) {
+            if (g_resolver_addresses != nullptr) {
+                ::freeaddrinfo(g_resolver_addresses);
+                g_resolver_addresses = nullptr;
+            }
+            return Error::ResolutionFailed;
+        }
+
+        *out = g_resolver_addresses;
+        g_resolver_addresses = nullptr;
+        return Error::None;
+    }
+
     int WaitFor(int fd, short events, int timeout_ms) {
         pollfd descriptor{};
         descriptor.fd = fd;
@@ -110,12 +222,30 @@ Error Initialize() {
     const auto result = ams::socket::Initialize(config);
     if (R_FAILED(result)) return Error::SocketInitialization;
 
+    os::InitializeEvent(
+        std::addressof(g_resolver_event), false, os::EventClearMode_ManualClear);
+    g_resolver_event_initialized = true;
     g_initialized = true;
     return Error::None;
 }
 
 void Finalize() {
     if (!g_initialized) return;
+
+    /*
+     * The BSD resolver may still be using its service session after a DNS
+     * timeout. Join it before finalizing the socket service.
+     */
+    if (g_resolver_thread_created) ReapResolverThread();
+    if (g_resolver_addresses != nullptr) {
+        ::freeaddrinfo(g_resolver_addresses);
+        g_resolver_addresses = nullptr;
+    }
+    if (g_resolver_event_initialized) {
+        os::FinalizeEvent(std::addressof(g_resolver_event));
+        g_resolver_event_initialized = false;
+    }
+
     ams::socket::Finalize();
     g_initialized = false;
 }
@@ -138,14 +268,9 @@ Error HttpPost(const char *host, u16 port,
     if (service_length <= 0 || static_cast<std::size_t>(service_length) >= sizeof(service))
         return Error::InvalidArgument;
 
-    addrinfo hints{};
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = IPPROTO_TCP;
-
     addrinfo *addresses = nullptr;
-    if (::getaddrinfo(host, service, &hints, &addresses) != 0 || !addresses)
-        return Error::ResolutionFailed;
+    const Error resolution = ResolveAddresses(host, service, &addresses);
+    if (resolution != Error::None) return resolution;
 
     int fd = -1;
     Error connect_error = Error::ConnectFailed;
