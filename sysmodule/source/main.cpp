@@ -29,7 +29,7 @@ namespace ams {
     namespace {
 
         constexpr s32 WorkerThreadPriority = 30;
-        constexpr size_t WorkerStackSize = 0x4000;
+        constexpr size_t WorkerStackSize = 0x8000;
         constexpr s32 SupervisorThreadPriority = 31;
         constexpr size_t SupervisorStackSize = 0x4000;
         constexpr s64 WorkerPollIntervalNs = 1'000'000'000LL;
