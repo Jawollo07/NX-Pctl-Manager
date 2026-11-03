@@ -23,8 +23,8 @@ The HIPC interface exposes read-only diagnostics plus a single enrollment bootst
 3. [x] Implement Horizon HTTP transport, local enrollment provisioning, encrypted enrollment/authentication, token refresh, heartbeat, policy retrieval/acknowledgement and protected credential persistence/recovery. HTTP is the selected device transport.
 4. [x] Add bounded policy validation and in-memory policy snapshots.
 5. [x] Add bounded schema-v1 JSON decoding and host tests.
-6. [x] Add bounded HTTP response framing parser and host tests. [ ] Add authenticated message integrity verification and connect only verified full snapshots to the RAM store.
-7. Implement enforcement only after the required Horizon services, permissions, firmware compatibility, and recovery behavior have been validated.
+6. [x] Add bounded HTTP response framing parser and host tests. [x] Add authenticated message integrity verification and connect only verified full snapshots to the RAM store.
+7. Implement enforcement only after the required Horizon services, permissions, firmware compatibility, and recovery behavior have been validated. The pure evaluator is ready for integration, but title monitoring, usage accounting, PCTL interaction and the hardware recovery path remain unverified.
 
 ## Power-state integration gate
 
