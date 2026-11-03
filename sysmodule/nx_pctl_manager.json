@@ -18,7 +18,11 @@
   "service_host": [
     "nxpctl"
   ],
-  "service_access": [],
+  "service_access": [
+    "bsd:s",
+    "sfdnsres",
+    "ssl"
+  ],
   "kernel_capabilities": [
     {
       "type": "kernel_flags",
