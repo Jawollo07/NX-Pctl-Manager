@@ -132,3 +132,20 @@ def test_policy_validator_rejects_duplicate_title_ids():
     policy["title_rules"].append(dict(policy["title_rules"][0]))
     with pytest.raises(Exception):
         api._validate_policy(policy, "switch-test")
+
+
+
+def test_revoked_device_can_be_reenrolled_with_rotated_credential(client):
+    old_token = enroll_and_auth(client)
+    with api.database() as db:
+        db.execute("UPDATE devices SET revoked_at=? WHERE device_id=?", (int(time.time()), "switch-test"))
+    code = enrollment_code()
+    response = client.post("/v1/devices/enroll", json={"device_id": "switch-test", "enrollment_code": code})
+    assert response.status_code == 200, response.text
+    new_credential = response.json()["device_credential"]
+    assert client.post("/v1/devices/auth", json={
+        "device_id": "switch-test", "device_credential": new_credential,
+    }).status_code == 200
+    assert client.get("/v1/devices/switch-test/policy", headers={
+        "Authorization": f"Bearer {old_token}",
+    }).status_code == 401
