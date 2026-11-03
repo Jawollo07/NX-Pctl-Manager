@@ -77,7 +77,12 @@ The exact schema-v1 JSON profile is documented in [`docs/policy-schema-v1.md`](.
 
 ## Policy processing status
 
-The current branch includes a bounded schema-v1 decoder and a pure policy evaluator with allow-all and allow-list-only title modes. Both are host-tested foundations only: no authenticated network path feeds them, and the evaluator is not connected to title monitoring or enforcement.
+The current branch includes a bounded schema-v1 decoder, authenticated encrypted
+policy retrieval, full-snapshot validation and atomic publication to the
+RAM-only policy store. The pure evaluator supports allow-all and allow-list-only
+title modes and is host-tested. It is not yet connected to Horizon title
+monitoring, playtime accounting or enforcement. No restrictions are currently
+applied to running or launching titles.
 
 
 ## HTTP backend
@@ -94,7 +99,10 @@ authentication for every request/response body. IP addresses, hostname, URL
 path, headers, packet sizes and timing remain visible. The secure routes are
 required; legacy plaintext routes are disabled by default.
 
-The sysmodule now contains the TCP/HTTP transport and encrypted wire client.
-It is not activated from the worker: trusted provisioning of the API host and
-one-time enrollment code, followed by secure credential lifecycle handling,
-must be implemented before the console can enroll or synchronize.
+The sysmodule worker activates the TCP/HTTP transport and encrypted wire
+client after local provisioning or restoration of a saved device credential.
+Enrollment, authentication, token refresh, heartbeat, policy retrieval and
+acknowledgement are part of the synchronization cycle. DNS resolution has a
+five-second caller deadline and uses a single-flight resolver thread; a timed
+out resolver is never forcibly cancelled and must finish before another lookup
+can begin.
