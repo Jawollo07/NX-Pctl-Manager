@@ -349,9 +349,20 @@ Error Post(const char *host, u16 port,
     }
 
     std::size_t response_size = 0;
-    const auto transport_error = net::HttpPost(host, port,
+    auto transport_error = net::HttpPost(host, port,
         request_view.data, request_view.length,
         g_response, sizeof(g_response), &response_size);
+    if (transport_error != net::Error::None) {
+        /*
+         * Retry the byte-identical request once. Reusing the same random
+         * request ID lets the backend return its cached encrypted response
+         * if it committed the operation but the first response was lost.
+         */
+        response_size = 0;
+        transport_error = net::HttpPost(host, port,
+            request_view.data, request_view.length,
+            g_response, sizeof(g_response), &response_size);
+    }
     if (transport_error != net::Error::None) {
         std::memset(key, 0, sizeof(key));
         return Error::TransportFailed;
