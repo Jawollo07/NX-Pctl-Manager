@@ -22,16 +22,23 @@ namespace ams {
 
         constexpr s32 WorkerThreadPriority = 30;
         constexpr size_t WorkerStackSize = 0x4000;
+        constexpr s32 SupervisorThreadPriority = 31;
+        constexpr size_t SupervisorStackSize = 0x4000;
+        constexpr u32 MaxWorkerRestarts = 3;
         constexpr s64 WorkerPollIntervalNs = 1'000'000'000LL;
         constexpr u64 InitialPolicyRevision = 0;
 
 
         alignas(os::ThreadStackAlignment) u8 g_worker_stack[WorkerStackSize];
+        alignas(os::ThreadStackAlignment) u8 g_supervisor_stack[SupervisorStackSize];
         os::ThreadType g_worker_thread;
+        os::ThreadType g_supervisor_thread;
         os::EventType g_worker_stop_event;
+        os::EventType g_supervisor_stop_event;
         util::Atomic<u32> g_worker_state;
         util::Atomic<u32> g_worker_heartbeat;
         bool g_worker_thread_created = false;
+        bool g_supervisor_thread_created = false;
 
         void WorkerThreadMain(void *) {
             g_worker_state = static_cast<u32>(::nxpctl::protocol::WorkerState::Running);
@@ -71,6 +78,61 @@ namespace ams {
 
             g_worker_thread_created = true;
             os::StartThread(std::addressof(g_worker_thread));
+        }
+
+        void WorkerSupervisorThreadMain(void *) {
+            u32 restart_count = 0;
+
+            while (!os::TimedWaitEvent(
+                std::addressof(g_supervisor_stop_event),
+                TimeSpan::FromNanoSeconds(WorkerPollIntervalNs))) {
+                if (!g_worker_thread_created || !os::TryWaitThread(std::addressof(g_worker_thread))) {
+                    continue;
+                }
+
+                /* Reap an unexpectedly terminated worker before restarting it. */
+                os::DestroyThread(std::addressof(g_worker_thread));
+                g_worker_thread_created = false;
+
+                if (restart_count >= MaxWorkerRestarts) {
+                    g_worker_state = static_cast<u32>(::nxpctl::protocol::WorkerState::Failed);
+                    break;
+                }
+
+                ++restart_count;
+                StartWorkerThread();
+            }
+        }
+
+        void StartSupervisorThread() {
+            AMS_ASSERT(!g_supervisor_thread_created);
+
+            R_ABORT_UNLESS(os::CreateThread(
+                std::addressof(g_supervisor_thread),
+                WorkerSupervisorThreadMain,
+                nullptr,
+                g_supervisor_stack,
+                sizeof(g_supervisor_stack),
+                SupervisorThreadPriority,
+                3));
+
+            os::SetThreadNamePointer(
+                std::addressof(g_supervisor_thread),
+                "ams.NxPctlManager.Supervisor");
+
+            g_supervisor_thread_created = true;
+            os::StartThread(std::addressof(g_supervisor_thread));
+        }
+
+        void StopSupervisorThread() {
+            if (!g_supervisor_thread_created) {
+                return;
+            }
+
+            os::SignalEvent(std::addressof(g_supervisor_stop_event));
+            os::WaitThread(std::addressof(g_supervisor_thread));
+            os::DestroyThread(std::addressof(g_supervisor_thread));
+            g_supervisor_thread_created = false;
         }
 
         void StopWorkerThread() {
@@ -136,10 +198,17 @@ namespace ams {
                 std::addressof(g_worker_stop_event),
                 false,
                 os::EventClearMode_AutoClear);
+            os::InitializeEvent(
+                std::addressof(g_supervisor_stop_event),
+                false,
+                os::EventClearMode_AutoClear);
         }
 
         void FinalizeSystemModule() {
+            /* Stop supervision first so an intentional shutdown is not restarted. */
+            StopSupervisorThread();
             StopWorkerThread();
+            os::FinalizeEvent(std::addressof(g_supervisor_stop_event));
             os::FinalizeEvent(std::addressof(g_worker_stop_event));
         }
 
@@ -155,6 +224,7 @@ namespace ams {
             "ams.NxPctlManager.Main");
 
         StartWorkerThread();
+        StartSupervisorThread();
 
         /*
          * This HIPC endpoint is deliberately read-only. It exposes only
