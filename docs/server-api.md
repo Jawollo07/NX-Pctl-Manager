@@ -123,7 +123,7 @@ python -m server.cli revoke-device --device-id switch-livingroom
 ```
 
 Revocation invalidates all active bearer tokens immediately. Re-enrollment
-requires an administrator to create a new invitation after revocation.
+requires an administrator to create a new invitation after revocation. Re-enrollment rotates the credential and clears the previous policy, tokens, event epoch and acknowledgements.
 
 The backend intentionally has no unauthenticated browser-admin API. Device
 provisioning, revocation and policy publishing are local CLI operations.
