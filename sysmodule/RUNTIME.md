@@ -71,7 +71,7 @@ Snapshots are attempted at most once per minute while dirty and are force-flushe
 on orderly module shutdown. A sudden power loss can therefore lose up to about
 one minute of newly accumulated usage. If save-data mounting or key derivation fails, monitoring remains RAM-only
 for that session and persistence is not claimed. Failed writes leave the newest
-valid slot intact and are retried at the next persistence interval. If both
+valid slot intact and are retried at the next persistence interval. If two authenticated records have the same sequence but different totals or day keys, the snapshot set is treated as ambiguous and rejected. If both
 existing slots are present but fail authentication/validation, the monitor
 reports storage error state `2` and refuses to overwrite them or silently
 reset the counter. Started minutes round up, forward local-day transitions reset the
