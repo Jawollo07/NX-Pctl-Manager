@@ -3,9 +3,9 @@
  *
  * Project-authored code, licensed under GPL-2.0-or-later.
  * This phase provides a resident worker, local HIPC provisioning/status service,
- * and encrypted HTTP policy synchronization. It does not yet enforce policies,
- * inspect running titles, or mutate PCTL state. Device credentials are persisted
- * separately by the secure sync subsystem.
+ * encrypted HTTP policy synchronization and read-only global application-activity
+ * monitoring for daily playtime. It does not enforce policies, retain title IDs,
+ * or mutate PCTL state. Device credentials are persisted separately by secure sync.
  */
 #include <stratosphere.hpp>
 #include <stratosphere/pgl/pgl_shell_api.hpp>
