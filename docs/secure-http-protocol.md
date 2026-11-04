@@ -11,8 +11,7 @@ traffic analysis.
 FastAPI implements `POST /v1/secure/{device_id}/{operation}`. Legacy
 plaintext `/v1/devices/*` routes are disabled unless
 `NXPCTL_ALLOW_LEGACY_API=1` is explicitly set for isolated development.
-The Switch-side network client and matching cryptography are not implemented
-yet, so public deployment remains blocked.
+The Switch-side HTTP client and matching AES-GCM/HKDF implementation are present. Shared C++/Python known-answer fixtures and encrypted API integration tests pass. Hardware connectivity, deployment configuration and platform enforcement are still unverified; do not treat the current build as production-ready.
 
 ## Wire envelope
 
@@ -100,14 +99,7 @@ plaintext.
 
 ## Replay protection
 
-AES-GCM alone does not prevent replay. The backend atomically inserts each
-random request identifier into SQLite, scoped to the credential or session
-key epoch, and rejects duplicates. Authentication identifiers are retained
-for the lifetime of the credential. Enrollment identifiers are pruned after
-the invitation lifetime. Session identifiers are pruned after the token TTL
-plus a grace period; an expired token is independently rejected. A random
-collision returns HTTP 409 and the client must retry with a new random
-identifier. The GCM nonce must also be fresh for every encryption under a key.
+AES-GCM alone does not prevent replay. The backend atomically claims each random request identifier in SQLite, scoped to the credential or session key epoch. Once a response is committed, a retry of the same request identifier receives the exact cached encrypted response and HTTP status without executing the operation again. A concurrent duplicate while the original is still processing receives HTTP 409. Authentication identifiers are retained for the lifetime of the credential. Enrollment identifiers are pruned after the invitation lifetime. Session identifiers are pruned after the token TTL plus a grace period; an expired token is independently rejected. The client must reuse an identifier only when retrying the byte-identical encrypted request. The GCM nonce must be fresh for every new encryption under a key.
 
 ## Deployment
 
@@ -117,6 +109,4 @@ not apply HTTP redirects or interactive Access/browser challenges, and keep
 the origin private. Do not enable the legacy plaintext API on the public
 listener.
 
-Production use remains blocked until Switch-side AES-GCM/HKDF, secure random
-generation, cross-language known-answer tests and full device workflow tests
-are complete.
+Production use remains blocked until real-device transport, secure random generation under Horizon, credential recovery, deployment hardening and enforcement integration have been validated. The current automated tests do not substitute for hardware tests.
