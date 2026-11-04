@@ -104,8 +104,10 @@ python -m server.cli list-devices  # includes the latest encrypted heartbeat and
 python -m server.cli revoke-device --device-id switch-livingroom
 ```
 
-The CLI validates the exact schema, device binding, time bounds, title rules,
-limits and monotonically increasing policy revision. Revocation invalidates
+The CLI validates the exact global-only schema, device binding, time bounds,
+global/weekday limits, quiet hours and monotonically increasing policy revision.
+Title-specific policy fields are rejected. Event batches also reject `title.*`
+event types and payload keys such as `title_id`, `title_ids` or `title_name`. Revocation invalidates
 all bearer tokens. Re-enrollment requires a new one-time invitation and
 rotates the device credential, policy epoch, event history and acknowledgements.
 
