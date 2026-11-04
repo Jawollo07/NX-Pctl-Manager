@@ -51,7 +51,7 @@ Migrate additively. Keep the existing NRO build working on main until the sysmod
         main.cpp
         lifecycle/       startup, shutdown, suspend/resume
         ipc/             versioned local service and request validation
-        network/         REST, WebSocket, TLS, reconnect
+        network/         encrypted HTTP REST, reconnect
         identity/        device ID and credential provisioning
         policy/          schema, validation, evaluator, RAM snapshot
         monitor/         global application-active and sleep/wake state
@@ -72,7 +72,7 @@ Migrate additively. Keep the existing NRO build working on main until the sysmod
       security-model.md
       firmware-compatibility.md
 
-The current NPDM title ID `0x010000000000D7A1` is a development placeholder only. It is not registered or hardware-validated. Do not install the artifact until title ID allocation, permissions and boot recovery have been reviewed. Never guess kernel hooks or service names.
+The current NPDM title ID is `0x420000000A3F1E7C`. Its registration and hardware compatibility are not yet confirmed. Do not install the artifact until permissions and boot recovery have been reviewed. Never guess kernel hooks or service names.
 
 ## 5. Runtime design
 
@@ -123,7 +123,7 @@ A policy needs at minimum:
 - global daily usage limits and quiet-hour schedule;
 - parent-authentication requirements.
 
-Reject unknown critical schema versions, invalid bounds, stale revisions, cross-device replay and malformed input. Use monotonic time for elapsed playtime; use server time only for wall-clock schedules, with explicit clock uncertainty handling. TLS validation is mandatory. Never log credentials, tokens, PINs, TOTP secrets or authentication payloads.
+Reject unknown critical schema versions, invalid bounds, stale revisions, cross-device replay and malformed input. Use monotonic time for elapsed playtime; use server time only for wall-clock schedules, with explicit clock uncertainty handling. The transport uses HTTP; application payloads must be AES-GCM authenticated and encrypted end-to-end. HTTP metadata remains visible. Never log credentials, tokens, PINs, TOTP secrets or authentication payloads.
 
 ### Policy model implementation boundary
 
@@ -160,7 +160,7 @@ Prefer documented Atmosphere/Stratosphere interfaces and narrowly scoped version
 - [x] Add initial NPDM metadata and a separate CI workflow.
 - [ ] Obtain a successful CI build of the NSP.
 - [ ] Validate start/stop and recovery on a test console.
-- Important: the current title ID is a placeholder; the package is not approved for installation.
+- Important: the configured NPDM title ID is `0x420000000A3F1E7C`; registration and hardware compatibility remain unverified, so the package is not approved for installation.
 
 ### Phase 2 — lifecycle and local IPC
 - [x] Add a versioned, read-only local HIPC endpoint for protocol version, worker state, heartbeat and policy revision.
