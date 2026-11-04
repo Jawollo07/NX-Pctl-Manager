@@ -17,6 +17,8 @@
 #include "../../protocol/usage_tracker.hpp"
 #include "secure_sync.hpp"
 #include "http_transport.hpp"
+#include "usage_store.hpp"
+#include "../../protocol/usage_snapshot.hpp"
 
 #define AMS_NXPCTL_I_RUNTIME_INTERFACE_INFO(C, H) \
     AMS_SF_METHOD_INFO(C, H, 65000, Result, GetRuntimeStatus, \
@@ -64,6 +66,10 @@ namespace ams {
         bool g_supervisor_thread_created = false;
         bool g_usage_monitor_thread_created = false;
         bool g_pgl_initialized = false;
+        bool g_usage_storage_ready = false;
+        bool g_usage_persist_dirty = false;
+        u64 g_last_usage_persist_seconds = 0;
+        ::nxpctl::usage::Snapshot g_persisted_usage{};
 
         u64 GetMonotonicSeconds() {
             const s64 frequency = os::GetSystemTickFrequency();
@@ -173,6 +179,36 @@ namespace ams {
             os::StartThread(std::addressof(g_supervisor_thread));
         }
 
+        void PersistUsageSnapshot(u64 monotonic_seconds) {
+            if (!g_usage_storage_ready || !g_usage_tracker.HasBaseline()) return;
+            const s64 day_key = g_usage_tracker.GetLocalDayKey();
+            const u64 active_seconds = g_usage_tracker.GetActiveSeconds();
+            if (day_key < 0 || active_seconds > ::nxpctl::usage::MaxPersistedActiveSeconds)
+                return;
+            const bool differs = !g_persisted_usage.valid ||
+                g_persisted_usage.local_day_key != day_key ||
+                g_persisted_usage.active_seconds != active_seconds;
+            if (!differs) {
+                g_usage_persist_dirty = false;
+                return;
+            }
+            g_usage_persist_dirty = true;
+            if (g_last_usage_persist_seconds != 0 &&
+                monotonic_seconds >= g_last_usage_persist_seconds &&
+                monotonic_seconds - g_last_usage_persist_seconds < 60)
+                return;
+
+            ::nxpctl::usage::Snapshot snapshot{};
+            snapshot.local_day_key = day_key;
+            snapshot.active_seconds = active_seconds;
+            snapshot.valid = true;
+            if (::nxpctl::usage_store::Save(snapshot)) {
+                g_persisted_usage = snapshot;
+                g_usage_persist_dirty = false;
+                g_last_usage_persist_seconds = monotonic_seconds;
+            }
+        }
+
         void UsageMonitorThreadMain(void *) {
             g_usage_monitor_state = 1;
 
@@ -188,6 +224,28 @@ namespace ams {
                     continue;
                 }
 
+                if (!g_usage_tracker.HasBaseline()) {
+                    s64 restored_day = 0;
+                    u64 restored_seconds = 0;
+                    if (!::nxpctl::usage::ReconcileSnapshot(
+                            g_persisted_usage, local_day_key,
+                            std::addressof(restored_day),
+                            std::addressof(restored_seconds))) {
+                        // The authenticated clock is behind the stored day.
+                        // Wait for a trustworthy clock instead of erasing usage.
+                        continue;
+                    }
+                    if (!g_usage_tracker.Restore(
+                            restored_day, restored_seconds, monotonic_seconds)) {
+                        continue;
+                    }
+                    g_usage_persist_dirty =
+                        !g_persisted_usage.valid ||
+                        g_persisted_usage.local_day_key != restored_day ||
+                        g_persisted_usage.active_seconds != restored_seconds;
+                }
+
+                const u64 previous_active_seconds = g_usage_tracker.GetActiveSeconds();
                 os::ProcessId application_pid{};
                 const ams::Result query_result =
                     pgl::GetRunningApplicationProcessId(std::addressof(application_pid));
@@ -204,9 +262,14 @@ namespace ams {
 
                 const auto observe_result = g_usage_tracker.Observe(
                     application_active, monotonic_seconds, local_day_key);
-                AMS_UNUSED(observe_result);
+                if (observe_result == ::nxpctl::usage::ObserveResult::DayRolledOver ||
+                    g_usage_tracker.GetActiveSeconds() != previous_active_seconds) {
+                    g_usage_persist_dirty = true;
+                }
                 g_usage_active_seconds = g_usage_tracker.GetActiveSeconds();
                 g_usage_daily_minutes = g_usage_tracker.GetDailyUsageMinutes();
+                if (g_usage_persist_dirty)
+                    PersistUsageSnapshot(monotonic_seconds);
             }
             g_usage_monitor_state = 0;
         }
@@ -241,6 +304,7 @@ namespace ams {
             os::DestroyThread(std::addressof(g_usage_monitor_thread));
             g_usage_monitor_thread_created = false;
             g_usage_monitor_state = 0;
+            PersistUsageSnapshot(GetMonotonicSeconds());
         }
 
         void StopSupervisorThread() {
@@ -363,7 +427,11 @@ namespace ams {
             }
 
             /* Restore encrypted device credentials before the worker starts. */
-            (void)::nxpctl::sync::Initialize();
+            const bool storage_available = ::nxpctl::sync::Initialize();
+            g_usage_storage_ready = storage_available;
+            g_persisted_usage = {};
+            if (storage_available)
+                (void)::nxpctl::usage_store::Load(std::addressof(g_persisted_usage));
         }
 
         void FinalizeSystemModule() {
