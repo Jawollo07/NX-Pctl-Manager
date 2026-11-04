@@ -50,8 +50,6 @@ def valid_policy(device_id="switch-test", revision=1):
         "quiet_hours_enabled": False,
         "quiet_hours_start_minute": 1320,
         "quiet_hours_end_minute": 420,
-        "title_rule_mode": 0,
-        "title_rules": [{"title_id": 72057594037932032, "action": 1}],
     }
 
 
@@ -132,13 +130,11 @@ def test_policy_validator_rejects_unknown_duplicate_or_cross_device_fields():
         api.strict_json_loads(b'{"a":{"b":{"c":{"d":{"e":{"f":{"g":{"h":{"i":1}}}}}}}}}')
 
 
-def test_policy_validator_rejects_duplicate_title_ids():
+def test_policy_validator_rejects_title_specific_fields():
     policy = valid_policy()
-    policy["title_rules"].append(dict(policy["title_rules"][0]))
-    with pytest.raises(Exception):
+    policy["title_rules"] = []
+    with pytest.raises(HTTPException):
         api._validate_policy(policy, "switch-test")
-
-
 
 def test_revoked_device_can_be_reenrolled_with_rotated_credential(client):
     old_token = enroll_and_auth(client)
