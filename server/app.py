@@ -451,7 +451,8 @@ async def heartbeat(device_id: str, request: Request):
     if authenticated_device(request) != device_id:
         raise HTTPException(403, "device scope mismatch")
     body = _validate_heartbeat_body(await read_json(request))
-    serialized = json.dumps(body, separators=(",", ":"), ensure_ascii=True)
+    heartbeat_snapshot = {key: value for key, value in body.items() if key != "access_token"}
+    serialized = json.dumps(heartbeat_snapshot, separators=(",", ":"), ensure_ascii=True)
     with database() as db:
         db.execute(
             "UPDATE devices SET last_seen_at = ?, last_heartbeat_json = ? WHERE device_id = ?",
