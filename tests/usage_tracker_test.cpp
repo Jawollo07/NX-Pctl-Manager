@@ -55,6 +55,16 @@ int main() {
     assert(tracker.Observe(true, 2, 21) == ObserveResult::Accumulated);
     assert(tracker.GetActiveSeconds() == 2);
 
+    DailyUsageTracker restored;
+    assert(restored.Restore(42, 3599, 9000));
+    assert(restored.GetActiveSeconds() == 3599);
+    assert(restored.Observe(true, 9001, 42) == ObserveResult::Accumulated);
+    assert(restored.GetActiveSeconds() == 3599);
+    assert(restored.Observe(true, 9002, 42) == ObserveResult::Accumulated);
+    assert(restored.GetActiveSeconds() == 3600);
+    assert(!restored.Restore(-1, 10, 0));
+    assert(!restored.Restore(42, MaxPersistedActiveSeconds + 1, 0));
+
     tracker.Reset();
     assert(!tracker.HasBaseline());
     assert(tracker.GetActiveSeconds() == 0);
