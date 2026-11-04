@@ -54,7 +54,7 @@ The NRO client exposes the matching enrollment configuration call.
 
 The worker performs encrypted enrollment, device authentication, short-lived
 token refresh, heartbeats, policy retrieval, schema/clock/device/revision
-validation, RAM-only policy publication and policy acknowledgements. The
+validation, in-memory policy publication and policy acknowledgements. The
 HTTP-only Horizon BSD transport and AES-128-GCM/HKDF envelope client verify
 response authenticity before plaintext reaches the policy decoder. The
 provisioning lock is held only for bounded memory copies, never across network
@@ -87,8 +87,12 @@ title modes and is host-tested. A separate daily usage tracker is host-tested an
 read-only PGL application-activity monitor. All games/apps share one counter;
 no title IDs are stored for playtime. Its local-day key uses an authenticated
 server-time anchor plus monotonic elapsed time and the policy's fixed UTC
-offset. Usage remains RAM-only and is not connected to enforcement. No
-restrictions are currently applied to running or launching titles.
+offset. Global usage is restored from alternating AES-GCM-authenticated
+daily snapshots in the sysmodule's own device save data. Writes are flushed
+periodically and on orderly shutdown; abrupt power loss may lose up to about
+one minute of new usage. A trusted clock regression cannot erase the newer
+stored day. Usage is not connected to enforcement. No restrictions are
+currently applied to running or launching titles.
 
 
 ## HTTP backend
