@@ -231,6 +231,7 @@ namespace ams {
                 s64 local_day_key = 0;
                 if (!::nxpctl::sync::GetTrustedLocalDayKey(
                         monotonic_seconds, std::addressof(local_day_key))) {
+                    g_usage_day_key_valid = 0;
                     continue;
                 }
 
