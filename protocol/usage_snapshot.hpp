@@ -32,6 +32,25 @@ inline constexpr std::uint64_t MaxPersistedActiveSeconds = 24 * 60 * 60;
 
 // Never roll persisted usage backwards if the trusted server clock regresses.
 // A later trusted day starts a fresh bucket; the previous day is not carried.
+struct WritePlan {
+    std::uint8_t target_slot = 0;
+    std::uint64_t sequence = 0;
+    bool valid = false;
+};
+
+[[nodiscard]] inline bool MakeWritePlan(
+    const Snapshot& first, const Snapshot& second, WritePlan* out) noexcept {
+    if (out == nullptr) return false;
+    const Snapshot* newest = SelectNewest(first, second);
+    const std::uint64_t current = newest == nullptr ? 0 : newest->sequence;
+    if (current == std::numeric_limits<std::uint64_t>::max()) return false;
+    out->sequence = current + 1;
+    out->target_slot = newest == nullptr ? 0 :
+        static_cast<std::uint8_t>(newest == &first ? 1 : 0);
+    out->valid = true;
+    return true;
+}
+
 [[nodiscard]] inline bool ReconcileSnapshot(
     const Snapshot& stored, std::int64_t trusted_day_key,
     std::int64_t* out_day_key, std::uint64_t* out_active_seconds) noexcept {
