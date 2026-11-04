@@ -48,7 +48,8 @@ firmware compatibility and boot/recovery procedure have been reviewed.
 The current experimental module initializes the service-manager client,
 starts a resident worker and supervisor, and exposes the `nxpctl` HIPC
 service. HIPC command 65000 reports runtime status; command 65001 accepts a
-validated, fixed-size API-host/device-ID/one-time-code provisioning request.
+validated, fixed-size API-host/device-ID/one-time-code provisioning request;
+command 65002 reports global daily usage and monitor state.
 The NRO client exposes the matching enrollment configuration call.
 
 The worker performs encrypted enrollment, device authentication, short-lived
@@ -66,9 +67,11 @@ device key ladder. Two alternating records provide recovery from interrupted
 writes. The short-lived access token and one-time enrollment code remain
 RAM-only; after restart, the sysmodule restores the device credential and
 authenticates again for a fresh access token. The NPDM requests the device-save
-data and own-save-data capabilities plus `fsp-srv` and `spl:`. There is
-still no PCTL mutation, title monitoring or system-wide enforcement. Hardware
-validation has not been performed.
+data and own-save-data capabilities plus `fsp-srv`, `spl:` and read-only
+`pgl` service access. A dedicated monitor queries whether any application is
+active and updates one global daily playtime counter; it does not retain title
+IDs. PGL monitoring is available on Horizon 10.0.0+. There is still no PCTL
+mutation or system-wide enforcement. Hardware validation has not been performed.
 
 A successful host-side compile is not evidence that the module is safe to load.
 Hardware installation/testing is intentionally not part of this phase.
@@ -80,9 +83,11 @@ The exact schema-v1 JSON profile is documented in [`docs/policy-schema-v1.md`](.
 The current branch includes a bounded schema-v1 decoder, authenticated encrypted
 policy retrieval, full-snapshot validation and atomic publication to the
 RAM-only policy store. The pure evaluator supports allow-all and allow-list-only
-title modes and is host-tested. A separate daily usage tracker is also
-host-tested, but remains RAM-only and is not connected to a trusted clock or
-Horizon title monitoring. Neither component is connected to enforcement. No
+title modes and is host-tested. A separate daily usage tracker is host-tested and connected to a dedicated,
+read-only PGL application-activity monitor. All games/apps share one counter;
+no title IDs are stored for playtime. Its local-day key uses an authenticated
+server-time anchor plus monotonic elapsed time and the policy's fixed UTC
+offset. Usage remains RAM-only and is not connected to enforcement. No
 restrictions are currently applied to running or launching titles.
 
 
