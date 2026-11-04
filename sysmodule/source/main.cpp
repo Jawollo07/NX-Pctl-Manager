@@ -107,7 +107,9 @@ namespace ams {
                     if (::nxpctl::sync::IsConfigured()) {
                         ::nxpctl::sync::RunCycle(
                             g_policy_store, uptime_seconds,
-                            g_usage_day_key_valid ? g_usage_local_day_key : -1,
+                            g_usage_day_key_valid
+                                ? static_cast<s64>(g_usage_local_day_key)
+                                : -1,
                             g_usage_active_seconds);
                     }
                     sync_countdown = 60;

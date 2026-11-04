@@ -102,8 +102,7 @@ namespace {
         for (std::size_t i = 0; i + pattern_size <= length; ++i) {
             if (std::memcmp(json + i, pattern, pattern_size) != 0) continue;
             std::size_t p = i + pattern_size;
-            while (p < length && (json[p] == ' ' || json[p] == '
-')) ++p;
+            while (p < length && (json[p] == ' ' || json[p] == '\n')) ++p;
             if (p >= length || json[p] < '0' || json[p] > '9') return false;
             u64 value = 0;
             do {

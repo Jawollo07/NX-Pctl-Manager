@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-ATMOSPHERE_ROOT="${ATMOSPHERE_ROOT:-}"
+ATMOSPHERE_ROOT=$ROOT/Atmosphere
 if [[ -z "$ATMOSPHERE_ROOT" ]]; then
   echo "Set ATMOSPHERE_ROOT to the pinned Atmosphere checkout." >&2
   exit 2
@@ -56,6 +56,7 @@ grep -q "FsStorageForBatchRead" "$DEVKITPRO/libnx/include/switch/services/fs.h"
 grep -q "GetRunningApplicationProcessId" \
   "$ATMOSPHERE_ROOT/libraries/libstratosphere/include/stratosphere/pgl/pgl_shell_api.hpp"
 
+git pull --rebase --autostash
 make -C "$ROOT/sysmodule" ATMOSPHERE_ROOT="$ATMOSPHERE_ROOT" nx_release
 
 echo "Build finished. Inspect: $ROOT/sysmodule/out/nintendo_nx_arm64_armv8a/release/nx_pctl_manager.nsp"
