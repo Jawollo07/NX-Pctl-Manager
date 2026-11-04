@@ -1,11 +1,3 @@
-[submodule "extern/borealis"]
-	path = extern/borealis
-	url = https://github.com/xfangfang/borealis.git
-	branch = wiliwili
-[submodule "Atmosphere"]
-	path = Atmosphere
-	url = https://github.com/Atmosphere-NX/Atmosphere.git
-	branch = master
 [submodule "deps/libnx"]
 	path = deps/libnx
 	url = https://github.com/switchbrew/libnx.git
