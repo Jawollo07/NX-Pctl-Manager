@@ -67,6 +67,7 @@ namespace ams {
         bool g_usage_monitor_thread_created = false;
         bool g_pgl_initialized = false;
         bool g_usage_storage_ready = false;
+        bool g_usage_storage_corrupt = false;
         bool g_usage_persist_dirty = false;
         u64 g_last_usage_persist_seconds = 0;
         ::nxpctl::usage::Snapshot g_persisted_usage{};
@@ -210,6 +211,10 @@ namespace ams {
         }
 
         void UsageMonitorThreadMain(void *) {
+            if (g_usage_storage_corrupt) {
+                g_usage_monitor_state = 2;
+                return;
+            }
             g_usage_monitor_state = 1;
 
             while (!os::TimedWaitEvent(
@@ -429,9 +434,15 @@ namespace ams {
             /* Restore encrypted device credentials before the worker starts. */
             const bool storage_available = ::nxpctl::sync::Initialize();
             g_usage_storage_ready = storage_available;
+            g_usage_storage_corrupt = false;
             g_persisted_usage = {};
-            if (storage_available)
-                (void)::nxpctl::usage_store::Load(std::addressof(g_persisted_usage));
+            if (storage_available &&
+                !::nxpctl::usage_store::Load(std::addressof(g_persisted_usage)) &&
+                ::nxpctl::usage_store::HasAnyRecord()) {
+                // Do not silently reset or overwrite a damaged saved counter.
+                g_usage_storage_corrupt = true;
+                g_usage_storage_ready = false;
+            }
         }
 
         void FinalizeSystemModule() {
