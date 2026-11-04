@@ -99,10 +99,15 @@ def list_devices(_: argparse.Namespace) -> int:
     init_database()
     with database() as db:
         rows = db.execute(
-            "SELECT device_id,created_at,revoked_at,last_auth_at,last_seen_at FROM devices ORDER BY device_id"
+            """SELECT device_id,created_at,revoked_at,last_auth_at,last_seen_at,
+                      last_heartbeat_json
+               FROM devices ORDER BY device_id"""
         ).fetchall()
     for row in rows:
-        print(json.dumps(dict(row), sort_keys=True))
+        item = dict(row)
+        heartbeat = item.pop("last_heartbeat_json", None)
+        item["last_heartbeat"] = json.loads(heartbeat) if heartbeat else None
+        print(json.dumps(item, sort_keys=True))
     return 0
 
 
