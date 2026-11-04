@@ -281,10 +281,10 @@ bool RunAesGcmSelfTest() {
         0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0a,0x0b
     };
     static constexpr char FixtureAad[] =
-        "NX-PCTL-AEAD/1\\nrequest\\nPOST\\n"
-        "/v1/secure/switch-test/heartbeat\\nswitch-test\\n123";
+        "NX-PCTL-AEAD/1\nrequest\nPOST\n"
+        "/v1/secure/switch-test/heartbeat\nswitch-test\n123";
     static constexpr char FixturePlaintext[] =
-        "{\\"protocol_version\\":1,\\"uptime_seconds\\":42}";
+        "{\"protocol_version\":1,\"uptime_seconds\":42}";
     const u8 expected_fixture_ciphertext[42] = {
         0xd8,0x83,0x07,0x9f,0xd0,0xfd,0x89,0x55,0x16,0x2a,0xb0,0x7d,
         0xb6,0x6c,0x92,0x22,0x4a,0x14,0x7a,0x2b,0xcc,0xb1,0xee,0x92,
