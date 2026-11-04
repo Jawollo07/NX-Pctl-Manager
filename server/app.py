@@ -434,9 +434,14 @@ async def heartbeat(device_id: str, request: Request):
     body = _require_object(await read_json(request))
     if len(body) > 32:
         raise HTTPException(422, "too many heartbeat fields")
-    for key in ("protocol_version", "uptime_seconds", "policy_revision"):
+    for key in ("protocol_version", "uptime_seconds", "policy_revision",
+                "global_usage_day_key", "global_usage_active_seconds"):
         if key in body and (not _is_int(body[key]) or body[key] < 0):
             raise HTTPException(422, f"invalid {key}")
+    if "global_usage_active_seconds" in body and body["global_usage_active_seconds"] > 86400:
+        raise HTTPException(422, "global_usage_active_seconds exceeds one day")
+    if ("global_usage_day_key" in body) != ("global_usage_active_seconds" in body):
+        raise HTTPException(422, "global usage day and seconds must be supplied together")
     if body.get("protocol_version", PROTOCOL_VERSION) != PROTOCOL_VERSION:
         raise HTTPException(422, "unsupported protocol_version")
     serialized = json.dumps(body, separators=(",", ":"), ensure_ascii=True)
