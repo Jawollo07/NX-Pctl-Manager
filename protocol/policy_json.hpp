@@ -254,7 +254,7 @@ inline Error Decode(const char* input, std::size_t length, Policy* out) noexcept
     if(parser.Get(root).type!=Token::Type::Object)return Error::WrongType;
 
     Policy candidate{};
-    bool seen[18]{};
+    bool seen[16]{};
     auto child=parser.Get(root).first_child;
     const auto child_count=parser.Get(root).child_count;
     if((child_count%2)!=0)return Error::InvalidSyntax;
@@ -265,8 +265,8 @@ inline Error Decode(const char* input, std::size_t length, Policy* out) noexcept
         if(value==0xFFFF)return Error::InvalidSyntax;
         child=parser.Get(value).next_sibling;
         int field=-1;
-        const char* names[]={"protocol_version","schema_version","device_id","revision","issued_at","not_after","server_time","enabled","require_parent_authentication","offline_behavior","timezone_offset_minutes","global_daily_limit_minutes","weekday_limit_minutes","quiet_hours_enabled","quiet_hours_start_minute","quiet_hours_end_minute","title_rule_mode","title_rules"};
-        for(int i=0;i<18;++i) if(StringEquals(parser,key,names[i])) {field=i;break;}
+        const char* names[]={"protocol_version","schema_version","device_id","revision","issued_at","not_after","server_time","enabled","require_parent_authentication","offline_behavior","timezone_offset_minutes","global_daily_limit_minutes","weekday_limit_minutes","quiet_hours_enabled","quiet_hours_start_minute","quiet_hours_end_minute"};
+        for(int i=0;i<16;++i) if(StringEquals(parser,key,names[i])) {field=i;break;}
         if(field<0)return Error::UnknownField;
         if(seen[field])return Error::DuplicateField;
         seen[field]=true;
@@ -287,7 +287,7 @@ inline Error Decode(const char* input, std::size_t length, Policy* out) noexcept
             case 6: if(!ReadSigned(parser,value,&candidate.server_time))return Error::WrongType; break;
             case 7: if(!ReadBool(parser,value,&candidate.enabled))return Error::WrongType; break;
             case 8: if(!ReadBool(parser,value,&candidate.require_parent_authentication))return Error::WrongType; break;
-            case 9: if(!ReadUnsigned(parser,value,&u)||u>2)return Error::WrongType; candidate.offline_behavior=static_cast<OfflineBehavior>(u); break;
+            case 9: if(!ReadUnsigned(parser,value,&u)||u>1)return Error::WrongType; candidate.offline_behavior=static_cast<OfflineBehavior>(u); break;
             case 10: if(!ReadSigned(parser,value,&s)||s<INT16_MIN||s>INT16_MAX)return Error::NumberOutOfRange; candidate.timezone_offset_minutes=static_cast<std::int16_t>(s); break;
             case 11: if(!ReadUnsigned(parser,value,&u)||u>UINT16_MAX)return Error::NumberOutOfRange; candidate.global_daily_limit_minutes=static_cast<std::uint16_t>(u); break;
             case 12: {
@@ -299,34 +299,6 @@ inline Error Decode(const char* input, std::size_t length, Policy* out) noexcept
             case 13: if(!ReadBool(parser,value,&candidate.quiet_hours_enabled))return Error::WrongType; break;
             case 14: if(!ReadUnsigned(parser,value,&u)||u>UINT16_MAX)return Error::NumberOutOfRange; candidate.quiet_hours_start_minute=static_cast<std::uint16_t>(u); break;
             case 15: if(!ReadUnsigned(parser,value,&u)||u>UINT16_MAX)return Error::NumberOutOfRange; candidate.quiet_hours_end_minute=static_cast<std::uint16_t>(u); break;
-            case 16: if(!ReadUnsigned(parser,value,&u)||u>1)return Error::WrongType; candidate.title_rule_mode=static_cast<TitleRuleMode>(u); break;
-            case 17: {
-                if(parser.Get(value).type!=Token::Type::Array||parser.Get(value).child_count>MaxTitleRules)return Error::ArraySize;
-                auto item=parser.Get(value).first_child;
-                while(item!=0xFFFF) {
-                    if(parser.Get(item).type!=Token::Type::Object||parser.Get(item).child_count!=4)return Error::WrongType;
-                    bool id_seen=false,action_seen=false;
-                    auto property=parser.Get(item).first_child;
-                    for(int p=0;p<2;++p) {
-                        if(property==0xFFFF)return Error::MissingField;
-                        auto v=parser.Get(property).next_sibling;
-                        if(v==0xFFFF)return Error::MissingField;
-                        if(StringEquals(parser,property,"title_id")) {
-                            if(id_seen||!ReadUnsigned(parser,v,&candidate.title_rules[candidate.title_rule_count].title_id))return Error::WrongType;
-                            id_seen=true;
-                        } else if(StringEquals(parser,property,"action")) {
-                            if(action_seen||!ReadUnsigned(parser,v,&u)||u>1)return Error::WrongType;
-                            candidate.title_rules[candidate.title_rule_count].action=static_cast<TitleRuleAction>(u);
-                            action_seen=true;
-                        } else return Error::UnknownField;
-                        property=parser.Get(v).next_sibling;
-                    }
-                    if(!id_seen||!action_seen)return Error::MissingField;
-                    candidate.title_rule_count++;
-                    item=parser.Get(item).next_sibling;
-                }
-                break;
-            }
         }
     }
     for(bool present:seen) if(!present)return Error::MissingField;
