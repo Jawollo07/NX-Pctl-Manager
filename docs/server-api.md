@@ -145,5 +145,8 @@ python -m pip install -r server/requirements.txt
 python -m unittest discover -s server/tests -v
 ```
 
-The GitHub Actions workflow `.github/workflows/server-tests.yml` runs the same
-suite when backend files change on the migration branch or in a pull request.
+The suite includes fixed HKDF-SHA-256 and AES-128-GCM request fixtures shared
+with the sysmodule runtime self-test. It checks the exact AAD layout, nonce,
+ciphertext and authentication tag, not merely a Python encrypt/decrypt roundtrip.
+The GitHub Actions workflow `.github/workflows/server-tests.yml` runs the suite
+when backend files or the matching sysmodule crypto implementation change.
