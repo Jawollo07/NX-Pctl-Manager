@@ -26,6 +26,4 @@ python -m server.cli list-devices
 python -m server.cli revoke-device --device-id switch-livingroom
 ```
 
-Do not expose plaintext HTTP to the public internet. Use a TLS reverse proxy
-for untrusted networks. The current sysmodule does not yet contain a network
-client and does not connect to this backend.
+Device requests use the encrypted AES-GCM envelope over HTTP; HTTP metadata remains visible. Do not expose the origin directly. For untrusted networks, place it behind the configured reverse proxy and ensure device API paths are not redirected, cached, transformed, or challenged. The current headless sysmodule contains the matching HTTP client and secure synchronization worker, but the end-to-end deployment still requires firmware-specific hardware validation.
