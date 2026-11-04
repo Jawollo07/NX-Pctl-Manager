@@ -121,7 +121,7 @@ UTC and offset day boundaries, expiry and monotonic regression.
 
 ## Deterministic policy evaluation (not enforcement)
 
-`protocol/policy_evaluator.hpp` evaluates a supplied immutable policy and context without Horizon calls or side effects. It covers parent-authentication gating, offline behavior, global daily-limit decisions, fixed-offset weekday budgets and quiet hours including intervals that cross midnight. Explicit title allows do not override global quiet hours, daily budgets, parent authentication or offline restrictions.
+`protocol/policy_evaluator.hpp` evaluates a supplied immutable policy and context without Horizon calls or side effects. It covers parent-authentication gating, offline behavior, global daily-limit decisions, fixed-offset weekday budgets and quiet hours including intervals that cross midnight. All decisions apply globally to the console and never inspect or distinguish individual titles.
 
 The evaluator is host-tested. It is not yet called by the sysmodule worker and does not observe application activity, track global playtime, mutate PCTL state, or block anything on a console. Monotonic accounting and a verified system integration point remain separate work.
 
