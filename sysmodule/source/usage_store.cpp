@@ -203,7 +203,15 @@ bool Save(const usage::Snapshot& snapshot) {
     usage::Snapshot to_write = snapshot;
     to_write.sequence = plan.sequence;
     to_write.valid = true;
-    const bool saved = WriteSlot(plan.target_slot, to_write, plan.sequence);
+    bool saved = WriteSlot(plan.target_slot, to_write, plan.sequence);
+    if (saved) {
+        usage::Snapshot verified{};
+        saved = ReadSlot(plan.target_slot, &verified) &&
+            verified.sequence == to_write.sequence &&
+            verified.local_day_key == to_write.local_day_key &&
+            verified.active_seconds == to_write.active_seconds;
+        Wipe(&verified, sizeof(verified));
+    }
     Wipe(slots, sizeof(slots));
     Wipe(&to_write, sizeof(to_write));
     return saved;
