@@ -12,6 +12,10 @@ int main() {
     assert(SelectNewest(empty, old) == &old);
     assert(SelectNewest(old, newest) == &newest);
     assert(SelectNewest(newest, corrupt) == &newest);
+    Snapshot duplicate_generation{100, 1801, 8, true};
+    assert(SelectNewest(newest, duplicate_generation) == nullptr);
+    Snapshot identical_generation{100, 1800, 8, true};
+    assert(SelectNewest(newest, identical_generation) == &newest);
     assert(SelectNewest(empty, corrupt) == nullptr);
     WritePlan plan{};
     assert(MakeWritePlan(empty, empty, &plan));
