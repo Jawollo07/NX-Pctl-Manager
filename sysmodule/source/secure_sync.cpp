@@ -26,6 +26,7 @@ namespace {
     u32 g_cycles_since_auth = AuthRefreshCycles;
     bool g_persistence_pending = false;
     std::atomic<bool> g_clock_anchor_valid{false};
+    std::atomic<u32> g_clock_anchor_sequence{0};
     std::atomic<s64> g_clock_server_time_anchor{0};
     std::atomic<s64> g_clock_not_after{0};
     std::atomic<u64> g_clock_monotonic_anchor{0};
@@ -233,11 +234,14 @@ namespace {
             g_clock_anchor_valid.store(false, std::memory_order_release);
             return true;
         }
+        g_clock_anchor_sequence.fetch_add(1, std::memory_order_acq_rel); // writer lock: odd
+        g_clock_anchor_valid.store(false, std::memory_order_relaxed);
         g_clock_server_time_anchor.store(candidate.server_time, std::memory_order_relaxed);
         g_clock_not_after.store(candidate.not_after, std::memory_order_relaxed);
         g_clock_timezone_offset_minutes.store(candidate.timezone_offset_minutes, std::memory_order_relaxed);
         g_clock_monotonic_anchor.store(monotonic_anchor, std::memory_order_relaxed);
-        g_clock_anchor_valid.store(true, std::memory_order_release);
+        g_clock_anchor_valid.store(true, std::memory_order_relaxed);
+        g_clock_anchor_sequence.fetch_add(1, std::memory_order_release); // publish: even
         return true;
     }
 
@@ -308,19 +312,26 @@ bool IsEnrolled() {
 }
 
 bool GetTrustedLocalDayKey(u64 monotonic_seconds, s64* out_day_key) {
-    if (out_day_key == nullptr ||
-        !g_clock_anchor_valid.load(std::memory_order_acquire)) {
-        return false;
-    }
+    if (out_day_key == nullptr) return false;
 
     trusted_clock::Anchor anchor{};
-    anchor.server_time = g_clock_server_time_anchor.load(std::memory_order_relaxed);
-    anchor.not_after = g_clock_not_after.load(std::memory_order_relaxed);
-    anchor.monotonic_seconds = g_clock_monotonic_anchor.load(std::memory_order_relaxed);
-    anchor.timezone_offset_minutes =
-        g_clock_timezone_offset_minutes.load(std::memory_order_relaxed);
-    anchor.valid = g_clock_anchor_valid.load(std::memory_order_acquire);
-    return trusted_clock::GetLocalDayKey(anchor, monotonic_seconds, out_day_key);
+    for (unsigned attempt = 0; attempt < 3; ++attempt) {
+        const u32 before = g_clock_anchor_sequence.load(std::memory_order_acquire);
+        if ((before & 1u) != 0) continue;
+
+        anchor.valid = g_clock_anchor_valid.load(std::memory_order_relaxed);
+        anchor.server_time = g_clock_server_time_anchor.load(std::memory_order_relaxed);
+        anchor.not_after = g_clock_not_after.load(std::memory_order_relaxed);
+        anchor.monotonic_seconds = g_clock_monotonic_anchor.load(std::memory_order_relaxed);
+        anchor.timezone_offset_minutes =
+            g_clock_timezone_offset_minutes.load(std::memory_order_relaxed);
+
+        const u32 after = g_clock_anchor_sequence.load(std::memory_order_acquire);
+        if (before == after && (after & 1u) == 0) {
+            return trusted_clock::GetLocalDayKey(anchor, monotonic_seconds, out_day_key);
+        }
+    }
+    return false;
 }
 
 void RunCycle(policy::PolicyStore& store, u64 uptime_seconds) {
