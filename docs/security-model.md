@@ -2,7 +2,7 @@
 
 ## Authority
 
-The server is authoritative for durable policies, schedules, usage and audit history. The Switch trusts only TLS-authenticated responses that pass schema, device-binding, timestamp and revision checks. WebSocket messages are validated exactly like REST responses.
+The server is authoritative for durable policies, schedules, usage and audit history. The Switch trusts only responses that pass AES-128-GCM authentication, schema, device-binding, trusted timestamp and revision checks. HTTP metadata remains visible; message bodies are encrypted end-to-end. WSS is not part of the current implementation.
 
 ## Assets
 
@@ -25,12 +25,12 @@ Unattended device authentication requires a persistent unique credential. This i
 
 ## Mandatory controls
 
-- TLS certificate and hostname verification; no insecure fallback.
+- End-to-end AES-128-GCM encryption/authentication for every application request and response body; no plaintext API fallback in normal operation.
 - Unique per-device credentials; no embedded shared secret.
 - Short-lived access tokens, server-side credential revocation and rotation.
 - Strict input bounds and rejection of malformed/oversized payloads.
 - Monotonic policy revisions and event sequence numbers.
-- Bounded RAM queues and bounded retry/backoff.
+- Bounded request/response buffers and bounded retries. Exponential reconnect/backoff and event batching on the Switch remain to be implemented.
 - No arbitrary remote code, shell, filesystem or raw IPC command execution.
 - Redact credentials, tokens, PINs, TOTP secrets and enrollment codes from logs.
 - Fail safely on unsupported firmware and unknown enforcement capability.
