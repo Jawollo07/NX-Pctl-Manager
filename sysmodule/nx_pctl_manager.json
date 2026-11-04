@@ -22,7 +22,8 @@
     "bsd:s",
     "sfdnsres",
     "fsp-srv",
-    "spl:"
+    "spl:",
+    "pgl"
   ],
   "kernel_capabilities": [
     {
