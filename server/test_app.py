@@ -112,6 +112,30 @@ def test_events_are_deduplicated(client):
     assert response.json()["received"] == 2
 
 
+def test_events_reject_title_specific_tracking(client):
+    token = enroll_and_auth(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    title_event = {
+        "event_id": "evt-title", "sequence": 2, "timestamp": int(time.time()),
+        "type": "title.started", "payload": {"title_id": 123},
+    }
+    response = client.post(
+        "/v1/devices/switch-test/events:batch", headers=headers,
+        json={"events": [title_event]},
+    )
+    assert response.status_code == 422
+
+    nested_title_event = {
+        "event_id": "evt-title-nested", "sequence": 3, "timestamp": int(time.time()),
+        "type": "usage.sample", "payload": {"details": {"title_name": "example"}},
+    }
+    response = client.post(
+        "/v1/devices/switch-test/events:batch", headers=headers,
+        json={"events": [nested_title_event]},
+    )
+    assert response.status_code == 422
+
+
 def test_policy_validator_rejects_unknown_duplicate_or_cross_device_fields():
     policy = valid_policy()
     policy["unexpected"] = True
