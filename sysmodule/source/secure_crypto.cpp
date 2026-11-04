@@ -267,8 +267,58 @@ bool RunAesGcmSelfTest() {
     if (!DeriveAes128Key(derived_key, TestSecret, sizeof(TestSecret) - 1,
                          "switch-test", "device")) return false;
     const bool kdf_ok = ConstantTimeEqual(derived_key, ExpectedDerivedKey, sizeof(derived_key));
+    if (!kdf_ok) {
+        std::memset(derived_key, 0, sizeof(derived_key));
+        return false;
+    }
+
+    /*
+     * Cross-language fixture shared with server/tests/test_secure_transport.py.
+     * It covers HKDF-SHA-256, the exact request AAD layout and AES-128-GCM
+     * ciphertext/tag bytes used by the HTTP envelope.
+     */
+    const u8 fixture_nonce[12] = {
+        0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0a,0x0b
+    };
+    static constexpr char FixtureAad[] =
+        "NX-PCTL-AEAD/1\\nrequest\\nPOST\\n"
+        "/v1/secure/switch-test/heartbeat\\nswitch-test\\n123";
+    static constexpr char FixturePlaintext[] =
+        "{\\"protocol_version\\":1,\\"uptime_seconds\\":42}";
+    const u8 expected_fixture_ciphertext[42] = {
+        0xd8,0x83,0x07,0x9f,0xd0,0xfd,0x89,0x55,0x16,0x2a,0xb0,0x7d,
+        0xb6,0x6c,0x92,0x22,0x4a,0x14,0x7a,0x2b,0xcc,0xb1,0xee,0x92,
+        0x4a,0x49,0xec,0x61,0x9d,0xc2,0xa5,0xe2,0x2f,0x2d,0xf2,0xd7,
+        0xf5,0xde,0xaa,0x7a,0x52,0x9d
+    };
+    const u8 expected_fixture_tag[16] = {
+        0xcf,0x0b,0x9a,0x99,0x43,0x7e,0x16,0x68,
+        0x7b,0xf4,0x9a,0x4b,0x7a,0x88,0xad,0x4d
+    };
+    u8 fixture_ciphertext[sizeof(expected_fixture_ciphertext)]{};
+    u8 fixture_tag[16]{};
+    u8 fixture_plaintext[sizeof(FixturePlaintext) - 1]{};
+    const bool fixture_encrypted = Aes128GcmEncrypt(
+        derived_key, fixture_nonce,
+        reinterpret_cast<const u8 *>(FixtureAad), sizeof(FixtureAad) - 1,
+        reinterpret_cast<const u8 *>(FixturePlaintext), sizeof(FixturePlaintext) - 1,
+        fixture_ciphertext, fixture_tag);
+    const bool fixture_matches = fixture_encrypted &&
+        ConstantTimeEqual(fixture_ciphertext, expected_fixture_ciphertext, sizeof(fixture_ciphertext)) &&
+        ConstantTimeEqual(fixture_tag, expected_fixture_tag, sizeof(fixture_tag));
+    const bool fixture_decrypted = fixture_matches && Aes128GcmDecrypt(
+        derived_key, fixture_nonce,
+        reinterpret_cast<const u8 *>(FixtureAad), sizeof(FixtureAad) - 1,
+        fixture_ciphertext, sizeof(fixture_ciphertext), fixture_tag, fixture_plaintext);
+    const bool fixture_plaintext_matches = fixture_decrypted &&
+        ConstantTimeEqual(fixture_plaintext,
+            reinterpret_cast<const u8 *>(FixturePlaintext), sizeof(fixture_plaintext));
+
     std::memset(derived_key, 0, sizeof(derived_key));
-    return kdf_ok;
+    std::memset(fixture_ciphertext, 0, sizeof(fixture_ciphertext));
+    std::memset(fixture_tag, 0, sizeof(fixture_tag));
+    std::memset(fixture_plaintext, 0, sizeof(fixture_plaintext));
+    return fixture_matches && fixture_plaintext_matches;
 }
 
 }
