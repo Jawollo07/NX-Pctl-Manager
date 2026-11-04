@@ -16,11 +16,11 @@ struct Anchor {
 
 // Wall-clock time is never consulted. The anchor's authenticated server time
 // advances only by elapsed monotonic seconds and expires with its policy.
-[[nodiscard]] inline bool GetLocalDayKey(
+[[nodiscard]] inline bool GetLocalUnixTime(
     const Anchor& anchor,
     std::uint64_t monotonic_now,
-    std::int64_t* out_day_key) noexcept {
-    if (out_day_key == nullptr || !anchor.valid ||
+    std::int64_t* out_local_time) noexcept {
+    if (out_local_time == nullptr || !anchor.valid ||
         anchor.server_time <= 0 || anchor.not_after <= anchor.server_time ||
         anchor.timezone_offset_minutes < -14 * 60 ||
         anchor.timezone_offset_minutes > 14 * 60 ||
@@ -50,9 +50,18 @@ struct Anchor {
 
     const std::int64_t local_now = utc_now + offset_seconds;
     if (local_now < 0) return false;
-
-    *out_day_key = local_now / 86400;
+    *out_local_time = local_now;
     return true;
 }
 
+[[nodiscard]] inline bool GetLocalDayKey(
+    const Anchor& anchor,
+    std::uint64_t monotonic_now,
+    std::int64_t* out_day_key) noexcept {
+    if (out_day_key == nullptr) return false;
+    std::int64_t local_now = 0;
+    if (!GetLocalUnixTime(anchor, monotonic_now, &local_now)) return false;
+    *out_day_key = local_now / 86400;
+    return true;
+}
 } // namespace nxpctl::trusted_clock
