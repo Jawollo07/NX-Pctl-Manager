@@ -59,13 +59,15 @@ The pinned libnx install is written to `$DEVKITPRO/libnx`, which now resolves
 to this project's `toolchain/libnx`. The existing devkitA64 compiler and
 packaging tools are reused read-only through their original installation.
 
-Before building the sysmodule, verify that the project-local headers expose
-the PGL API used by the runtime:
+Before building the sysmodule, verify the two APIs from their respective
+pinned source trees: `FsStorageForBatchRead` comes from libnx, while the
+read-only `GetRunningApplicationProcessId` wrapper comes from Atmosphère's
+libstratosphere headers.
 
 ```sh
-test -f "$DEVKITPRO/libnx/include/switch/services/pgl.h"
-grep -n "pglGetApplicationProcessId\|pglGetRunningApplicationProcessId" \
-  "$DEVKITPRO/libnx/include/switch/services/pgl.h"
+grep -n "FsStorageForBatchRead" "$DEVKITPRO/libnx/include/switch/services/fs.h"
+grep -n "GetRunningApplicationProcessId" \
+  /tmp/nxpctl-atmosphere/libraries/libstratosphere/include/stratosphere/pgl/pgl_shell_api.hpp
 ```
 
 The expected release package is:
