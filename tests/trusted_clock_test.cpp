@@ -18,6 +18,11 @@ int main() {
     // the local day boundary.
     Anchor cet{82'800, 200'000, 100, 60, true};
     assert(GetLocalDayKey(cet, 100, &day) && day == 1);
+    std::int64_t local_time = -1;
+    assert(nxpctl::trusted_clock::GetLocalUnixTime(cet, 100, &local_time)
+           && local_time == 86'400);
+    assert(nxpctl::trusted_clock::GetLocalUnixTime(cet, 101, &local_time)
+           && local_time == 86'401);
 
     Anchor west{86'399, 200'000, 0, -60, true};
     assert(GetLocalDayKey(west, 0, &day) && day == 0);
