@@ -195,18 +195,15 @@ bool Save(const usage::Snapshot& snapshot) {
     usage::Snapshot slots[2]{};
     (void)ReadSlot(0, &slots[0]);
     (void)ReadSlot(1, &slots[1]);
-    const usage::Snapshot* newest = usage::SelectNewest(slots[0], slots[1]);
-    const u64 current = newest == nullptr ? 0 : newest->sequence;
-    if (current == std::numeric_limits<u64>::max()) {
+    usage::WritePlan plan{};
+    if (!usage::MakeWritePlan(slots[0], slots[1], &plan)) {
         Wipe(slots, sizeof(slots));
         return false;
     }
-    const u64 next = current + 1;
     usage::Snapshot to_write = snapshot;
-    to_write.sequence = next;
+    to_write.sequence = plan.sequence;
     to_write.valid = true;
-    const unsigned target = static_cast<unsigned>(next & 1u);
-    const bool saved = WriteSlot(target, to_write, next);
+    const bool saved = WriteSlot(plan.target_slot, to_write, plan.sequence);
     Wipe(slots, sizeof(slots));
     Wipe(&to_write, sizeof(to_write));
     return saved;
