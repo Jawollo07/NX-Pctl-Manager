@@ -1,6 +1,6 @@
 # Headless Atmosphere Sysmodule Migration Plan
 
-Status: The feature branch now has a buildable headless Stratosphere module, resident worker/supervisor, read-only HIPC status/provisioning, global daily usage tracking with encrypted local snapshots, a FastAPI/SQLite backend, Switch-side HTTP + AES-128-GCM/HKDF transport, credential persistence, token refresh, encrypted policy fetch/publication, heartbeat and policy acknowledgement. Backend CI and host protocol tests pass; a local Switch NSP build has succeeded. The current runtime remains a prototype: it does not enforce policy, does not identify foreground title IDs, has no qlaunch/HOME lock integration, and has not been validated on hardware.
+Status: The feature branch now has a buildable headless Stratosphere module, resident worker/supervisor, read-only HIPC status/provisioning, global daily usage tracking with encrypted local snapshots, a FastAPI/SQLite backend, Switch-side HTTP + AES-128-GCM/HKDF transport, credential persistence, token refresh, encrypted policy fetch/publication, heartbeat and policy acknowledgement. Backend CI and host protocol tests pass; a local Switch NSP build has succeeded. The current runtime remains a prototype: it does not enforce policy, does not inspect or identify individual titles, has no global qlaunch/HOME lock integration, and has not been validated on hardware.
 
 ## 1. Accepted decisions
 
@@ -54,7 +54,7 @@ Migrate additively. Keep the existing NRO build working on main until the sysmod
         network/         REST, WebSocket, TLS, reconnect
         identity/        device ID and credential provisioning
         policy/          schema, validation, evaluator, RAM snapshot
-        monitor/         title/process and sleep/wake events
+        monitor/         global application-active and sleep/wake state
         enforcement/     PCTL and system integration adapters
         accounting/      monotonic play-time accounting
         telemetry/       bounded RAM event queue and redaction
@@ -120,14 +120,14 @@ A policy needs at minimum:
 - enabled state and explicit startup/offline behaviour;
 - global and weekday play-time budgets;
 - quiet hours and timezone semantics;
-- allowed/blocked title identifiers and restriction mode;
+- global daily usage limits and quiet-hour schedule;
 - parent-authentication requirements.
 
 Reject unknown critical schema versions, invalid bounds, stale revisions, cross-device replay and malformed input. Use monotonic time for elapsed playtime; use server time only for wall-clock schedules, with explicit clock uncertainty handling. TLS validation is mandatory. Never log credentials, tokens, PINs, TOTP secrets or authentication payloads.
 
 ### Policy model implementation boundary
 
-`protocol/policy.hpp` implements schema/protocol version 1 as a fixed-size C++ model. It includes device binding, monotonic revision, issue/expiry/server timestamps, enabled state, parent-authentication requirement, offline behavior, fixed UTC offset, global and weekday budgets, quiet hours, and up to 64 title allow/block rules. Validation rejects unsupported versions, device mismatch, stale revisions, invalid time bounds/clock skew, expired or overlong policies, invalid limits/schedules, invalid title IDs/actions, duplicate rules, and oversized rule sets.
+`protocol/policy.hpp` implements schema/protocol version 1 as a fixed-size C++ model. It includes device binding, monotonic revision, issue/expiry/server timestamps, enabled state, parent-authentication requirement, offline behavior, fixed UTC offset, global and weekday budgets, and quiet hours. Title identifiers and per-title rules are not part of the model; the strict decoder rejects such fields.
 
 `PolicyStore` holds only one fixed-size snapshot in RAM. It validates a candidate while holding a short spin lock against the currently active revision and replaces the complete structure only on success. A rejected candidate cannot partially mutate the active snapshot. Host tests exercise these rules. The sysmodule exposes the active revision through its read-only status command, but no worker/network path can publish a policy yet.
 
@@ -136,8 +136,8 @@ A bounded fixed-buffer JSON decoder now accepts the exact schema-v1 fields and r
 ## 8. Full system integration: feasibility gate
 
 A resident sysmodule alone does not prove that users cannot close, bypass or kill the enforcement surface. Full scope requires supported mechanisms for:
-- foreground title/process observation;
-- enforcement before or immediately after a disallowed title starts;
+- global active/inactive usage observation without title identification;
+- global restriction enforcement through a verified qlaunch/HOME integration;
 - HOME, user changes, sleep/wake, reboot and crash handling;
 - a non-dismissible parent-authentication/lock surface where required;
 - preventing ordinary UI paths from disabling enforcement.
@@ -187,7 +187,7 @@ Prefer documented Atmosphere/Stratosphere interfaces and narrowly scoped version
 - [x] Add authenticated encrypted transport and policy integrity verification before publication.
 - [x] Connect worker/network lifecycle to policy publication and retain the last accepted snapshot in RAM during a network interruption.
 - [ ] Implement and verify restricted bootstrap after a cold start without a fetched policy.
-- [x] Add pure evaluator tests for weekday budgets, quiet hours, title allow/block modes, parent authentication and offline decisions.
+- [x] Add pure evaluator tests for weekday budgets, quiet hours, global daily-limit decisions, parent authentication and offline decisions.
 - [x] Add monotonic global daily playtime accounting, trusted-day rollover and cross-day/clock-regression host tests.
 - Acceptance remains pending: malformed/stale policy rejected; network loss retains last policy; reconnect catches up; restart offline enters restricted bootstrap.
 
@@ -198,8 +198,8 @@ Prefer documented Atmosphere/Stratosphere interfaces and narrowly scoped version
 - Acceptance: supported playtime/bedtime policies map to verified PCTL calls on each declared firmware.
 
 ### Phase 6 — full monitoring and enforcement
-- Prove foreground title observation and qlaunch/HOME integration on hardware.
-- Implement monotonic playtime accounting, title restrictions, quiet hours and lock/re-auth surface only after feasibility passes.
+- Prove global active/inactive observation and global qlaunch/HOME lock integration on hardware.
+- Connect the existing monotonic global playtime counter and global quiet-hours evaluator to a verified system-wide lock/re-auth surface.
 - Acceptance: cannot bypass through HOME, app exit, user switch, sleep/wake or reboot; crash recovery and uninstall are tested.
 
 ### Phase 7 — retire the legacy UI
