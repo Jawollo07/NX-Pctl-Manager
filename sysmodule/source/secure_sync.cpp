@@ -180,17 +180,20 @@ namespace {
         return true;
     }
 
-    bool SendHeartbeat(u64 uptime_seconds, u64 policy_revision) {
+    bool SendHeartbeat(u64 uptime_seconds, u64 policy_revision,\n                       s64 usage_day_key, u64 usage_active_seconds) {
         ResponseWiper response_wiper;
         if (!g_access_token[0]) return false;
         char payload[512];
         ScopedWipe payload_wiper(payload, sizeof(payload));
         const int n = std::snprintf(payload, sizeof(payload),
             "{\"access_token\":\"%s\",\"protocol_version\":1,"
-            "\"uptime_seconds\":%llu,\"policy_revision\":%llu}",
+            "\"uptime_seconds\":%llu,\"policy_revision\":%llu,"
+            "\"global_usage_day_key\":%lld,\"global_usage_active_seconds\":%llu}",
             g_access_token,
             static_cast<unsigned long long>(uptime_seconds),
-            static_cast<unsigned long long>(policy_revision));
+            static_cast<unsigned long long>(policy_revision),
+            static_cast<long long>(usage_day_key),
+            static_cast<unsigned long long>(usage_active_seconds));
         if (n <= 0 || static_cast<std::size_t>(n) >= sizeof(payload)) return false;
         u16 status = 0;
         std::size_t response_size = 0;
@@ -334,7 +337,7 @@ bool GetTrustedLocalDayKey(u64 monotonic_seconds, s64* out_day_key) {
     return false;
 }
 
-void RunCycle(policy::PolicyStore& store, u64 uptime_seconds) {
+void RunCycle(policy::PolicyStore& store, u64 uptime_seconds,\n              s64 usage_day_key, u64 usage_active_seconds) {
     /*
      * Adopt provisioning and reserve the enrollment transition atomically.
      * The lock is released before DNS/TCP/HTTP, so HIPC remains responsive.
@@ -381,7 +384,7 @@ void RunCycle(policy::PolicyStore& store, u64 uptime_seconds) {
     }
 
     const u64 revision = store.GetRevision();
-    (void)SendHeartbeat(uptime_seconds, revision);
+    if (usage_day_key >= 0 && usage_active_seconds <= 24 * 60 * 60) {\n        (void)SendHeartbeat(uptime_seconds, revision, usage_day_key, usage_active_seconds);\n    } else {\n        (void)SendHeartbeat(uptime_seconds, revision, -1, 0);\n    }
     if (FetchPolicy(store)) {
         AcknowledgePolicy(store.GetRevision());
     }
