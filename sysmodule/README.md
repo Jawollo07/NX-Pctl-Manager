@@ -83,7 +83,7 @@ The exact schema-v1 JSON profile is documented in [`docs/policy-schema-v1.md`](.
 The current branch includes a bounded schema-v1 decoder, authenticated encrypted
 policy retrieval, full-snapshot validation and atomic publication to the
 RAM-only policy store. The pure evaluator supports allow-all and allow-list-only
-title modes and is host-tested. A separate daily usage tracker is host-tested and connected to a dedicated,
+global-only limits, quiet hours and offline behavior and is host-tested. A separate daily usage tracker is host-tested and connected to a dedicated,
 read-only PGL application-activity monitor. All games/apps share one counter;
 no title IDs are stored for playtime. Its local-day key uses an authenticated
 server-time anchor plus monotonic elapsed time and the policy's fixed UTC
@@ -91,8 +91,8 @@ offset. Global usage is restored from alternating AES-GCM-authenticated
 daily snapshots in the sysmodule's own device save data. Writes are flushed
 periodically and on orderly shutdown; abrupt power loss may lose up to about
 one minute of new usage. A trusted clock regression cannot erase the newer
-stored day. Usage is not connected to enforcement. No restrictions are
-currently applied to running or launching titles.
+stored day. Usage is not connected to enforcement. No global restrictions are
+currently enforced yet.
 
 
 ## HTTP backend
