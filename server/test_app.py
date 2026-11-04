@@ -105,7 +105,7 @@ def test_revoked_device_cannot_use_existing_token(client):
 def test_events_are_deduplicated(client):
     token = enroll_and_auth(client)
     headers = {"Authorization": f"Bearer {token}"}
-    event = {"event_id": "evt-1", "sequence": 1, "timestamp": int(time.time()), "type": "title.started", "payload": {"title_id": 123}}
+    event = {"event_id": "evt-1", "sequence": 1, "timestamp": int(time.time()), "type": "usage.sample", "payload": {"global_usage_active_seconds": 300}}
     response = client.post("/v1/devices/switch-test/events:batch", headers=headers, json={"events": [event, event]})
     assert response.status_code == 200
     assert response.json()["accepted"] == 1
