@@ -12,5 +12,6 @@ namespace nxpctl::sync {
     void RunCycle(policy::PolicyStore& store, u64 uptime_seconds,
                   s64 usage_day_key, u64 usage_active_seconds);
     bool GetTrustedLocalDayKey(u64 monotonic_seconds, s64* out_day_key);
+    bool GetTrustedLocalUnixTime(u64 monotonic_seconds, s64* out_local_time);
     void Clear();
 }
