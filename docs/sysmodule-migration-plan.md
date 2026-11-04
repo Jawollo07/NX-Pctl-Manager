@@ -1,11 +1,11 @@
 # Headless Atmosphere Sysmodule Migration Plan
 
-Status: Phase 0 reference pinned; Phase 1 build target committed; Phase 2 runtime and read-only IPC scaffold added; Phase 4 policy model, validation and RAM snapshot store added as a host-tested foundation. A FastAPI/SQLite HTTP backend is now implemented and host-tested. Switch-side HTTP transport, credential provisioning, policy delivery into the sysmodule, enforcement and hardware validation remain unimplemented.
+Status: The feature branch now has a buildable headless Stratosphere module, resident worker/supervisor, read-only HIPC status/provisioning, global daily usage tracking with encrypted local snapshots, a FastAPI/SQLite backend, Switch-side HTTP + AES-128-GCM/HKDF transport, credential persistence, token refresh, encrypted policy fetch/publication, heartbeat and policy acknowledgement. Backend CI and host protocol tests pass; a local Switch NSP build has succeeded. The current runtime remains a prototype: it does not enforce policy, does not identify foreground title IDs, has no qlaunch/HOME lock integration, and has not been validated on hardware.
 
 ## 1. Accepted decisions
 
 - Offline: keep the last verified policy in RAM and continue enforcing it while the network is unavailable.
-- Communication: REST is the baseline for enrollment, authentication, full policy snapshots, heartbeats, event batches and reconciliation. The backend accepts HTTP for isolated trusted networks and can sit behind HTTPS termination; TLS is strongly recommended on any untrusted network. WSS is deferred until REST works end-to-end. REST polling remains the fallback.
+- Communication: REST over HTTP is the selected transport. Every application request and response body is encrypted and authenticated end-to-end with AES-128-GCM; HKDF derives per-device keys. HTTP metadata (host, path, timing, sizes and availability) remains visible. WSS is deferred; periodic REST polling is used.
 - Scope: full system-wide enforcement is the target, not merely a PCTL settings editor.
 - Authority: the server owns durable policies, schedules, usage records and audit history. The Switch keeps only the active verified policy in RAM and the minimum persistent device credential/configuration needed to authenticate.
 
@@ -78,7 +78,7 @@ The current NPDM title ID `0x010000000000D7A1` is a development placeholder only
 
 1. Initialise required Horizon services, register the local IPC endpoint and start bounded workers.
 2. Load the provisioned device identity. Missing/invalid credentials mean provisioning-required, never a shared default key.
-3. Establish HTTP(S) and authenticate the device. On untrusted networks, require TLS with certificate and hostname validation. Plain HTTP is only for isolated trusted networks and provides no confidentiality or transport integrity.
+3. Establish HTTP and authenticate the device. Application payloads are protected end-to-end with AES-128-GCM; the HTTP layer is a carrier and exposes traffic metadata.
 4. Fetch a complete policy snapshot over REST. Validate protocol version, device binding, revision, timestamps, limits, schedules and integrity metadata.
 5. Atomically publish the verified policy as an immutable in-memory snapshot.
 6. Connect WSS and subscribe using device ID and last accepted revision. Reject stale revisions and messages with an incorrect device scope.
@@ -174,19 +174,21 @@ Prefer documented Atmosphere/Stratosphere interfaces and narrowly scoped version
 - [x] Add the server-side FastAPI/SQLite REST API: one-time enrollment, per-device credentials, short-lived bearer tokens, policy snapshots, heartbeat, deduplicated event batches and policy acknowledgements.
 - [x] Add local administrator CLI for enrollment codes, policy publication, device listing and revocation.
 - [x] Add backend contract/security tests and a dedicated CI job.
-- [ ] Add Switch-side HTTP(S) transport, per-device credential provisioning/storage, token refresh, WSS (optional later), reconnect/backoff, heartbeat and bounded RAM event queue.
+- [x] Add Switch-side HTTP transport, AES-GCM/HKDF, per-device credential persistence, enrollment/authentication, token refresh, policy fetch, heartbeat and policy acknowledgement.
+- [ ] Add bounded exponential reconnect/backoff and Switch-side event queue/batch delivery. WSS remains deferred.
 - Bound JSON body size, nesting, strings and arrays.
-- Acceptance pending for the Switch client: authenticated connection, TLS certificate failure rejection when TLS is used, reconnect/backoff, REST reconciliation and secret-free logs. Backend-only tests do not prove Switch connectivity.
+- Acceptance pending for the Switch client: hardware connectivity, reconnect/backoff, event batch delivery and secret-free runtime logs. Host tests and a successful build do not prove Switch connectivity.
 
 ### Phase 4 — policy engine and RAM cache
 - [x] Add a versioned fixed-size policy model and strict structural/range validation.
 - [x] Bind snapshots to one device and require strictly increasing revisions.
 - [x] Add a bounded RAM-only snapshot store; validate under lock and replace the complete snapshot or leave the previous one untouched.
 - [x] Add bounded fixed-buffer JSON decoding; reject unknown/duplicate fields, malformed values and oversized documents.
-- [ ] Add authenticated transport and policy integrity verification before publication.
-- [ ] Connect worker/network lifecycle to policy publication, offline retention and restricted bootstrap.
+- [x] Add authenticated encrypted transport and policy integrity verification before publication.
+- [x] Connect worker/network lifecycle to policy publication and retain the last accepted snapshot in RAM during a network interruption.
+- [ ] Implement and verify restricted bootstrap after a cold start without a fetched policy.
 - [x] Add pure evaluator tests for weekday budgets, quiet hours, title allow/block modes, parent authentication and offline decisions.
-- [ ] Add monotonic playtime accounting and cross-midnight/day-boundary tests.
+- [x] Add monotonic global daily playtime accounting, trusted-day rollover and cross-day/clock-regression host tests.
 - Acceptance remains pending: malformed/stale policy rejected; network loss retains last policy; reconnect catches up; restart offline enters restricted bootstrap.
 
 ### Phase 5 — PCTL adapter
@@ -209,6 +211,6 @@ Prefer documented Atmosphere/Stratosphere interfaces and narrowly scoped version
 
 Keep a temporary legacy NRO job. Add a separate sysmodule build job using the pinned Atmosphere template. Host tests cover policy parsing, revision logic, schedules, event deduplication and reconnect state. Device tests are mandatory for PCTL and system integration; a host build is not evidence of working enforcement.
 
-The product is a headless sysmodule only when it builds as an installable Stratosphere module, starts without hbmenu/Borealis, authenticates to the server over verified TLS, uses REST+WSS, retains the last verified policy in RAM during network loss, follows restricted bootstrap after restart offline, maps PCTL correctly, and survives HOME/sleep/wake/user changes/reboot with a tested recovery path.
+The product is a complete headless parental-control sysmodule only when it builds as an installable Stratosphere module, starts without hbmenu/Borealis, authenticates using the encrypted HTTP protocol, retains the last verified policy in RAM during network loss, follows restricted bootstrap after restart offline, enforces limits through verified platform integration, and survives HOME/sleep/wake/user changes/reboot with a tested recovery path.
 
 Until system-wide bypass resistance is demonstrated on hardware, call it a resident sysmodule prototype, not complete system-wide parental control.
