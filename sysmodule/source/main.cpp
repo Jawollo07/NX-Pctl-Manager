@@ -202,10 +202,10 @@ namespace ams {
             snapshot.local_day_key = day_key;
             snapshot.active_seconds = active_seconds;
             snapshot.valid = true;
+            g_last_usage_persist_seconds = monotonic_seconds;
             if (::nxpctl::usage_store::Save(snapshot)) {
                 g_persisted_usage = snapshot;
                 g_usage_persist_dirty = false;
-                g_last_usage_persist_seconds = monotonic_seconds;
             }
         }
 
