@@ -33,8 +33,8 @@ namespace {
     char g_response[ResponseCapacity];
 
     u64 GetMonotonicSeconds() {
-        const s64 frequency = os::GetSystemTickFrequency();
-        const s64 ticks = os::GetSystemTick().GetInt64Value();
+        const s64 frequency = ams::os::GetSystemTickFrequency();
+        const s64 ticks = ams::os::GetSystemTick().GetInt64Value();
         if (frequency <= 0 || ticks < 0) return 0;
         return static_cast<u64>(ticks / frequency);
     }
