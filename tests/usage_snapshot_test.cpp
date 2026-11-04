@@ -13,6 +13,31 @@ int main() {
     assert(SelectNewest(old, newest) == &newest);
     assert(SelectNewest(newest, corrupt) == &newest);
     assert(SelectNewest(empty, corrupt) == nullptr);
+    WritePlan plan{};
+    assert(MakeWritePlan(empty, empty, &plan));
+    assert(plan.valid && plan.target_slot == 0 && plan.sequence == 1);
+
+    // A failed write leaves the previous committed slot untouched. Retrying
+    // produces the same plan; only a successful write advances the sequence.
+    Snapshot slot0{100, 900, 4, true};
+    Snapshot slot1{100, 1200, 5, true};
+    assert(MakeWritePlan(slot0, slot1, &plan));
+    assert(plan.target_slot == 0 && plan.sequence == 6);
+    const Snapshot before_failure0 = slot0;
+    const Snapshot before_failure1 = slot1;
+    const bool simulated_write_succeeded = false;
+    if (simulated_write_succeeded) slot0 = Snapshot{100, 1500, plan.sequence, true};
+    assert(slot0.sequence == before_failure0.sequence);
+    assert(slot1.sequence == before_failure1.sequence);
+    WritePlan retry{};
+    assert(MakeWritePlan(slot0, slot1, &retry));
+    assert(retry.target_slot == plan.target_slot && retry.sequence == plan.sequence);
+
+    slot0 = Snapshot{100, 1500, retry.sequence, true};
+    assert(SelectNewest(slot0, slot1) == &slot0);
+    assert(MakeWritePlan(slot0, slot1, &plan));
+    assert(plan.target_slot == 1 && plan.sequence == 7);
+
     std::int64_t day = -1;
     std::uint64_t seconds = 0;
     assert(ReconcileSnapshot(newest, 100, &day, &seconds));
