@@ -2,19 +2,19 @@
 
 ## Current runtime phase
 
-The experimental Stratosphere target now has a resident main thread, a separate cooperative worker thread, and a local HIPC status and enrollment-provisioning service.
+The experimental Stratosphere target now has a resident main thread, a separate cooperative network worker, a dedicated global playtime monitor thread, and a local HIPC status and enrollment-provisioning service.
 
 - `InitializeSystemModule` initializes the service-manager client, checks the pinned libstratosphere API, creates the worker stop event, and attempts to mount this sysmodule’s own device save data before the worker starts.
 - `Main` starts the worker, registers the `nxpctl` HIPC service, and enters the Stratosphere server loop.
 - The worker uses a dedicated 32 KiB stack and a one-second timed event wait as its idle cadence and cooperative shutdown point. The larger stack accommodates the bounded schema-v1 parser and network call frames. A separate supervisor checks thread termination with `os::TryWaitThread`, reaps the exited thread, and permits at most three automatic restarts per module lifetime. After the retry budget is exhausted, the service reports `WorkerState::Failed` and does not restart indefinitely.
 - Finalization stops and joins the supervisor before stopping the worker, preventing an intentional shutdown from being mistaken for a worker failure.
-- HIPC command 65000 (`GetRuntimeStatus`) returns protocol version, worker state, worker heartbeat, bounded worker restart count, and policy revision. Command 65001 (`ConfigureEnrollment`) accepts one fixed-size, validated host/device-ID/enrollment-code buffer. It is not a general configuration or policy-write interface.
+- HIPC command 65000 (`GetRuntimeStatus`) returns protocol version, worker state, worker heartbeat, bounded worker restart count, and policy revision. Command 65001 (`ConfigureEnrollment`) accepts one fixed-size, validated host/device-ID/enrollment-code buffer. Command 65002 (`GetUsageStatus`) returns monitor state, global active seconds, and rounded daily minutes. These are not general configuration or policy-write interfaces.
 - `protocol/runtime_status.hpp` is the shared, Horizon-independent wire contract used by both the NRO client and sysmodule. `protocol/worker_supervision.hpp` contains the Horizon-independent three-restart budget used by the supervisor; CI tests that budget independently. `WorkerState::Failed` is a terminal health state after the bounded restart budget is exhausted. The CMIF output layout is four `u32` values at offsets 0/4/8/12 (protocol version, worker state, heartbeat, restart count), then the aligned `u64` policy revision at offset 16.
 - `protocol/http_response.hpp` now provides a bounded, allocation-free HTTP/1.0/1.1 response parser. It requires exactly one decimal `Content-Length`, rejects chunked/other transfer encodings, rejects compressed bodies, duplicate lengths, malformed CRLF framing, truncated bodies and trailing bytes, and caps headers/body at 8 KiB/96 KiB. It returns a view into the caller-owned receive buffer; it does not perform socket I/O or authenticate the peer.
 - The existing NRO performs an optional read-only status request at startup. If the service is absent, it logs the condition and continues in standalone mode.
-- `FinalizeSystemModule` signals the worker, joins it, destroys its thread object, and finalizes the event.
+- `InitializeSystemModule` initializes PGL only on Horizon 10.0.0 or later; failure leaves monitoring unavailable rather than aborting module startup. `Main` starts the monitor independently from the network worker. `FinalizeSystemModule` stops and joins the monitor before finalizing PGL, then stops the other threads and finalizes their events.
 
-The HIPC interface exposes read-only diagnostics plus a single enrollment bootstrap operation. It does not inspect running titles, change parental-control state or apply restrictions. Credential persistence uses this sysmodule’s own device save data. The NRO offers an enrollment screen and passes the API hostname, server-assigned device ID and one-time code to the sysmodule. The worker then performs encrypted enrollment, exchanges the returned device credential for a short-lived token, fetches and validates policy snapshots, sends heartbeats and acknowledges accepted revisions.
+The HIPC interface exposes read-only diagnostics, a global usage snapshot, and a single enrollment bootstrap operation. The monitor asks PGL only whether an application process is currently running; it does not request or store the process ID beyond the call, inspect title IDs, change parental-control state or apply restrictions. Credential persistence uses this sysmodule’s own device save data. The NRO offers an enrollment screen and passes the API hostname, server-assigned device ID and one-time code to the sysmodule. The worker then performs encrypted enrollment, exchanges the returned device credential for a short-lived token, fetches and validates policy snapshots, sends heartbeats and acknowledges accepted revisions.
 
 ## Next implementation phases
 
@@ -24,38 +24,46 @@ The HIPC interface exposes read-only diagnostics plus a single enrollment bootst
 4. [x] Add bounded policy validation and in-memory policy snapshots.
 5. [x] Add bounded schema-v1 JSON decoding and host tests.
 6. [x] Add bounded HTTP response framing parser and host tests. [x] Add authenticated message integrity verification and connect only verified full snapshots to the RAM store.
-7. Implement enforcement only after the required Horizon services, permissions, firmware compatibility, and recovery behavior have been validated. The pure evaluator is ready for integration, but application-activity monitoring, global usage accounting, PCTL interaction and the hardware recovery path remain unverified.
+7. Implement enforcement only after the required Horizon services, permissions, firmware compatibility, and recovery behavior have been validated. The pure evaluator is ready for integration, but PCTL interaction, suspend/resume accounting, persistent daily usage and the hardware recovery path remain unverified. Read-only PGL application-activity monitoring and the global RAM counter are now connected.
 
-## Application activity monitoring and PCTL integration gate
+## Application activity monitoring and PCTL integration
 
-The pinned Atmosphere headers expose `pm::dmnt::GetApplicationProcessId`,
-`pm::dmnt::GetProgramId` and `pm::dmnt::HookToCreateApplicationProcess`.
-These are process/debug-monitor interfaces, not a generic unprivileged
-foreground-application API. Their service access and NPDM requirements have
-not been established for this module. Do not add `pm:dmnt` or process hooks
-to the manifest until the required privileges and failure/recovery behavior
-are verified on the target firmware.
+The pinned Atmosphere/libstratosphere revision exposes
+`ams::pgl::Initialize` and `ams::pgl::GetRunningApplicationProcessId`.
+The wrapper delegates to the pinned libnx PGL client, which connects to the
+`pgl` service and issues its documented read-only command 5. PGL is available
+from Horizon 10.0.0 onward. The NPDM service-access list therefore includes
+`pgl`; it does not request `pm:dmnt`, debug process handles or process hooks.
+
+A dedicated one-second monitor thread queries PGL independently of the network
+worker, so DNS/TCP/HTTP waits cannot stall usage sampling. A successful query
+means an application is active. PGL's documented no-running-application result
+(`0x6E4`) means idle; any other query failure is treated as unknown and the
+sample is skipped. The monitor does not use the returned PID as a key or retain
+it. It passes only an active/inactive boolean to the global daily tracker.
+The tracker therefore counts all games/applications together and has no
+per-title usage buckets.
+
+The trusted local-day key comes from the authenticated policy `server_time`
+and the policy's fixed UTC offset. The server timestamp is anchored to
+Atmosphère's monotonic system tick and advanced only by monotonic elapsed time;
+the device wall clock is not used. The anchor is valid only until the policy's
+`not_after` time. If no verified policy clock is available, the monitor
+continues running but does not fabricate a day key or count usage.
 
 The pinned libnx PCTL wrapper exposes parental-control state/settings queries
 and synchronization/play-timer events. Its public wrapper does not expose a
 general command to install arbitrary per-title allow/block rules or to
-terminate a title based on this project's policy. Therefore the current
-policy evaluator cannot be described as enforcement, and PCTL must not be
-modified by guessed IPC command IDs.
+terminate a title based on this project's policy. No guessed PCTL IPC command
+IDs are used.
 
-The usage model is deliberately global: while any game/application is active,
-all elapsed time contributes to one shared daily console counter. Switching
-between games or applications does not create a new bucket or a per-title
-record. HOME-menu/idle time is excluded. The tracker accepts only an
-application-active boolean, monotonic seconds and a local-day key; it does not
-accept or store title IDs. This is separate from any future per-game
-restriction rules, which must not create per-game playtime counters.
-
-The next safe integration step is a narrowly scoped platform adapter that
-can identify whether a game/application is active using a verified, permitted
-service. It must be tested independently before it is connected to global
-usage accounting or any launch/termination action. Until then, application
-monitoring and all restriction enforcement remain disabled.
+The tracker is currently RAM-only: usage is lost if the sysmodule or console
+restarts. It rounds started minutes up, resets on a forward local-day
+transition, ignores gaps longer than two seconds and does not erase an
+accumulated counter on a backward clock correction. HIPC command 65002 exposes
+the monitor state, global active seconds and daily minutes. Neither monitoring
+nor the evaluator applies restrictions yet; persistent usage, suspend/resume
+accounting, real-device validation and enforcement remain separate gates.
 
 ## Power-state integration gate
 
@@ -77,20 +85,22 @@ The store uses fixed-size memory and performs no allocation, file I/O, database 
 
 The accepted schema uses printable ASCII strings without escapes, integer-only numeric fields, numeric enum values, exactly seven weekday limits, and title-rule objects containing exactly `title_id` and `action`. This deliberately strict subset must match the server serializer. JSON decoding is followed by the existing policy validator through `DecodeAndValidate`; only a fully decoded and structurally valid candidate is returned. The decoder does not authenticate its input; the secure sync worker verifies the AEAD envelope before calling it and publishes only a fully validated snapshot.
 
-## Daily usage accounting primitive (not yet connected)
+## Global daily usage accounting
 
-`protocol/usage_tracker.hpp` provides a host-testable, allocation-free **global
-daily console usage counter**. It consumes only an application-active boolean,
-monotonic seconds and a local-day key; it does not receive, store or distinguish
-title IDs. Time from all running games/applications is combined into one daily
-total, and switching between applications does not interrupt accounting.
-HOME-menu/idle time is excluded. It rounds started minutes up, resets on a
-forward day transition, does not erase accumulated usage on a backward
-wall-clock correction, and ignores observation gaps longer than two seconds
-rather than assuming continuous playtime. The tracker is RAM-only and is not
-yet wired to a Horizon application-activity source, a trusted clock anchor,
-suspend/resume handling or persistent storage. It must not be treated as
-active console enforcement.
+`protocol/usage_tracker.hpp` provides a host-testable, allocation-free global
+daily console counter. It consumes only an application-active boolean,
+monotonic seconds and a trusted local-day key. It does not receive, store or
+distinguish title IDs. The dedicated PGL monitor thread feeds it independently
+of network synchronization. Switching applications does not interrupt the
+counter; HOME-menu/idle time is excluded. Started minutes round up, forward
+day transitions reset the daily bucket, backward clock corrections do not
+erase accumulated time, and observation gaps over two seconds are ignored.
+The counter is RAM-only and is not enforcement.
+
+`protocol/trusted_clock.hpp` derives the local day from an authenticated
+policy server-time anchor, monotonic elapsed seconds and the policy's fixed
+UTC offset. It rejects invalid, expired or regressed anchors. Host tests cover
+UTC and offset day boundaries, expiry and monotonic regression.
 
 ## Deterministic policy evaluation (not enforcement)
 
