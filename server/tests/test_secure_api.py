@@ -172,5 +172,83 @@ class SecureDeviceApiIntegrationTests(unittest.TestCase):
         self.assertEqual(json.loads(row["last_heartbeat_json"])["uptime_seconds"], 10)
 
 
+    def _enroll_and_authenticate(self):
+        _, enrolled, *_ = self.secure_call(
+            "enroll", 1, {"enrollment_code": self.ENROLLMENT_CODE},
+            self.enrollment_digest, "enrollment",
+        )
+        credential = enrolled["device_credential"]
+        credential_digest = hashlib.sha256(credential.encode()).digest()
+        _, authenticated, *_ = self.secure_call(
+            "auth", 2, {"device_credential": credential}, credential_digest,
+        )
+        return credential_digest, authenticated["access_token"]
+
+    def test_encrypted_policy_fetch_and_policy_ack(self):
+        credential_digest, token = self._enroll_and_authenticate()
+        now = int(time.time())
+        policy = {
+            "protocol_version": 1, "schema_version": 1,
+            "device_id": self.DEVICE_ID, "revision": 1,
+            "issued_at": now - 5, "not_after": now + 3600,
+            "server_time": now - 5, "enabled": True,
+            "require_parent_authentication": False, "offline_behavior": 0,
+            "timezone_offset_minutes": 60, "global_daily_limit_minutes": 120,
+            "weekday_limit_minutes": [65535] * 7,
+            "quiet_hours_enabled": False, "quiet_hours_start_minute": 0,
+            "quiet_hours_end_minute": 0, "title_rule_mode": 0, "title_rules": [],
+        }
+        with api.database() as db:
+            db.execute(
+                "INSERT INTO policies(device_id,revision,body_json,updated_at) VALUES(?,?,?,?)",
+                (self.DEVICE_ID, 1, json.dumps(policy), now),
+            )
+        status, received, *_ = self.secure_call(
+            "policy", 3, {"access_token": token}, credential_digest,
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(received["revision"], 1)
+        self.assertEqual(received["device_id"], self.DEVICE_ID)
+        self.assertGreaterEqual(received["server_time"], now)
+
+        ack = {"access_token": token, "revision": 1,
+               "status": "accepted", "message": "validated"}
+        status, result, *_ = self.secure_call(
+            "policy-ack", 4, ack, credential_digest,
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(result["accepted"])
+        with api.database() as db:
+            row = db.execute(
+                "SELECT status,message FROM policy_acks WHERE device_id=? AND revision=1",
+                (self.DEVICE_ID,),
+            ).fetchone()
+        self.assertEqual((row["status"], row["message"]), ("accepted", "validated"))
+
+    def test_encrypted_events_batch_is_persisted_idempotently(self):
+        credential_digest, token = self._enroll_and_authenticate()
+        event = {
+            "event_id": "evt-integration-1", "sequence": 1,
+            "timestamp": int(time.time()), "type": "usage.started",
+            "payload": {"source": "integration-test"},
+        }
+        payload = {"access_token": token, "events": [event]}
+        status, result, *_ = self.secure_call("events", 3, payload, credential_digest)
+        self.assertEqual(status, 200)
+        self.assertEqual(result["accepted"], 1)
+        self.assertEqual(result["received"], 1)
+
+        status, duplicate, *_ = self.secure_call("events", 4, payload, credential_digest)
+        self.assertEqual(status, 200)
+        self.assertEqual(duplicate["accepted"], 0)
+        self.assertEqual(duplicate["received"], 1)
+        with api.database() as db:
+            rows = db.execute(
+                "SELECT event_id,event_type FROM events WHERE device_id=?",
+                (self.DEVICE_ID,),
+            ).fetchall()
+        self.assertEqual([(row["event_id"], row["event_type"]) for row in rows],
+                         [("evt-integration-1", "usage.started")])
+
 if __name__ == "__main__":
     unittest.main()
