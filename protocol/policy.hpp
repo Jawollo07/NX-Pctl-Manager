@@ -10,7 +10,6 @@ namespace nxpctl::policy {
 inline constexpr std::uint32_t PolicyProtocolVersion = 1;
 inline constexpr std::uint32_t PolicySchemaVersion = 1;
 inline constexpr std::size_t DeviceIdCapacity = 65; // 64 bytes plus NUL.
-inline constexpr std::size_t MaxTitleRules = 64;
 inline constexpr std::uint16_t NoDailyLimit = 0xFFFF;
 inline constexpr std::uint16_t MaxDailyLimitMinutes = 1440;
 inline constexpr std::int64_t MaxPolicyLifetimeSeconds = 30LL * 24 * 60 * 60;
@@ -18,23 +17,7 @@ inline constexpr std::int64_t AllowedClockSkewSeconds = 300;
 
 enum class OfflineBehavior : std::uint8_t {
     KeepLastVerified = 0,
-    BlockNewTitles = 1,
-    BlockAllTitles = 2,
-};
-
-enum class TitleRuleMode : std::uint8_t {
-    AllowAll = 0,
-    AllowListedOnly = 1,
-};
-
-enum class TitleRuleAction : std::uint8_t {
-    Allow = 0,
-    Block = 1,
-};
-
-struct TitleRule {
-    std::uint64_t title_id = 0;
-    TitleRuleAction action = TitleRuleAction::Block;
+    BlockAllUsage = 1,
 };
 
 struct Policy {
@@ -63,9 +46,6 @@ struct Policy {
     std::uint16_t quiet_hours_start_minute = 0;
     std::uint16_t quiet_hours_end_minute = 0;
 
-    TitleRuleMode title_rule_mode = TitleRuleMode::AllowAll;
-    std::uint16_t title_rule_count = 0;
-    TitleRule title_rules[MaxTitleRules]{};
 };
 
 enum class ValidationError : std::uint8_t {
@@ -84,9 +64,6 @@ enum class ValidationError : std::uint8_t {
     InvalidTimezone,
     InvalidDailyLimit,
     InvalidQuietHours,
-    TooManyTitleRules,
-    InvalidTitleRule,
-    DuplicateTitleRule,
 };
 
 struct ValidationContext {
@@ -157,8 +134,7 @@ struct ValidationContext {
 
     switch (candidate.offline_behavior) {
         case OfflineBehavior::KeepLastVerified:
-        case OfflineBehavior::BlockNewTitles:
-        case OfflineBehavior::BlockAllTitles:
+        case OfflineBehavior::BlockAllUsage:
             break;
         default:
             return ValidationError::InvalidOfflineBehavior;
@@ -180,26 +156,6 @@ struct ValidationContext {
             || candidate.quiet_hours_end_minute >= 1440
             || candidate.quiet_hours_start_minute == candidate.quiet_hours_end_minute)) {
         return ValidationError::InvalidQuietHours;
-    }
-
-    if (candidate.title_rule_mode != TitleRuleMode::AllowAll
-        && candidate.title_rule_mode != TitleRuleMode::AllowListedOnly) {
-        return ValidationError::InvalidTitleRule;
-    }
-    if (candidate.title_rule_count > MaxTitleRules) {
-        return ValidationError::TooManyTitleRules;
-    }
-    for (std::size_t i = 0; i < candidate.title_rule_count; ++i) {
-        const auto& rule = candidate.title_rules[i];
-        if (rule.title_id == 0
-            || (rule.action != TitleRuleAction::Allow && rule.action != TitleRuleAction::Block)) {
-            return ValidationError::InvalidTitleRule;
-        }
-        for (std::size_t j = 0; j < i; ++j) {
-            if (candidate.title_rules[j].title_id == rule.title_id) {
-                return ValidationError::DuplicateTitleRule;
-            }
-        }
     }
 
     return ValidationError::None;
