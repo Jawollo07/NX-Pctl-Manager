@@ -35,7 +35,7 @@ Operations:
 | Enrollment | `/v1/secure/{id}/enroll` | `{"enrollment_code":"..."}` |
 | Authentication | `/v1/secure/{id}/auth` | `{"device_credential":"..."}` |
 | Policy | `/v1/secure/{id}/policy` | `{"access_token":"..."}` |
-| Heartbeat | `/v1/secure/{id}/heartbeat` | Token plus heartbeat fields |
+| Heartbeat | `/v1/secure/{id}/heartbeat` | Token, uptime/policy revision and optional global daily usage (`global_usage_day_key`, `global_usage_active_seconds`) |
 | Events | `/v1/secure/{id}/events` | Token plus `events` array |
 | Policy ack | `/v1/secure/{id}/policy-ack` | Token plus revision/status/message |
 
@@ -127,7 +127,7 @@ For device API paths:
 
 ## Persistence and current limitations
 
-SQLite stores device credential hashes, enrollment-code hashes, access-token
+The encrypted heartbeat stores the latest reported global daily usage day key and active seconds in `devices.last_heartbeat_json`; it is a single console-wide counter, not a per-title breakdown. The Switch sends it on the normal heartbeat cadence (about once per minute) only after the trusted day is available.\n\nSQLite stores device credential hashes, enrollment-code hashes, access-token
 hashes, policies, events, acknowledgements and secure replay identifiers.
 Raw credentials, invitation codes and bearer tokens are never stored.
 Protect and back up the database directory.
