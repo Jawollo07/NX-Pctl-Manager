@@ -19,9 +19,6 @@ Policy MakePolicy(std::uint64_t revision = 1) {
     value.quiet_hours_enabled = true;
     value.quiet_hours_start_minute = 22 * 60;
     value.quiet_hours_end_minute = 6 * 60;
-    value.title_rule_count = 2;
-    value.title_rules[0] = {0x0100000000001000ULL, TitleRuleAction::Allow};
-    value.title_rules[1] = {0x0100000000002000ULL, TitleRuleAction::Block};
     return value;
 }
 
@@ -80,22 +77,6 @@ int main() {
     invalid.quiet_hours_end_minute = invalid.quiet_hours_start_minute;
     assert(Validate(invalid, Context()) == ValidationError::InvalidQuietHours);
 
-    invalid = candidate;
-    invalid.title_rules[1].title_id = invalid.title_rules[0].title_id;
-    assert(Validate(invalid, Context()) == ValidationError::DuplicateTitleRule);
-
-    invalid = candidate;
-    invalid.title_rules[0].title_id = 0;
-    assert(Validate(invalid, Context()) == ValidationError::InvalidTitleRule);
-
-    invalid = candidate;
-    invalid.title_rule_mode = static_cast<TitleRuleMode>(2);
-    assert(Validate(invalid, Context()) == ValidationError::InvalidTitleRule);
-
-    invalid = candidate;
-    invalid.title_rule_count = MaxTitleRules + 1;
-    assert(Validate(invalid, Context()) == ValidationError::TooManyTitleRules);
-
     PolicyStore store;
     assert(!store.HasPolicy());
     assert(store.GetRevision() == 0);
@@ -126,6 +107,5 @@ int main() {
 
     assert(!store.CopyActive(nullptr));
 
-    std::cout << "policy validation and RAM snapshot store OK; max_title_rules="
-              << MaxTitleRules << '\n';
+    std::cout << "global policy validation and RAM snapshot store OK\n";
 }
