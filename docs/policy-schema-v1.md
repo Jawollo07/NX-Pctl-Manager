@@ -2,8 +2,8 @@
 
 This document defines the exact JSON representation accepted by
 `protocol/policy_json.hpp`. It is a transport-decoding contract, not an
-authentication mechanism. A decoded policy is untrusted until a future
-authenticated transport and integrity-verification layer accepts it.
+authentication mechanism. A decoded policy is untrusted until the encrypted
+transport verifies its integrity. The model contains only console-wide rules.
 
 ## Rules
 
@@ -44,8 +44,6 @@ authenticated transport and integrity-verification layer accepts it.
 | `quiet_hours_enabled` | boolean | Enable quiet hours |
 | `quiet_hours_start_minute` | integer | Minute after local midnight |
 | `quiet_hours_end_minute` | integer | Minute after local midnight |
-| `title_rule_mode` | integer | 0 = allow-all; 1 = allow-list-only |
-| `title_rules` | array | Title allow/block rules |
 
 The parser performs structural and primitive-range decoding. The policy validator
 then checks device binding, version compatibility, revision monotonicity,
