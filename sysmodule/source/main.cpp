@@ -179,7 +179,7 @@ namespace ams {
             os::StartThread(std::addressof(g_supervisor_thread));
         }
 
-        void PersistUsageSnapshot(u64 monotonic_seconds) {
+        void PersistUsageSnapshot(u64 monotonic_seconds, bool force = false) {
             if (!g_usage_storage_ready || !g_usage_tracker.HasBaseline()) return;
             const s64 day_key = g_usage_tracker.GetLocalDayKey();
             const u64 active_seconds = g_usage_tracker.GetActiveSeconds();
@@ -193,7 +193,7 @@ namespace ams {
                 return;
             }
             g_usage_persist_dirty = true;
-            if (g_last_usage_persist_seconds != 0 &&
+            if (!force && g_last_usage_persist_seconds != 0 &&
                 monotonic_seconds >= g_last_usage_persist_seconds &&
                 monotonic_seconds - g_last_usage_persist_seconds < 60)
                 return;
@@ -304,7 +304,7 @@ namespace ams {
             os::DestroyThread(std::addressof(g_usage_monitor_thread));
             g_usage_monitor_thread_created = false;
             g_usage_monitor_state = 0;
-            PersistUsageSnapshot(GetMonotonicSeconds());
+            PersistUsageSnapshot(GetMonotonicSeconds(), true);
         }
 
         void StopSupervisorThread() {
