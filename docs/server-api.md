@@ -100,7 +100,7 @@ Create a JSON file matching [policy-schema-v1.md](policy-schema-v1.md), then:
 
 ```sh
 python -m server.cli set-policy --device-id switch-livingroom --file policy.json
-python -m server.cli list-devices
+python -m server.cli list-devices  # includes the latest encrypted heartbeat and global usage snapshot
 python -m server.cli revoke-device --device-id switch-livingroom
 ```
 
