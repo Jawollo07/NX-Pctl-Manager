@@ -325,6 +325,29 @@ bool IsEnrolled() {
            g_enrollment_in_progress.load(std::memory_order_acquire);
 }
 
+bool GetTrustedLocalUnixTime(u64 monotonic_seconds, s64* out_local_time) {
+    if (out_local_time == nullptr) return false;
+
+    trusted_clock::Anchor anchor{};
+    for (unsigned attempt = 0; attempt < 3; ++attempt) {
+        const u32 before = g_clock_anchor_sequence.load(std::memory_order_acquire);
+        if ((before & 1u) != 0) continue;
+
+        anchor.valid = g_clock_anchor_valid.load(std::memory_order_relaxed);
+        anchor.server_time = g_clock_server_time_anchor.load(std::memory_order_relaxed);
+        anchor.not_after = g_clock_not_after.load(std::memory_order_relaxed);
+        anchor.monotonic_seconds = g_clock_monotonic_anchor.load(std::memory_order_relaxed);
+        anchor.timezone_offset_minutes =
+            g_clock_timezone_offset_minutes.load(std::memory_order_relaxed);
+
+        const u32 after = g_clock_anchor_sequence.load(std::memory_order_acquire);
+        if (before == after && (after & 1u) == 0) {
+            return trusted_clock::GetLocalUnixTime(anchor, monotonic_seconds, out_local_time);
+        }
+    }
+    return false;
+}
+
 bool GetTrustedLocalDayKey(u64 monotonic_seconds, s64* out_day_key) {
     if (out_day_key == nullptr) return false;
 
