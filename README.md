@@ -31,10 +31,13 @@ source revisions and commands.
 ## Current implementation status
 
 The module currently provides encrypted HTTP synchronization, local IPC,
-credential storage scaffolding, and read-only global application activity
-monitoring through PGL. Global playtime accounting is still RAM-only and is
-not yet policy enforcement. Hardware behavior, recovery, persistence and
-enforcement remain unfinished and must not be assumed safe for installation.
+credential storage, and read-only global application activity monitoring
+through PGL. Global daily playtime is persisted in alternating device-key-
+derived AES-GCM records in the sysmodule's own save data. Interrupted writes
+preserve the newest valid slot; a trusted clock regression cannot erase a
+newer saved day. This is not policy enforcement. Hardware behavior,
+suspend/resume accounting, recovery and enforcement remain unfinished and
+must not be assumed safe for installation.
 
 The CI workflow runs backend tests, shared C++ protocol/accounting tests, and
 an experimental Stratosphere package build. A successful CI build is not
