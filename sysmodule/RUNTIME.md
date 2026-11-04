@@ -42,7 +42,9 @@ means an application is active. PGL's documented no-running-application result
 sample is skipped. The monitor does not use the returned PID as a key or retain
 it. It passes only an active/inactive boolean to the global daily tracker.
 The tracker therefore counts all games/applications together and has no
-per-title usage buckets.
+per-title usage buckets. Exact HOME-menu, overlay and suspend behavior still
+requires hardware validation; the implementation counts only what PGL reports
+as an active application.
 
 The trusted local-day key comes from the authenticated policy `server_time`
 and the policy's fixed UTC offset. The server timestamp is anchored to
@@ -92,8 +94,9 @@ daily console counter. It consumes only an application-active boolean,
 monotonic seconds and a trusted local-day key. It does not receive, store or
 distinguish title IDs. The dedicated PGL monitor thread feeds it independently
 of network synchronization. Switching applications does not interrupt the
-counter; HOME-menu/idle time is excluded. Started minutes round up, forward
-day transitions reset the daily bucket, backward clock corrections do not
+counter. Time is counted only while PGL reports an active application;
+HOME-menu/overlay behavior requires hardware validation. Started minutes
+round up, forward day transitions reset the daily bucket, backward clock corrections do not
 erase accumulated time, and observation gaps over two seconds are ignored.
 The counter is RAM-only and is not enforcement.
 
