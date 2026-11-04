@@ -69,9 +69,12 @@ trusted day restores its total; a later trusted day starts at zero; a trusted
 clock earlier than the stored day is rejected rather than erasing usage.
 Snapshots are attempted at most once per minute while dirty and are force-flushed
 on orderly module shutdown. A sudden power loss can therefore lose up to about
-one minute of newly accumulated usage. If save-data mounting, key derivation or
-writes fail, monitoring remains RAM-only for that session and persistence is
-not claimed. Started minutes round up, forward local-day transitions reset the
+one minute of newly accumulated usage. If save-data mounting or key derivation fails, monitoring remains RAM-only
+for that session and persistence is not claimed. Failed writes leave the newest
+valid slot intact and are retried at the next persistence interval. If both
+existing slots are present but fail authentication/validation, the monitor
+reports storage error state `2` and refuses to overwrite them or silently
+reset the counter. Started minutes round up, forward local-day transitions reset the
 bucket, gaps longer than two seconds are ignored, and backward clock corrections
 do not erase an accumulated counter. HIPC command 65002 exposes monitor state,
 global active seconds and daily minutes. Neither monitoring nor the evaluator
