@@ -75,6 +75,23 @@ public:
         return ObserveResult::Accumulated;
     }
 
+    // Restore a persisted daily total without charging time across a reboot.
+    // The first post-boot observation is a fresh inactive baseline; monitoring
+    // starts counting only after a subsequent confirmed active interval.
+    [[nodiscard]] bool Restore(
+        std::int64_t local_day_key,
+        std::uint64_t active_seconds,
+        std::uint64_t monotonic_seconds) noexcept {
+        if (local_day_key < 0 || active_seconds > MaxPersistedActiveSeconds)
+            return false;
+        initialized_ = true;
+        previous_application_was_active_ = false;
+        last_monotonic_seconds_ = monotonic_seconds;
+        local_day_key_ = local_day_key;
+        active_seconds_ = active_seconds;
+        return true;
+    }
+
     void Reset() noexcept {
         initialized_ = false;
         previous_application_was_active_ = false;
