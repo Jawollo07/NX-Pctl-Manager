@@ -74,4 +74,28 @@ struct Decision {
     return {true, DecisionReason::Allowed};
 }
 
+
+[[nodiscard]] inline Decision EvaluateAtLocalUnixTime(
+    const Policy& policy,
+    std::int64_t local_unix_time,
+    std::uint16_t daily_usage_minutes,
+    bool offline,
+    bool parent_authenticated) noexcept {
+    if (local_unix_time < 0) {
+        return {false, DecisionReason::InvalidContext};
+    }
+    const std::int64_t local_day = local_unix_time / 86400;
+    // 1970-01-01 was Thursday; Monday is index zero.
+    const auto weekday = static_cast<std::uint8_t>((local_day + 3) % 7);
+    const auto minute_of_day = static_cast<std::uint16_t>(
+        (local_unix_time % 86400) / 60);
+    EvaluationContext context{};
+    context.weekday = weekday;
+    context.minute_of_day = minute_of_day;
+    context.daily_usage_minutes = daily_usage_minutes;
+    context.offline = offline;
+    context.parent_authenticated = parent_authenticated;
+    return Evaluate(policy, context);
+}
+
 } // namespace nxpctl::policy
