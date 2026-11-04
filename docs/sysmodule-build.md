@@ -71,9 +71,10 @@ run on the same x86_64 runner.
 
 ## Scope and safety
 
-The current module is only a build/bootstrap skeleton. It does not yet provide
-network communication, local IPC, policy enforcement, PCTL writes, device
-monitoring or recovery integration.
+The current module includes encrypted network synchronization, local IPC, and
+read-only global application-activity monitoring through PGL for daily playtime.
+It does not yet enforce policies, write PCTL state, persist daily usage across
+restarts, or implement the hardware recovery path.
 
 The NPDM title ID in `nx_pctl_manager.json` is a provisional development
 placeholder. Do not install the NSP on hardware until the title ID, NPDM
