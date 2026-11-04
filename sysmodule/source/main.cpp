@@ -105,7 +105,10 @@ namespace ams {
                 ++uptime_seconds;
                 if (sync_countdown == 0) {
                     if (::nxpctl::sync::IsConfigured()) {
-                        ::nxpctl::sync::RunCycle(\n                            g_policy_store, uptime_seconds,\n                            g_usage_day_key_valid ? g_usage_local_day_key : -1,\n                            g_usage_active_seconds);
+                        ::nxpctl::sync::RunCycle(
+                            g_policy_store, uptime_seconds,
+                            g_usage_day_key_valid ? g_usage_local_day_key : -1,
+                            g_usage_active_seconds);
                     }
                     sync_countdown = 60;
                 }
