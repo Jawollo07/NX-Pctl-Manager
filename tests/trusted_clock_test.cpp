@@ -9,23 +9,17 @@ int main() {
     using nxpctl::trusted_clock::GetLocalDayKey;
 
     // UTC day boundary follows the server anchor plus monotonic elapsed time.
-    Anchor utc{.server_time = 86'399, .not_after = 200'000,
-               .monotonic_seconds = 500, .timezone_offset_minutes = 0,
-               .valid = true};
+    Anchor utc{86'399, 200'000, 500, 0, true};
     std::int64_t day = -1;
     assert(GetLocalDayKey(utc, 500, &day) && day == 0);
     assert(GetLocalDayKey(utc, 501, &day) && day == 1);
 
     // The configured fixed policy offset, not the console wall clock, decides
     // the local day boundary.
-    Anchor cet{.server_time = 82'800, .not_after = 200'000,
-               .monotonic_seconds = 100, .timezone_offset_minutes = 60,
-               .valid = true};
+    Anchor cet{82'800, 200'000, 100, 60, true};
     assert(GetLocalDayKey(cet, 100, &day) && day == 1);
 
-    Anchor west{.server_time = 86'399, .not_after = 200'000,
-                .monotonic_seconds = 0, .timezone_offset_minutes = -60,
-                .valid = true};
+    Anchor west{86'399, 200'000, 0, -60, true};
     assert(GetLocalDayKey(west, 0, &day) && day == 0);
 
     // An expired policy, regressed monotonic clock, invalid anchor or null
