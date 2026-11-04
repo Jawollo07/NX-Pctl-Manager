@@ -134,3 +134,16 @@ Protect and back up the database directory.
 
 The Python backend now implements encrypted device routes and replay
 protection. The Switch-side AES-GCM/HKDF implementation, HTTP client, secure enrollment, token refresh and worker integration are present in this branch. Remaining gates include automated cross-language known-answer/fixture coverage, real-device transport and save-data validation, credential recovery, and policy enforcement. Until those gates pass, do not expose the API publicly over HTTP.
+
+
+## Backend tests
+
+Run the backend regression suite from the repository root:
+
+```sh
+python -m pip install -r server/requirements.txt
+python -m unittest discover -s server/tests -v
+```
+
+The GitHub Actions workflow `.github/workflows/server-tests.yml` runs the same
+suite when backend files change on the migration branch or in a pull request.
