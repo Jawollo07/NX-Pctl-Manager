@@ -10,5 +10,6 @@ namespace nxpctl::sync {
     bool IsConfigured();
     bool IsEnrolled();
     void RunCycle(policy::PolicyStore& store, u64 uptime_seconds);
+    bool GetTrustedLocalDayKey(u64 monotonic_seconds, s64* out_day_key);
     void Clear();
 }
