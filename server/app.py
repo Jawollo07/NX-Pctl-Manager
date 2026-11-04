@@ -47,7 +47,6 @@ POLICY_FIELDS = {
     "timezone_offset_minutes", "global_daily_limit_minutes",
     "weekday_limit_minutes", "quiet_hours_enabled",
     "quiet_hours_start_minute", "quiet_hours_end_minute",
-    "title_rule_mode", "title_rules",
 }
 
 
@@ -121,7 +120,7 @@ def _validate_policy(policy: Any, expected_device_id: str | None = None) -> dict
         "protocol_version", "schema_version", "revision", "issued_at",
         "not_after", "server_time", "offline_behavior",
         "timezone_offset_minutes", "global_daily_limit_minutes",
-        "quiet_hours_start_minute", "quiet_hours_end_minute", "title_rule_mode",
+        "quiet_hours_start_minute", "quiet_hours_end_minute",
     )
     if any(not _is_int(obj[name]) for name in integer_fields):
         raise HTTPException(422, "policy integer field has wrong type")
@@ -148,7 +147,7 @@ def _validate_policy(policy: Any, expected_device_id: str | None = None) -> dict
         raise HTTPException(422, "policy is not currently valid")
     if obj["not_after"] - obj["issued_at"] > 7 * 24 * 60 * 60:
         raise HTTPException(422, "policy lifetime exceeds seven days")
-    if obj["offline_behavior"] not in (0, 1, 2):
+    if obj["offline_behavior"] not in (0, 1):
         raise HTTPException(422, "invalid offline_behavior")
     if not -840 <= obj["timezone_offset_minutes"] <= 840:
         raise HTTPException(422, "invalid timezone_offset_minutes")
@@ -167,23 +166,6 @@ def _validate_policy(policy: Any, expected_device_id: str | None = None) -> dict
             raise HTTPException(422, "invalid quiet-hours interval")
     elif not (0 <= start <= 1439 and 0 <= end <= 1439):
         raise HTTPException(422, "quiet-hours minute out of range")
-    if obj["title_rule_mode"] not in (0, 1):
-        raise HTTPException(422, "invalid title_rule_mode")
-    rules = obj["title_rules"]
-    if not isinstance(rules, list) or len(rules) > 64:
-        raise HTTPException(422, "title_rules must contain at most 64 entries")
-    seen: set[int] = set()
-    for rule in rules:
-        if not isinstance(rule, dict) or set(rule) != {"title_id", "action"}:
-            raise HTTPException(422, "each title rule needs title_id and action only")
-        title_id, action = rule["title_id"], rule["action"]
-        if not _is_int(title_id) or not 1 <= title_id <= 0xFFFFFFFFFFFFFFFF:
-            raise HTTPException(422, "invalid title_id")
-        if not _is_int(action) or action not in (0, 1):
-            raise HTTPException(422, "invalid title rule action")
-        if title_id in seen:
-            raise HTTPException(422, "duplicate title_id")
-        seen.add(title_id)
     return obj
 
 
