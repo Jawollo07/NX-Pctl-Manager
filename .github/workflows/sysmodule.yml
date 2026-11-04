@@ -104,8 +104,10 @@ jobs:
               done
               make -C deps/libnx -j"$(nproc)"
               make -C deps/libnx install
-              test -f "$DEVKITPRO/libnx/include/switch/services/pgl.h"
-              grep -n "pglGetApplicationProcessId\\|pglGetRunningApplicationProcessId" "$DEVKITPRO/libnx/include/switch/services/pgl.h"
+              test -f "$DEVKITPRO/libnx/include/switch/services/fs.h"
+              grep -q "FsStorageForBatchRead" "$DEVKITPRO/libnx/include/switch/services/fs.h"
+              test -f /work/atmosphere/libraries/libstratosphere/include/stratosphere/pgl/pgl_shell_api.hpp
+              grep -q "GetRunningApplicationProcessId" /work/atmosphere/libraries/libstratosphere/include/stratosphere/pgl/pgl_shell_api.hpp
               make -C sysmodule ATMOSPHERE_ROOT=/work/atmosphere nx_release
             '
 
