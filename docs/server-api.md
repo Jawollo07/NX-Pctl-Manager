@@ -3,8 +3,7 @@
 The backend implements the server side of the device protocol. All device
 operations use an authenticated encrypted envelope over HTTP:
 `POST /v1/secure/{device_id}/{operation}`. Legacy plaintext device routes are
-disabled by default. The Switch sysmodule does not yet contain the matching
-network client, so the end-to-end system is not yet ready for public use.
+disabled by default. The headless Switch sysmodule contains the matching HTTP transport, AES-GCM/HKDF envelope client, enrollment/authentication flow, token refresh, heartbeat, policy retrieval and acknowledgement. The end-to-end system is still experimental: cross-language fixtures, firmware-specific hardware validation, credential recovery and enforcement gates must pass before public deployment.
 
 ## Run locally
 
@@ -134,7 +133,4 @@ Raw credentials, invitation codes and bearer tokens are never stored.
 Protect and back up the database directory.
 
 The Python backend now implements encrypted device routes and replay
-protection. The Switch-side AES-GCM/HKDF implementation, HTTP client,
-cross-language known-answer tests, secure credential provisioning, token
-refresh, policy scheduling and worker integration remain outstanding. Until
-those are completed and tested, do not expose the API publicly over HTTP.
+protection. The Switch-side AES-GCM/HKDF implementation, HTTP client, secure enrollment, token refresh and worker integration are present in this branch. Remaining gates include automated cross-language known-answer/fixture coverage, real-device transport and save-data validation, credential recovery, and policy enforcement. Until those gates pass, do not expose the API publicly over HTTP.
