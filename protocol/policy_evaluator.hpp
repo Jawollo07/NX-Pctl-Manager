@@ -11,23 +11,18 @@ enum class DecisionReason : std::uint8_t {
     Allowed = 0,
     PolicyDisabled,
     ParentAuthenticationRequired,
-    OfflineBlockAll,
-    OfflineBlockNewTitle,
-    TitleBlocked,
-    TitleNotAllowListed,
+    OfflineBlockAllUsage,
     QuietHours,
     DailyLimitReached,
     InvalidContext,
 };
 
 struct EvaluationContext {
-    std::uint64_t title_id = 0;
     // Monday = 0 ... Sunday = 6, matching weekday_limit_minutes.
     std::uint8_t weekday = 0;
     std::uint16_t minute_of_day = 0;
     std::uint16_t daily_usage_minutes = 0;
     bool offline = false;
-    bool title_already_running = false;
     bool parent_authenticated = false;
 };
 
@@ -56,7 +51,7 @@ struct Decision {
 
 [[nodiscard]] inline Decision Evaluate(
     const Policy& policy, const EvaluationContext& context) noexcept {
-    if (context.weekday >= 7 || context.minute_of_day >= 1440 || context.title_id == 0) {
+    if (context.weekday >= 7 || context.minute_of_day >= 1440) {
         return {false, DecisionReason::InvalidContext};
     }
     if (!policy.enabled) return {true, DecisionReason::PolicyDisabled};
@@ -64,26 +59,9 @@ struct Decision {
         return {false, DecisionReason::ParentAuthenticationRequired};
     }
     if (context.offline) {
-        if (policy.offline_behavior == OfflineBehavior::BlockAllTitles) {
-            return {false, DecisionReason::OfflineBlockAll};
+        if (policy.offline_behavior == OfflineBehavior::BlockAllUsage) {
+            return {false, DecisionReason::OfflineBlockAllUsage};
         }
-        if (policy.offline_behavior == OfflineBehavior::BlockNewTitles
-            && !context.title_already_running) {
-            return {false, DecisionReason::OfflineBlockNewTitle};
-        }
-    }
-
-    bool explicitly_allowed = false;
-    for (std::size_t i = 0; i < policy.title_rule_count && i < MaxTitleRules; ++i) {
-        const auto& rule = policy.title_rules[i];
-        if (rule.title_id != context.title_id) continue;
-        if (rule.action == TitleRuleAction::Block) {
-            return {false, DecisionReason::TitleBlocked};
-        }
-        if (rule.action == TitleRuleAction::Allow) explicitly_allowed = true;
-    }
-    if (policy.title_rule_mode == TitleRuleMode::AllowListedOnly && !explicitly_allowed) {
-        return {false, DecisionReason::TitleNotAllowListed};
     }
 
     if (IsWithinQuietHours(policy, context.minute_of_day)) {
