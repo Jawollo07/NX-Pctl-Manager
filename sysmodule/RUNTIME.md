@@ -134,8 +134,9 @@ plaintext. The AES-GCM NIST vector and backend-matched HKDF vector are run
 before the first secure POST. Large transport buffers are static BSS
 allocations, not worker stack allocations.
 
-The NRO supplies the API hostname, device ID and one-time enrollment code
-through HIPC command 65001. The worker invokes the secure client to enroll,
+The provisioning client supplies the API hostname, device ID and one-time enrollment code
+through HIPC command 65001. No NRO or provisioning UI is shipped in this branch.
+The worker invokes the secure client to enroll,
 authenticate, refresh its short-lived token, send heartbeats, retrieve and
 validate policy snapshots, publish accepted snapshots to the RAM-only store,
 and acknowledge their revisions. The enrollment code is erased after a
