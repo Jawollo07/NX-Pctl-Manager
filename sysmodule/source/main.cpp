@@ -59,6 +59,8 @@ namespace ams {
         util::Atomic<u32> g_worker_restart_count;
         util::Atomic<u32> g_usage_monitor_state;
         util::Atomic<u64> g_usage_active_seconds;
+        util::Atomic<s64> g_usage_local_day_key;
+        util::Atomic<u32> g_usage_day_key_valid;
         util::Atomic<u32> g_usage_daily_minutes;
         ::nxpctl::policy::PolicyStore g_policy_store;
         ::nxpctl::usage::DailyUsageTracker g_usage_tracker;
@@ -103,7 +105,7 @@ namespace ams {
                 ++uptime_seconds;
                 if (sync_countdown == 0) {
                     if (::nxpctl::sync::IsConfigured()) {
-                        ::nxpctl::sync::RunCycle(g_policy_store, uptime_seconds);
+                        ::nxpctl::sync::RunCycle(\n                            g_policy_store, uptime_seconds,\n                            g_usage_day_key_valid ? g_usage_local_day_key : -1,\n                            g_usage_active_seconds);
                     }
                     sync_countdown = 60;
                 }
@@ -271,6 +273,8 @@ namespace ams {
                     g_usage_tracker.GetActiveSeconds() != previous_active_seconds) {
                     g_usage_persist_dirty = true;
                 }
+                g_usage_local_day_key = g_usage_tracker.GetLocalDayKey();
+                g_usage_day_key_valid = 1;
                 g_usage_active_seconds = g_usage_tracker.GetActiveSeconds();
                 g_usage_daily_minutes = g_usage_tracker.GetDailyUsageMinutes();
                 if (g_usage_persist_dirty)
