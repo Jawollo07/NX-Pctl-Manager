@@ -91,7 +91,7 @@ The NPDM title ID is currently configured as `0x420000000A3F1E7C`, but is not ye
 
 ## RAM-only policy model (validation stage)
 
-`protocol/policy.hpp` defines the fixed-size, versioned policy model and a bounded in-memory `PolicyStore`. It validates device binding, protocol/schema versions, strictly increasing revisions, trusted-server clock skew, expiry and maximum lifetime, offline behavior, fixed UTC offset, daily limits, quiet hours, and bounded/unique title rules. A candidate is validated again while holding the store lock against the currently active revision, then copied as one complete snapshot. Invalid or stale candidates leave the previous snapshot unchanged.
+`protocol/policy.hpp` defines the fixed-size, versioned policy model and a bounded in-memory `PolicyStore`. It validates device binding, protocol/schema versions, strictly increasing revisions, trusted-server clock skew, expiry and maximum lifetime, offline behavior, fixed UTC offset, daily limits, quiet hours, and global offline behavior. A candidate is validated again while holding the store lock against the currently active revision, then copied as one complete snapshot. Invalid or stale candidates leave the previous snapshot unchanged.
 
 The store uses fixed-size memory and performs no allocation, file I/O, database access, or network access. The HIPC status endpoint reports the store's active revision. The secure sync worker now feeds it only after encrypted response verification and schema/clock/device/revision validation. The model still does not enforce restrictions.
 
@@ -99,7 +99,7 @@ The store uses fixed-size memory and performs no allocation, file I/O, database 
 
 `protocol/policy_json.hpp` adds a fixed-buffer parser for schema v1. It accepts documents up to 16 KiB, uses a fixed token array, bounds nesting and string length, rejects unknown and duplicate root fields, requires every schema field, checks array lengths and integer ranges, and rejects malformed numbers and unsupported string escapes. No heap allocation is performed.
 
-The accepted schema uses printable ASCII strings without escapes, integer-only numeric fields, numeric enum values, exactly seven weekday limits, and title-rule objects containing exactly `title_id` and `action`. This deliberately strict subset must match the server serializer. JSON decoding is followed by the existing policy validator through `DecodeAndValidate`; only a fully decoded and structurally valid candidate is returned. The decoder does not authenticate its input; the secure sync worker verifies the AEAD envelope before calling it and publishes only a fully validated snapshot.
+The accepted schema uses printable ASCII strings without escapes, integer-only numeric fields, numeric enum values, exactly seven weekday limits, and rejects all title-specific fields as unknown. This deliberately strict subset must match the server serializer. JSON decoding is followed by the existing policy validator through `DecodeAndValidate`; only a fully decoded and structurally valid candidate is returned. The decoder does not authenticate its input; the secure sync worker verifies the AEAD envelope before calling it and publishes only a fully validated snapshot.
 
 ## Global daily usage accounting
 
@@ -121,7 +121,7 @@ UTC and offset day boundaries, expiry and monotonic regression.
 
 ## Deterministic policy evaluation (not enforcement)
 
-`protocol/policy_evaluator.hpp` evaluates a supplied immutable policy and context without Horizon calls or side effects. It covers parent-authentication gating, offline behavior, explicit title blocks, allow-all versus allow-list-only title modes, fixed-offset weekday budgets and quiet hours including intervals that cross midnight. Explicit title allows do not override global quiet hours, daily budgets, parent authentication or offline restrictions.
+`protocol/policy_evaluator.hpp` evaluates a supplied immutable policy and context without Horizon calls or side effects. It covers parent-authentication gating, offline behavior, global daily-limit decisions, fixed-offset weekday budgets and quiet hours including intervals that cross midnight. Explicit title allows do not override global quiet hours, daily budgets, parent authentication or offline restrictions.
 
 The evaluator is host-tested. It is not yet called by the sysmodule worker and does not observe application activity, track global playtime, mutate PCTL state, or block anything on a console. Monotonic accounting and a verified system integration point remain separate work.
 
