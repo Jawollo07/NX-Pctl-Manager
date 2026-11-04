@@ -178,6 +178,17 @@ bool Load(usage::Snapshot* out) {
     return true;
 }
 
+bool HasAnyRecord() {
+    for (unsigned slot = 0; slot < 2; ++slot) {
+        fs::FileHandle file{};
+        if (R_SUCCEEDED(fs::OpenFile(&file, SlotPath(slot), fs::OpenMode_Read))) {
+            fs::CloseFile(file);
+            return true;
+        }
+    }
+    return false;
+}
+
 bool Save(const usage::Snapshot& snapshot) {
     if (!snapshot.valid || snapshot.local_day_key < 0 ||
         snapshot.active_seconds > usage::MaxPersistedActiveSeconds) return false;
