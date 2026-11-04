@@ -27,6 +27,13 @@ inline constexpr std::uint64_t MaxPersistedActiveSeconds = 24 * 60 * 60;
     if (!a && !b) return nullptr;
     if (!a) return &second;
     if (!b) return &first;
+    if (first.sequence == second.sequence) {
+        // Equal generations are safe only when they describe the same state.
+        // Conflicting authenticated snapshots are ambiguous and must fail closed.
+        if (first.local_day_key != second.local_day_key ||
+            first.active_seconds != second.active_seconds) return nullptr;
+        return &first;
+    }
     return second.sequence > first.sequence ? &second : &first;
 }
 
