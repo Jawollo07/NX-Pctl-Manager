@@ -34,41 +34,23 @@ git clone https://github.com/Atmosphere-NX/Atmosphere.git /tmp/nxpctl-atmosphere
 git -C /tmp/nxpctl-atmosphere checkout 6b0c077b4c608a3a2ee712b8dc35fee87ceb62e8
 ```
 
-Build with a Bash-compatible shell. The commands below keep the libnx install
-inside this repository's ignored `toolchain/` directory; they do not replace
-the libnx installation under `/opt/devkitpro`:
+Build with a Bash-compatible shell. The helper verifies both pinned
+revisions, initializes the libnx submodule, installs libnx into this
+repository's ignored `toolchain/` directory, checks the required APIs, and
+builds the release package. It reuses the installed devkitA64 compiler and
+packaging utilities without changing the system libnx installation.
 
 ```sh
-SYSTEM_DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
-PROJECT_TOOLCHAIN="$PWD/toolchain"
-mkdir -p "$PROJECT_TOOLCHAIN"
-ln -sfn "$SYSTEM_DEVKITPRO/devkitA64" "$PROJECT_TOOLCHAIN/devkitA64"
-if [ -d "$SYSTEM_DEVKITPRO/portlibs" ]; then
-  ln -sfn "$SYSTEM_DEVKITPRO/portlibs" "$PROJECT_TOOLCHAIN/portlibs"
-fi
-export DEVKITPRO="$PROJECT_TOOLCHAIN"
-export DEVKITA64="$PROJECT_TOOLCHAIN/devkitA64"
-export PATH="$DEVKITA64/bin:$SYSTEM_DEVKITPRO/tools/bin:$PATH"
-
-make -C deps/libnx -j"$(nproc)"
-make -C deps/libnx install
-make -C sysmodule ATMOSPHERE_ROOT=/tmp/nxpctl-atmosphere nx_release
+export ATMOSPHERE_ROOT=/tmp/nxpctl-atmosphere
+bash scripts/build-sysmodule-local.sh
 ```
 
-The pinned libnx install is written to `$DEVKITPRO/libnx`, which now resolves
-to this project's `toolchain/libnx`. The existing devkitA64 compiler and
-packaging tools are reused read-only through their original installation.
-
-Before building the sysmodule, verify the two APIs from their respective
-pinned source trees: `FsStorageForBatchRead` comes from libnx, while the
-read-only `GetRunningApplicationProcessId` wrapper comes from Atmosphère's
-libstratosphere headers.
-
-```sh
-grep -n "FsStorageForBatchRead" "$DEVKITPRO/libnx/include/switch/services/fs.h"
-grep -n "GetRunningApplicationProcessId" \
-  /tmp/nxpctl-atmosphere/libraries/libstratosphere/include/stratosphere/pgl/pgl_shell_api.hpp
-```
+The script expects the Atmosphère checkout to be at revision
+`6b0c077b4c608a3a2ee712b8dc35fee87ceb62e8` and libnx at
+`b156b4774fb2df7b93402169509266da7547fc4c`. If devkitPro is installed in a
+non-standard location, set `DEVKITPRO` to that existing installation before
+running the script. All libnx install output stays under this repository's
+`toolchain/libnx`; `/opt/devkitpro` is not modified.
 
 The expected release package is:
 
