@@ -16,20 +16,14 @@ authenticated transport and integrity-verification layer accepts it.
   normalization; do not send escaped or non-ASCII device identifiers.
 - All numeric values are base-10 integers. Fractions and exponent notation are
   rejected. Booleans must be JSON `true` or `false`.
-- `offline_behavior`: 0 = keep last verified in RAM, 1 = block new titles,
-  2 = block all titles.
+- `offline_behavior`: 0 = continue using the last verified global policy;
+  1 = block all console usage while offline. No title-specific behavior exists.
 - `global_daily_limit_minutes` and each weekday entry are 0–1440, or 65535
   for no limit / inherit. Weekday order is Monday through Sunday.
 - `timezone_offset_minutes` is a fixed UTC offset in the range -840..840.
   IANA timezone identifiers and DST transitions are not part of schema v1.
 - Quiet-hours minute values are 0..1439. Equal start/end is invalid when
   quiet hours are enabled. A start later than end spans midnight.
-- `title_rule_mode`: 0 = allow all titles unless explicitly blocked; 1 = allow
-  only titles with an explicit allow rule (explicit block always wins).
-- `title_rules` is an array of at most 64 objects. Each object contains exactly
-  `title_id` (non-zero unsigned 64-bit integer) and `action` (0 = allow,
-  1 = block). Duplicate title IDs are rejected.
-
 ## Required fields
 
 | Field | JSON type | Meaning |
@@ -55,7 +49,8 @@ authenticated transport and integrity-verification layer accepts it.
 
 The parser performs structural and primitive-range decoding. The policy validator
 then checks device binding, version compatibility, revision monotonicity,
-timestamps, expiry, lifetime, enum ranges, schedule limits and duplicate rules.
+timestamps, expiry, lifetime, enum ranges and schedule limits. Title-related
+fields are unknown and rejected.
 
 No signature, MAC, token or credential is represented by this JSON document.
 Never log credentials or authentication envelopes. Do not publish decoded data
