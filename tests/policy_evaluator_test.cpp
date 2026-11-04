@@ -74,5 +74,21 @@ int main() {
     assert(Evaluate(p, At(7, 600)).reason == DecisionReason::InvalidContext);
     assert(Evaluate(p, At(0, 1440)).reason == DecisionReason::InvalidContext);
 
+    // Unix-time adapter derives Monday=0 weekday and minute-of-day from the
+    // authenticated local timestamp, without consulting a wall clock.
+    p.global_daily_limit_minutes = 120;
+    const std::int64_t monday_10am = 4 * 86400 + 10 * 3600;
+    assert(EvaluateAtLocalUnixTime(p, monday_10am, 119, false, false).allowed);
+    assert(EvaluateAtLocalUnixTime(p, monday_10am, 120, false, false).reason
+           == DecisionReason::DailyLimitReached);
+    p.quiet_hours_enabled = true;
+    p.quiet_hours_start_minute = 22 * 60;
+    p.quiet_hours_end_minute = 6 * 60;
+    const std::int64_t monday_23pm = 4 * 86400 + 23 * 3600;
+    assert(EvaluateAtLocalUnixTime(p, monday_23pm, 0, false, false).reason
+           == DecisionReason::QuietHours);
+    assert(EvaluateAtLocalUnixTime(p, -1, 0, false, false).reason
+           == DecisionReason::InvalidContext);
+
     std::cout << "policy evaluator OK; weekdays=7; quiet_hours=midnight-safe\n";
 }
