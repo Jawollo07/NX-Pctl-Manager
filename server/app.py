@@ -427,23 +427,30 @@ def get_policy(device_id: str, request: Request):
     return JSONResponse(content=policy, headers={"Cache-Control": "no-store"})
 
 
+def _validate_heartbeat_body(body: Any) -> dict[str, Any]:
+    obj = _require_object(body)
+    if len(obj) > 32:
+        raise HTTPException(422, "too many heartbeat fields")
+    for key in ("protocol_version", "uptime_seconds", "policy_revision",
+                "global_usage_day_key", "global_usage_active_seconds"):
+        if key in obj and (not _is_int(obj[key]) or obj[key] < 0):
+            raise HTTPException(422, f"invalid {key}")
+    if "global_usage_day_key" in obj and obj["global_usage_day_key"] > 0x7FFFFFFFFFFFFFFF:
+        raise HTTPException(422, "global_usage_day_key exceeds signed 64-bit range")
+    if "global_usage_active_seconds" in obj and obj["global_usage_active_seconds"] > 86400:
+        raise HTTPException(422, "global_usage_active_seconds exceeds one day")
+    if ("global_usage_day_key" in obj) != ("global_usage_active_seconds" in obj):
+        raise HTTPException(422, "global usage day and seconds must be supplied together")
+    if obj.get("protocol_version", PROTOCOL_VERSION) != PROTOCOL_VERSION:
+        raise HTTPException(422, "unsupported protocol_version")
+    return obj
+
+
 @app.post("/v1/devices/{device_id}/heartbeat")
 async def heartbeat(device_id: str, request: Request):
     if authenticated_device(request) != device_id:
         raise HTTPException(403, "device scope mismatch")
-    body = _require_object(await read_json(request))
-    if len(body) > 32:
-        raise HTTPException(422, "too many heartbeat fields")
-    for key in ("protocol_version", "uptime_seconds", "policy_revision",
-                "global_usage_day_key", "global_usage_active_seconds"):
-        if key in body and (not _is_int(body[key]) or body[key] < 0):
-            raise HTTPException(422, f"invalid {key}")
-    if "global_usage_active_seconds" in body and body["global_usage_active_seconds"] > 86400:
-        raise HTTPException(422, "global_usage_active_seconds exceeds one day")
-    if ("global_usage_day_key" in body) != ("global_usage_active_seconds" in body):
-        raise HTTPException(422, "global usage day and seconds must be supplied together")
-    if body.get("protocol_version", PROTOCOL_VERSION) != PROTOCOL_VERSION:
-        raise HTTPException(422, "unsupported protocol_version")
+    body = _validate_heartbeat_body(await read_json(request))
     serialized = json.dumps(body, separators=(",", ":"), ensure_ascii=True)
     with database() as db:
         db.execute(
