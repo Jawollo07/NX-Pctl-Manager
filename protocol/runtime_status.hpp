@@ -1,4 +1,4 @@
-// Shared versioned wire contract for the NRO <-> sysmodule HIPC endpoint.
+// Shared versioned wire contract for the external HIPC client <-> sysmodule HIPC endpoint.
 #pragma once
 
 #include <cstddef>
