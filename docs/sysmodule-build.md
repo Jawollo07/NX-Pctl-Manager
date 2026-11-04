@@ -34,20 +34,39 @@ git clone https://github.com/Atmosphere-NX/Atmosphere.git /tmp/nxpctl-atmosphere
 git -C /tmp/nxpctl-atmosphere checkout 6b0c077b4c608a3a2ee712b8dc35fee87ceb62e8
 ```
 
-Build with a Bash-compatible shell:
+Build with a Bash-compatible shell. The commands below keep the libnx install
+inside this repository's ignored `toolchain/` directory; they do not replace
+the libnx installation under `/opt/devkitpro`:
 
 ```sh
-export DEVKITPRO=/opt/devkitpro
-export PATH="$DEVKITPRO/devkitA64/bin:$DEVKITPRO/tools/bin:$PATH"
+SYSTEM_DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
+PROJECT_TOOLCHAIN="$PWD/toolchain"
+mkdir -p "$PROJECT_TOOLCHAIN"
+ln -sfn "$SYSTEM_DEVKITPRO/devkitA64" "$PROJECT_TOOLCHAIN/devkitA64"
+if [ -d "$SYSTEM_DEVKITPRO/portlibs" ]; then
+  ln -sfn "$SYSTEM_DEVKITPRO/portlibs" "$PROJECT_TOOLCHAIN/portlibs"
+fi
+export DEVKITPRO="$PROJECT_TOOLCHAIN"
+export DEVKITA64="$PROJECT_TOOLCHAIN/devkitA64"
+export PATH="$DEVKITA64/bin:$SYSTEM_DEVKITPRO/tools/bin:$PATH"
 
 make -C deps/libnx -j"$(nproc)"
 make -C deps/libnx install
 make -C sysmodule ATMOSPHERE_ROOT=/tmp/nxpctl-atmosphere nx_release
 ```
 
-If devkitPro is installed elsewhere, adjust `DEVKITPRO`. The pinned libnx
-install writes to `$DEVKITPRO/libnx`; use a dedicated development toolchain
-if you do not want to replace the system's currently installed libnx.
+The pinned libnx install is written to `$DEVKITPRO/libnx`, which now resolves
+to this project's `toolchain/libnx`. The existing devkitA64 compiler and
+packaging tools are reused read-only through their original installation.
+
+Before building the sysmodule, verify that the project-local headers expose
+the PGL API used by the runtime:
+
+```sh
+test -f "$DEVKITPRO/libnx/include/switch/services/pgl.h"
+grep -n "pglGetApplicationProcessId\|pglGetRunningApplicationProcessId" \
+  "$DEVKITPRO/libnx/include/switch/services/pgl.h"
+```
 
 The expected release package is:
 
@@ -55,8 +74,8 @@ The expected release package is:
 sysmodule/out/nintendo_nx_arm64_armv8a/release/nx_pctl_manager.nsp
 ```
 
-Generated `build/` and `out/` directories are local build products and must
-not be committed.
+Generated `build/`, `out/`, and `toolchain/` directories are local build
+products and must not be committed.
 
 ## CI build
 
@@ -66,8 +85,10 @@ The `sysmodule-build` workflow:
 2. compiles and runs the shared C++ protocol/accounting tests;
 3. initializes the pinned libnx submodule;
 4. checks out Atmosphère and switch-tools at their pinned revisions;
-5. builds the host packaging utilities and the Stratosphere module;
-6. verifies and uploads the experimental NSP artifact.
+5. builds host packaging utilities outside the devkitPro container;
+6. creates a project-local toolchain directory in the container and installs
+   the pinned libnx there;
+7. builds, verifies and uploads the experimental NSP artifact.
 
 The packaging utilities are built outside the devkitPro container because
 the devkitPro package endpoint may be unavailable to GitHub-hosted runners.
