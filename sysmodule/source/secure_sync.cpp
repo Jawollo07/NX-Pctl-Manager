@@ -2,6 +2,7 @@
 #include "secure_http_client.hpp"
 #include "credential_store.hpp"
 #include "../../protocol/policy_json.hpp"
+#include "../../protocol/trusted_clock.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -24,7 +25,19 @@ namespace {
     char g_access_token[257]{};
     u32 g_cycles_since_auth = AuthRefreshCycles;
     bool g_persistence_pending = false;
+    std::atomic<bool> g_clock_anchor_valid{false};
+    std::atomic<s64> g_clock_server_time_anchor{0};
+    std::atomic<s64> g_clock_not_after{0};
+    std::atomic<u64> g_clock_monotonic_anchor{0};
+    std::atomic<s16> g_clock_timezone_offset_minutes{0};
     char g_response[ResponseCapacity];
+
+    u64 GetMonotonicSeconds() {
+        const s64 frequency = os::GetSystemTickFrequency();
+        const s64 ticks = os::GetSystemTick().GetInt64Value();
+        if (frequency <= 0 || ticks < 0) return 0;
+        return static_cast<u64>(ticks / frequency);
+    }
 
     class Guard {
     public:
@@ -210,7 +223,22 @@ namespace {
         if (policy::json::DecodeAndValidate(
                 g_response, response_size, context, &candidate) != policy::json::Error::None)
             return false;
-        return store.TryReplace(candidate, context) == policy::ValidationError::None;
+        if (store.TryReplace(candidate, context) != policy::ValidationError::None)
+            return false;
+
+        // Anchor the backend-authenticated timestamp to the monotonic clock.
+        // Device wall-clock changes cannot move the usage day backwards.
+        const u64 monotonic_anchor = GetMonotonicSeconds();
+        if (monotonic_anchor == 0) {
+            g_clock_anchor_valid.store(false, std::memory_order_release);
+            return true;
+        }
+        g_clock_server_time_anchor.store(candidate.server_time, std::memory_order_relaxed);
+        g_clock_not_after.store(candidate.not_after, std::memory_order_relaxed);
+        g_clock_timezone_offset_minutes.store(candidate.timezone_offset_minutes, std::memory_order_relaxed);
+        g_clock_monotonic_anchor.store(monotonic_anchor, std::memory_order_relaxed);
+        g_clock_anchor_valid.store(true, std::memory_order_release);
+        return true;
     }
 
     void AcknowledgePolicy(u64 revision) {
@@ -231,6 +259,11 @@ namespace {
 }
 
 bool Initialize() {
+    g_clock_anchor_valid.store(false, std::memory_order_release);
+    g_clock_server_time_anchor.store(0, std::memory_order_relaxed);
+    g_clock_not_after.store(0, std::memory_order_relaxed);
+    g_clock_monotonic_anchor.store(0, std::memory_order_relaxed);
+    g_clock_timezone_offset_minutes.store(0, std::memory_order_relaxed);
     const bool storage_available = credential_store::Initialize();
     credential_store::CredentialData stored{};
     if (storage_available && credential_store::Load(&stored)) {
@@ -272,6 +305,22 @@ bool IsConfigured() {
 bool IsEnrolled() {
     return g_enrolled.load(std::memory_order_acquire) ||
            g_enrollment_in_progress.load(std::memory_order_acquire);
+}
+
+bool GetTrustedLocalDayKey(u64 monotonic_seconds, s64* out_day_key) {
+    if (out_day_key == nullptr ||
+        !g_clock_anchor_valid.load(std::memory_order_acquire)) {
+        return false;
+    }
+
+    trusted_clock::Anchor anchor{};
+    anchor.server_time = g_clock_server_time_anchor.load(std::memory_order_relaxed);
+    anchor.not_after = g_clock_not_after.load(std::memory_order_relaxed);
+    anchor.monotonic_seconds = g_clock_monotonic_anchor.load(std::memory_order_relaxed);
+    anchor.timezone_offset_minutes =
+        g_clock_timezone_offset_minutes.load(std::memory_order_relaxed);
+    anchor.valid = g_clock_anchor_valid.load(std::memory_order_acquire);
+    return trusted_clock::GetLocalDayKey(anchor, monotonic_seconds, out_day_key);
 }
 
 void RunCycle(policy::PolicyStore& store, u64 uptime_seconds) {
@@ -340,6 +389,11 @@ void Clear() {
     g_enrollment_in_progress.store(false, std::memory_order_release);
     g_persistence_pending = false;
     g_cycles_since_auth = AuthRefreshCycles;
+    g_clock_anchor_valid.store(false, std::memory_order_release);
+    g_clock_server_time_anchor.store(0, std::memory_order_relaxed);
+    g_clock_not_after.store(0, std::memory_order_relaxed);
+    g_clock_monotonic_anchor.store(0, std::memory_order_relaxed);
+    g_clock_timezone_offset_minutes.store(0, std::memory_order_relaxed);
 }
 
 }
