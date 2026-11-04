@@ -443,6 +443,18 @@ async def heartbeat(device_id: str, request: Request):
     return {"accepted": True, "server_time": int(time.time())}
 
 
+def _contains_title_reference(value: Any) -> bool:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if isinstance(key, str) and key.lower() in {"title_id", "title_ids", "title_name"}:
+                return True
+            if _contains_title_reference(child):
+                return True
+    elif isinstance(value, list):
+        return any(_contains_title_reference(item) for item in value)
+    return False
+
+
 @app.post("/v1/devices/{device_id}/events:batch")
 async def events_batch(device_id: str, request: Request):
     if authenticated_device(request) != device_id:
@@ -461,6 +473,12 @@ async def events_batch(device_id: str, request: Request):
                 raise HTTPException(422, "event fields must be event_id, sequence, timestamp, type, payload")
             event_id, sequence, timestamp = event["event_id"], event["sequence"], event["timestamp"]
             event_type, payload = event["type"], event["payload"]
+            if isinstance(event_type, str) and event_type.startswith("title."):
+                db.rollback()
+                raise HTTPException(422, "title-specific events are not supported")
+            if _contains_title_reference(payload):
+                db.rollback()
+                raise HTTPException(422, "title-specific event payloads are not supported")
             if not isinstance(event_id, str) or not 1 <= len(event_id) <= 64:
                 db.rollback(); raise HTTPException(422, "invalid event_id")
             if not _is_int(sequence) or not 0 <= sequence <= 0xFFFFFFFFFFFFFFFF or not _is_int(timestamp) or not 0 <= timestamp <= 0xFFFFFFFFFFFFFFFF:
