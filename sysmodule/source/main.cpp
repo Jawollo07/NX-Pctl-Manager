@@ -13,6 +13,7 @@
 #include "../../protocol/runtime_status.hpp"
 #include "../../protocol/worker_supervision.hpp"
 #include "../../protocol/policy.hpp"
+#include "../../protocol/policy_evaluator.hpp"
 #include "../../protocol/provisioning.hpp"
 #include "../../protocol/usage_tracker.hpp"
 #include "secure_sync.hpp"
@@ -28,7 +29,10 @@
         (sf::InBuffer request), (request)) \
     AMS_SF_METHOD_INFO(C, H, 65002, Result, GetUsageStatus, \
         (sf::Out<u32> out_monitor_state, sf::Out<u64> out_active_seconds, sf::Out<u32> out_daily_minutes), \
-        (out_monitor_state, out_active_seconds, out_daily_minutes))
+        (out_monitor_state, out_active_seconds, out_daily_minutes)) \
+    AMS_SF_METHOD_INFO(C, H, 65003, Result, GetPolicyDecision, \
+        (sf::Out<u32> out_valid, sf::Out<u32> out_allowed, sf::Out<u32> out_reason), \
+        (out_valid, out_allowed, out_reason))
 
 AMS_SF_DEFINE_INTERFACE(ams::nxpctl::impl, IRuntime, AMS_NXPCTL_I_RUNTIME_INTERFACE_INFO, 0x00000000)
 
@@ -62,6 +66,9 @@ namespace ams {
         util::Atomic<s64> g_usage_local_day_key;
         util::Atomic<u32> g_usage_day_key_valid;
         util::Atomic<u32> g_usage_daily_minutes;
+        util::Atomic<u32> g_policy_decision_valid;
+        util::Atomic<u32> g_policy_decision_allowed;
+        util::Atomic<u32> g_policy_decision_reason;
         ::nxpctl::policy::PolicyStore g_policy_store;
         ::nxpctl::usage::DailyUsageTracker g_usage_tracker;
         bool g_worker_thread_created = false;
@@ -285,6 +292,22 @@ namespace ams {
                 g_usage_daily_minutes = g_usage_tracker.GetDailyUsageMinutes();
                 if (g_usage_persist_dirty)
                     PersistUsageSnapshot(monotonic_seconds);
+
+                ::nxpctl::policy::Policy active_policy{};
+                s64 trusted_local_time = 0;
+                if (g_policy_store.CopyActive(&active_policy) &&
+                    ::nxpctl::sync::GetTrustedLocalUnixTime(
+                        monotonic_seconds, std::addressof(trusted_local_time))) {
+                    const auto decision =
+                        ::nxpctl::policy::EvaluateAtLocalUnixTime(
+                            active_policy, trusted_local_time,
+                            g_usage_daily_minutes, false, false);
+                    g_policy_decision_allowed = decision.allowed ? 1 : 0;
+                    g_policy_decision_reason = static_cast<u32>(decision.reason);
+                    g_policy_decision_valid = 1;
+                } else {
+                    g_policy_decision_valid = 0;
+                };
             }
             g_usage_monitor_state = 0;
         }
@@ -394,6 +417,16 @@ namespace ams {
                     *out_daily_minutes = g_usage_daily_minutes;
                     R_SUCCEED();
                 }
+                Result GetPolicyDecision(
+                    sf::Out<u32> out_valid,
+                    sf::Out<u32> out_allowed,
+                    sf::Out<u32> out_reason) {
+                    *out_valid = g_policy_decision_valid;
+                    *out_allowed = g_policy_decision_allowed;
+                    *out_reason = g_policy_decision_reason;
+                    R_SUCCEED();
+                }
+
         };
 
         static_assert(impl::IsIRuntime<RuntimeService>);
