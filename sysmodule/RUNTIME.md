@@ -23,7 +23,7 @@ The HIPC interface exposes read-only diagnostics, a global usage snapshot, and a
 4. [x] Add bounded policy validation and in-memory policy snapshots.
 5. [x] Add bounded schema-v1 JSON decoding and host tests.
 6. [x] Add bounded HTTP response framing parser and host tests. [x] Add authenticated message integrity verification and connect only verified full snapshots to the RAM store.
-7. Implement enforcement only after the required Horizon services, permissions, firmware compatibility, and recovery behavior have been validated. The pure evaluator is ready for integration, but PCTL interaction, suspend/resume accounting, persistent daily usage and the hardware recovery path remain unverified. Read-only PGL application-activity monitoring and the global RAM counter are now connected.
+7. Implement enforcement only after the required Horizon services, permissions, firmware compatibility, and recovery behavior have been validated. The pure evaluator is ready for integration, but PCTL interaction, suspend/resume accounting and the hardware recovery path remain unverified. Read-only PGL application-activity monitoring and encrypted persistent global daily usage are now connected.
 
 ## Application activity monitoring and PCTL integration
 
@@ -58,13 +58,25 @@ general command to install arbitrary per-title allow/block rules or to
 terminate a title based on this project's policy. No guessed PCTL IPC command
 IDs are used.
 
-The tracker is currently RAM-only: usage is lost if the sysmodule or console
-restarts. It rounds started minutes up, resets on a forward local-day
-transition, ignores gaps longer than two seconds and does not erase an
-accumulated counter on a backward clock correction. HIPC command 65002 exposes
-the monitor state, global active seconds and daily minutes. Neither monitoring
-nor the evaluator applies restrictions yet; persistent usage, suspend/resume
-accounting, real-device validation and enforcement remain separate gates.
+The tracker restores its global daily total from two alternating AES-128-GCM
+authenticated records in this sysmodule's own device save data. A device-derived
+SPL key encrypts the snapshot; the plaintext total and key are not written to
+storage. Each record includes a monotonically increasing sequence, trusted
+local-day key and active seconds. Writes replace the older slot and flush the
+complete record, leaving the newest valid slot available if power is lost
+mid-write. On boot, the newest authenticated snapshot is selected. A matching
+trusted day restores its total; a later trusted day starts at zero; a trusted
+clock earlier than the stored day is rejected rather than erasing usage.
+Snapshots are attempted at most once per minute while dirty and are force-flushed
+on orderly module shutdown. A sudden power loss can therefore lose up to about
+one minute of newly accumulated usage. If save-data mounting, key derivation or
+writes fail, monitoring remains RAM-only for that session and persistence is
+not claimed. Started minutes round up, forward local-day transitions reset the
+bucket, gaps longer than two seconds are ignored, and backward clock corrections
+do not erase an accumulated counter. HIPC command 65002 exposes monitor state,
+global active seconds and daily minutes. Neither monitoring nor the evaluator
+applies restrictions; suspend/resume accounting, real-device validation and
+enforcement remain separate gates.
 
 ## Power-state integration gate
 
@@ -97,7 +109,7 @@ counter. Time is counted only while PGL reports an active application;
 HOME-menu/overlay behavior requires hardware validation. Started minutes
 round up, forward day transitions reset the daily bucket, backward clock corrections do not
 erase accumulated time, and observation gaps over two seconds are ignored.
-The counter is RAM-only and is not enforcement.
+The counter is persisted as an encrypted daily snapshot and is not enforcement.
 
 `protocol/trusted_clock.hpp` derives the local day from an authenticated
 policy server-time anchor, monotonic elapsed seconds and the policy's fixed
@@ -138,7 +150,7 @@ The provisioning client supplies the API hostname, device ID and one-time enroll
 through HIPC command 65001. No NRO or provisioning UI is shipped in this branch.
 The worker invokes the secure client to enroll,
 authenticate, refresh its short-lived token, send heartbeats, retrieve and
-validate policy snapshots, publish accepted snapshots to the RAM-only store,
+validate policy snapshots, publish accepted snapshots to the in-memory policy store,
 and acknowledge their revisions. The enrollment code is erased after a
 successful enrollment. The API host, device ID and long-lived device credential
 are stored in two versioned AES-128-GCM records in this sysmodule's own device
