@@ -179,7 +179,8 @@ bool Load(usage::Snapshot* out) {
 }
 
 bool Save(const usage::Snapshot& snapshot) {
-    if (!usage::IsValidSnapshot(snapshot)) return false;
+    if (!snapshot.valid || snapshot.local_day_key < 0 ||
+        snapshot.active_seconds > usage::MaxPersistedActiveSeconds) return false;
     usage::Snapshot slots[2]{};
     (void)ReadSlot(0, &slots[0]);
     (void)ReadSlot(1, &slots[1]);
