@@ -196,7 +196,7 @@ class SecureDeviceApiIntegrationTests(unittest.TestCase):
             "timezone_offset_minutes": 60, "global_daily_limit_minutes": 120,
             "weekday_limit_minutes": [65535] * 7,
             "quiet_hours_enabled": False, "quiet_hours_start_minute": 0,
-            "quiet_hours_end_minute": 0, "title_rule_mode": 0, "title_rules": [],
+            "quiet_hours_end_minute": 0,
         }
         with api.database() as db:
             db.execute(
