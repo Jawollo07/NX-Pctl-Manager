@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <limits>
+#include "usage_snapshot.hpp"
 
 namespace nxpctl::usage {
 
