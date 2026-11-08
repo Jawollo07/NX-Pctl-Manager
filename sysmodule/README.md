@@ -61,12 +61,13 @@ Suspend/resume accounting is not implemented because a safe PSC module
 identity has not been established.
 
 The branch includes `tools/provisioner/nxpctl-bootstrap.nro`, a one-shot,
-non-interactive HIPC bootstrap helper. It reads a fixed-size
-`nxpctl-provision.bin` file from the SD-card root, submits it through command
-65001 and deletes it after the sysmodule accepts the request. The host-side
-Python generator prompts for the API hostname, device ID and one-time
-enrollment code without echoing the code. This is not a management UI and does
-not use Borealis.
+non-interactive HIPC bootstrap helper. It reads the human-readable
+`nxpctl.conf` file from the SD-card root, strictly validates its three required
+keys, submits the fixed-size request through command 65001 and deletes the file
+after the sysmodule accepts the request. The host-side Python generator prompts
+for the API hostname, device ID and one-time enrollment code without echoing
+the code. See [device enrollment](../docs/device-enrollment.md). This is not a
+management UI and does not use Borealis.
 
 The configured NPDM title ID is a development value and has not been
 independently reviewed or validated on hardware. CI packaging does not prove
