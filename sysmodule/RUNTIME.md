@@ -169,7 +169,7 @@ plaintext. The AES-GCM NIST vector and backend-matched HKDF vector are run
 before the first secure POST. Large transport buffers are static BSS
 allocations, not worker stack allocations.
 
-The one-shot `tools/provisioner/nxpctl-bootstrap.nro` helper supplies the API hostname, device ID and one-time enrollment code through HIPC command 65001. It is a minimal bootstrap utility only; the headless sysmodule remains the product runtime and all policy administration stays in the backend dashboard.
+The one-shot `tools/provisioner/nxpctl-bootstrap.nro` helper reads the API hostname, device ID and one-time enrollment code from the validated `nxpctl.conf` file on the SD card and submits them through HIPC command 65001. It is a minimal bootstrap utility only; the headless sysmodule remains the product runtime and all policy administration stays in the backend dashboard.
 The worker invokes the secure client to enroll,
 authenticate, refresh its short-lived token, send heartbeats, retrieve and
 validate policy snapshots, publish accepted snapshots to the in-memory policy store,
