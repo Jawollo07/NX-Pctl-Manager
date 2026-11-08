@@ -1,5 +1,6 @@
 #include "credential_store.hpp"
 #include "secure_crypto.hpp"
+#include "../../protocol/provisioning.hpp"
 
 #include <cstring>
 #include <cstddef>
@@ -88,18 +89,14 @@ namespace {
             for (size_t i = 0; i < capacity; ++i) if (value[i] == '\0') return i;
             return capacity;
         };
-        const size_t host_size = length(data.api_host, sizeof(data.api_host));
+        const size_t url_size = length(data.api_url, sizeof(data.api_url));
         const size_t id_size = length(data.device_id, sizeof(data.device_id));
         const size_t credential_size = length(data.device_credential, sizeof(data.device_credential));
-        if (host_size == 0 || host_size >= sizeof(data.api_host) ||
+        if (url_size == 0 || url_size >= sizeof(data.api_url) ||
             id_size == 0 || id_size >= sizeof(data.device_id) ||
-            credential_size < 16 || credential_size >= sizeof(data.device_credential)) return false;
+            credential_size < 16 || credential_size >= sizeof(data.device_credential) ||
+            !protocol::IsValidApiUrl(data.api_url, sizeof(data.api_url), true)) return false;
 
-        for (size_t i = 0; i < host_size; ++i) {
-            const char c = data.api_host[i];
-            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-                  (c >= '0' && c <= '9') || c == '.' || c == '-')) return false;
-        }
         for (size_t i = 0; i < id_size; ++i) {
             const char c = data.device_id[i];
             if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
