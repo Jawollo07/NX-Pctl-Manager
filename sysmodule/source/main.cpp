@@ -35,8 +35,8 @@
         (sf::Out<u32> out_valid, sf::Out<u32> out_allowed, sf::Out<u32> out_reason), \
         (out_valid, out_allowed, out_reason)) \
     AMS_SF_METHOD_INFO(C, H, 65004, Result, GetEnforcementStatus, \
-        (sf::Out<u32> out_state, sf::Out<u32> out_termination_attempts), \
-        (out_state, out_termination_attempts))
+        (sf::Out<u32> out_state, sf::Out<u32> out_termination_attempts, sf::Out<u32> out_event_monitor_state), \
+        (out_state, out_termination_attempts, out_event_monitor_state))
 
 AMS_SF_DEFINE_INTERFACE(ams::nxpctl::impl, IRuntime, AMS_NXPCTL_I_RUNTIME_INTERFACE_INFO, 0x00000000)
 
@@ -50,22 +50,28 @@ namespace ams {
         constexpr size_t SupervisorStackSize = 0x4000;
         constexpr s32 UsageMonitorThreadPriority = 32;
         constexpr size_t UsageMonitorStackSize = 0x4000;
+        constexpr s32 PglEventThreadPriority = 31;
+        constexpr size_t PglEventThreadStackSize = 0x4000;
         constexpr s64 WorkerPollIntervalNs = 1'000'000'000LL;
         constexpr u32 NoRunningApplicationResult = 0x6E4;
 
         alignas(os::ThreadStackAlignment) u8 g_worker_stack[WorkerStackSize];
         alignas(os::ThreadStackAlignment) u8 g_supervisor_stack[SupervisorStackSize];
         alignas(os::ThreadStackAlignment) u8 g_usage_monitor_stack[UsageMonitorStackSize];
+        alignas(os::ThreadStackAlignment) u8 g_pgl_event_thread_stack[PglEventThreadStackSize];
         os::ThreadType g_worker_thread;
         os::ThreadType g_supervisor_thread;
         os::ThreadType g_usage_monitor_thread;
+        os::ThreadType g_pgl_event_thread;
         os::EventType g_worker_stop_event;
         os::EventType g_supervisor_stop_event;
         os::EventType g_usage_monitor_stop_event;
+        os::EventType g_pgl_event_stop_event;
         util::Atomic<u32> g_worker_state;
         util::Atomic<u32> g_worker_heartbeat;
         util::Atomic<u32> g_worker_restart_count;
         util::Atomic<u32> g_usage_monitor_state;
+        util::Atomic<u32> g_pgl_event_monitor_state;
         util::Atomic<u64> g_usage_active_seconds;
         util::Atomic<s64> g_usage_local_day_key;
         util::Atomic<u32> g_usage_day_key_valid;
@@ -82,7 +88,8 @@ namespace ams {
         bool g_worker_thread_created = false;
         bool g_supervisor_thread_created = false;
         bool g_usage_monitor_thread_created = false;
-        bool g_pgl_initialized = false;
+        bool g_pgl_event_thread_created = false;
+        util::Atomic<u32> g_pgl_initialized;
         bool g_usage_storage_ready = false;
         bool g_usage_storage_corrupt = false;
         bool g_usage_persist_dirty = false;
@@ -260,6 +267,115 @@ namespace ams {
             g_enforcement_state = R_SUCCEEDED(terminate_result)
                 ? (policy_valid ? 2U : 4U)
                 : 3U;
+        }
+
+        void EnforceStartedApplication(const pm::ProcessEventInfo &event_info) {
+            if (event_info.GetProcessEvent() != pm::ProcessEvent::Started ||
+                !::nxpctl::sync::IsEnrolled()) {
+                return;
+            }
+
+            const bool policy_valid = g_policy_decision_valid != 0;
+            const bool allowed = g_policy_decision_allowed != 0;
+            if (policy_valid && allowed) return;
+
+            // PGL events can include non-application processes. Only terminate
+            // when the event PID matches the currently running application.
+            os::ProcessId current_application_pid{};
+            const ams::Result query_result =
+                pgl::GetRunningApplicationProcessId(std::addressof(current_application_pid));
+            if (R_FAILED(query_result) ||
+                current_application_pid != event_info.process_id) {
+                return;
+            }
+
+            const ams::Result terminate_result =
+                pgl::TerminateProcess(event_info.process_id);
+            ++g_termination_attempts;
+            g_enforcement_state = R_SUCCEEDED(terminate_result)
+                ? (policy_valid ? 2U : 4U)
+                : 3U;
+        }
+
+        void PglEventMonitorThreadMain(void *) {
+            g_pgl_event_monitor_state = 2;
+
+            while (!os::TimedWaitEvent(
+                std::addressof(g_pgl_event_stop_event),
+                TimeSpan::FromNanoSeconds(WorkerPollIntervalNs))) {
+                if (hos::GetVersion() < hos::Version_10_0_0 || !g_pgl_initialized) {
+                    g_pgl_event_monitor_state = 2;
+                    continue;
+                }
+
+                pgl::EventObserver observer;
+                if (R_FAILED(pgl::CreateShellEvent(std::addressof(observer)))) {
+                    g_pgl_event_monitor_state = 2;
+                    continue;
+                }
+
+                os::SystemEvent shell_event;
+                if (R_FAILED(observer.GetShellEvent(shell_event.GetBase()))) {
+                    g_pgl_event_monitor_state = 2;
+                    continue;
+                }
+
+                g_pgl_event_monitor_state = 1;
+                while (!os::TimedWaitEvent(
+                    std::addressof(g_pgl_event_stop_event),
+                    TimeSpan::FromNanoSeconds(0))) {
+                    if (!shell_event.TimedWait(
+                        TimeSpan::FromNanoSeconds(WorkerPollIntervalNs))) {
+                        continue;
+                    }
+
+                    // A single signal can represent multiple queued process events.
+                    for (;;) {
+                        pm::ProcessEventInfo event_info{};
+                        if (R_FAILED(observer.GetShellEventInfo(std::addressof(event_info)))) {
+                            break;
+                        }
+                        EnforceStartedApplication(event_info);
+                    }
+                }
+
+                g_pgl_event_monitor_state = 0;
+                return;
+            }
+
+            g_pgl_event_monitor_state = 0;
+        }
+
+        void StartPglEventMonitorThread() {
+            if (g_pgl_event_thread_created) return;
+
+            const ams::Result create_result = os::CreateThread(
+                std::addressof(g_pgl_event_thread),
+                PglEventMonitorThreadMain,
+                nullptr,
+                g_pgl_event_thread_stack,
+                sizeof(g_pgl_event_thread_stack),
+                PglEventThreadPriority,
+                3);
+            if (R_FAILED(create_result)) {
+                g_pgl_event_monitor_state = 2;
+                return;
+            }
+
+            os::SetThreadNamePointer(
+                std::addressof(g_pgl_event_thread),
+                "ams.NxPctlManager.PglEvents");
+            g_pgl_event_thread_created = true;
+            os::StartThread(std::addressof(g_pgl_event_thread));
+        }
+
+        void StopPglEventMonitorThread() {
+            if (!g_pgl_event_thread_created) return;
+            os::SignalEvent(std::addressof(g_pgl_event_stop_event));
+            os::WaitThread(std::addressof(g_pgl_event_thread));
+            os::DestroyThread(std::addressof(g_pgl_event_thread));
+            g_pgl_event_thread_created = false;
+            g_pgl_event_monitor_state = 0;
         }
 
         void UsageMonitorThreadMain(void *) {
@@ -503,9 +619,11 @@ namespace ams {
 
                 Result GetEnforcementStatus(
                     sf::Out<u32> out_state,
-                    sf::Out<u32> out_termination_attempts) {
+                    sf::Out<u32> out_termination_attempts,
+                    sf::Out<u32> out_event_monitor_state) {
                     *out_state = g_enforcement_state;
                     *out_termination_attempts = g_termination_attempts;
+                    *out_event_monitor_state = g_pgl_event_monitor_state;
                     R_SUCCEED();
                 }
 
@@ -549,6 +667,10 @@ namespace ams {
                 std::addressof(g_usage_monitor_stop_event),
                 false,
                 os::EventClearMode_AutoClear);
+            os::InitializeEvent(
+                std::addressof(g_pgl_event_stop_event),
+                false,
+                os::EventClearMode_AutoClear);
 
             // PGL provides both application-process queries and the supported
             // TerminateProcess operation used for global policy enforcement.
@@ -576,6 +698,7 @@ namespace ams {
             StopSupervisorThread();
             StopWorkerThread();
             StopUsageMonitorThread();
+            StopPglEventMonitorThread();
             if (g_pgl_initialized) {
                 pgl::Finalize();
                 g_pgl_initialized = false;
@@ -583,6 +706,7 @@ namespace ams {
             ::nxpctl::sync::Clear();
             ::nxpctl::sync::Finalize();
             ::nxpctl::net::Finalize();
+            os::FinalizeEvent(std::addressof(g_pgl_event_stop_event));
             os::FinalizeEvent(std::addressof(g_usage_monitor_stop_event));
             os::FinalizeEvent(std::addressof(g_supervisor_stop_event));
             os::FinalizeEvent(std::addressof(g_worker_stop_event));
@@ -602,6 +726,7 @@ namespace ams {
         StartWorkerThread();
         StartSupervisorThread();
         StartUsageMonitorThread();
+        StartPglEventMonitorThread();
 
         /*
          * HIPC exposes runtime diagnostics plus a narrowly-scoped enrollment
