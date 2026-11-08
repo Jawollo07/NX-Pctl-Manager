@@ -1,11 +1,13 @@
 # NX-Pctl-Manager backend
 
-FastAPI reference service with SQLite server-side storage. The backend provides
-device enrollment/authentication, policy delivery, heartbeats, event batches
-and policy acknowledgements.
+FastAPI control plane with SQLite server-side storage. Device enrollment,
+global policy management, parent authentication, revocation, usage inspection,
+and event logs are managed through authenticated backend APIs. The Switch
+sysmodule is an execution/enforcement agent, not an administration interface.
 
-See [the API and deployment guide](../docs/server-api.md) for complete setup,
-endpoint examples, HTTP security notes and CLI usage.
+See [the API and deployment guide](../docs/server-api.md) for endpoint
+examples, key management, HTTP security notes and the remaining integration
+gates.
 
 ## Quick start
 
@@ -14,16 +16,18 @@ python -m venv .venv
 . .venv/bin/activate
 pip install -r server/requirements.txt
 export NXPCTL_DATABASE="$PWD/data/nxpctl.sqlite3"
+export NXPCTL_ADMIN_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+export NXPCTL_PARENT_AUTH_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
 uvicorn server.app:app --host 127.0.0.1 --port 8080
 ```
 
-The CLI is run from the repository root:
+Keep both secrets in a protected secret manager or environment file. Back up
+`NXPCTL_PARENT_AUTH_KEY` separately from SQLite: losing it makes stored TOTP
+seeds unrecoverable. Never commit either secret.
 
-```sh
-python -m server.cli create-enrollment --device-id switch-livingroom
-python -m server.cli set-policy --device-id switch-livingroom --file policy.json
-python -m server.cli list-devices
-python -m server.cli revoke-device --device-id switch-livingroom
-```
-
-Device requests use the encrypted AES-GCM envelope over HTTP; HTTP metadata remains visible. Do not expose the origin directly. For untrusted networks, place it behind the configured reverse proxy and ensure device API paths are not redirected, cached, transformed, or challenged. The current headless sysmodule contains the matching HTTP client and secure synchronization worker, but the end-to-end deployment still requires firmware-specific hardware validation.
+The local CLI remains available for recovery and isolated development, but
+normal management is intended to use the backend API. Device requests use the
+encrypted AES-GCM envelope over HTTP; HTTP metadata remains visible. Do not
+expose the origin directly. Place it behind the configured reverse proxy and
+ensure device API paths are not redirected, cached, transformed, or challenged.
+The end-to-end deployment still requires firmware-specific hardware validation.
