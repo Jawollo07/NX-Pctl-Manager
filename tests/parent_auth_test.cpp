@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstdint>
 #include <iostream>
+#include <cstdio>
 
 int main() {
     using namespace nxpctl::parent_auth;
@@ -29,12 +30,16 @@ int main() {
     assert(!auth.IsAuthenticated(102));
 
     // Five invalid attempts activate a monotonic-time lockout.
+    std::uint32_t current_code = 0;
+    assert(nxpctl::totp::GenerateCode(secret, sizeof(secret) - 1, 89 / 30, &current_code));
+    char valid_code[7]{};
+    std::snprintf(valid_code, sizeof(valid_code), "%06u", current_code);
     for (unsigned i = 0; i < MaxFailedAttempts - 1; ++i)
         assert(auth.Authenticate("111111", 89, 200 + i) == Result::InvalidCode);
     assert(auth.Authenticate("111111", 89, 204) == Result::LockedOut);
     assert(auth.LockoutUntil() == 204 + LockoutSeconds);
-    assert(auth.Authenticate("050471", 89, 205) == Result::LockedOut);
-    assert(auth.Authenticate("050471", 89, 204 + LockoutSeconds) == Result::Authenticated);
+    assert(auth.Authenticate(valid_code, 89, 205) == Result::LockedOut);
+    assert(auth.Authenticate(valid_code, 89, 204 + LockoutSeconds) == Result::Authenticated);
 
     // Session automatically expires after the configured duration.
     assert(auth.IsAuthenticated(204 + LockoutSeconds));
