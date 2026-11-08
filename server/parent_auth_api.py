@@ -199,11 +199,12 @@ async def verify_parent_auth(
         if int(row["locked_until"]) > now:
             db.rollback()
             raise HTTPException(429, "parent authentication is temporarily locked")
+        failed_attempts = 0 if int(row["locked_until"]) != 0 else int(row["failed_attempts"])
         secret = _decrypt_secret(device_id, bytes(row["secret_nonce"]), bytes(row["secret_ciphertext"]))
         matched = _matching_counter(secret, body["code"], now, int(row["last_counter"]))
         # Best-effort wipe of the mutable copy; immutable bytes are short-lived.
         if matched is None:
-            failures = int(row["failed_attempts"]) + 1
+            failures = failed_attempts + 1
             locked_until = now + LOCKOUT_SECONDS if failures >= MAX_FAILURES else 0
             db.execute(
                 """UPDATE parent_auth SET failed_attempts=?,locked_until=?,
