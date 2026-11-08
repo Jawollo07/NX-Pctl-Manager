@@ -21,7 +21,9 @@ export NXPCTL_PARENT_AUTH_KEY="$(python -c 'import secrets; print(secrets.token_
 uvicorn server.app:app --host 127.0.0.1 --port 8080
 ```
 
-Open `http://127.0.0.1:8080/admin` to use the browser dashboard. The dashboard asks for the administrator token on each visit and keeps it in page memory only; it does not store it in localStorage or cookies. Put the dashboard behind an authenticated HTTPS reverse proxy before remote use.\n\nKeep both secrets in a protected secret manager or environment file. Back up
+Open `http://127.0.0.1:8080/admin` to use the browser dashboard. The dashboard asks for the administrator token on each visit and keeps it in page memory only; it does not store it in localStorage or cookies. Put the dashboard behind an authenticated HTTPS reverse proxy before remote use.
+
+Keep both secrets in a protected secret manager or environment file. Back up
 `NXPCTL_PARENT_AUTH_KEY` separately from SQLite: losing it makes stored TOTP
 seeds unrecoverable. Never commit either secret.
 
