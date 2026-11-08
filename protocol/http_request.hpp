@@ -70,6 +70,7 @@ inline bool AppendUnsigned(char* output, std::size_t capacity, std::size_t* used
     if (host_length == 0 || host_length > 260 || !request_detail::IsHeaderSafe(host, host_length))
         return RequestError::InvalidHost;
     bool seen_port_separator = false;
+    unsigned int parsed_port = 0;
     for (std::size_t i = 0; i < host_length; ++i) {
         const char c = host[i];
         if (c == ':') {
@@ -79,12 +80,15 @@ inline bool AppendUnsigned(char* output, std::size_t capacity, std::size_t* used
         }
         if (seen_port_separator) {
             if (c < '0' || c > '9') return RequestError::InvalidHost;
+            parsed_port = parsed_port * 10 + static_cast<unsigned int>(c - '0');
+            if (parsed_port > 65535) return RequestError::InvalidHost;
         } else {
             const bool valid = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
                 || (c >= '0' && c <= '9') || c == '.' || c == '-';
             if (!valid) return RequestError::InvalidHost;
         }
     }
+    if (seen_port_separator && parsed_port == 0) return RequestError::InvalidHost;
     const auto path_length = request_detail::Length(path);
     if (path_length == 0 || path[0] != '/' || path_length > 512)
         return RequestError::InvalidPath;
