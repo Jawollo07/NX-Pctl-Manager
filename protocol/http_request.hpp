@@ -53,7 +53,7 @@ inline bool AppendUnsigned(char* output, std::size_t capacity, std::size_t* used
 } // namespace request_detail
 
 // Writes one complete HTTP/1.1 request into caller-owned storage.
-// Host must be a DNS hostname (no port); TLS/socket setup is handled separately.
+// Host header accepts a DNS hostname or IPv4 address, optionally followed by a TCP port.
 // token may be null/empty for enrollment and authentication endpoints.
 [[nodiscard]] inline RequestError BuildRequest(
     const char* method, const char* host, const char* path,
