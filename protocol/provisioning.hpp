@@ -111,7 +111,7 @@ inline bool ParseProvisioningConfig(const char* input, std::size_t size,
             destination = request.api_host; capacity = ApiHostCapacity; bit = 1;
         } else if (key_size == 9 && __builtin_memcmp(input + begin, "device_id", 9) == 0) {
             destination = request.device_id; capacity = DeviceIdCapacity; bit = 2;
-        } else if (key_size == 14 && __builtin_memcmp(input + begin, "enrollment_code", 14) == 0) {
+        } else if (key_size == 15 && __builtin_memcmp(input + begin, "enrollment_code", 15) == 0) {
             destination = request.enrollment_code; capacity = EnrollmentCodeCapacity; bit = 4;
         } else {
             return false;
