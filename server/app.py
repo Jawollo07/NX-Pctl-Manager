@@ -261,6 +261,11 @@ app = FastAPI(title="NX-Pctl-Manager API", version=APP_VERSION)
 @app.on_event("startup")
 def startup() -> None:
     init_database()
+    try:
+        from .parent_auth_api import init_parent_auth_schema
+    except ImportError:  # pragma: no cover - direct module execution
+        from parent_auth_api import init_parent_auth_schema
+    init_parent_auth_schema()
     if os.environ.get("NXPCTL_ALLOW_LEGACY_API", "0") == "1":
         print("WARNING: legacy plaintext device API is enabled; do not expose it on an untrusted network.")
 
@@ -600,6 +605,23 @@ async def _dispatch_secure_operation(operation: str, device_id: str, request: Re
     token = payload.pop("access_token", None)
     if not isinstance(token, str) or not 32 <= len(token) <= 256:
         raise HTTPException(401, "invalid device session")
+    if operation == "parent-auth":
+        if payload:
+            raise HTTPException(400, "parent-auth request must not contain extra fields")
+        with database() as db:
+            row = db.execute(
+                """SELECT t.device_id,d.revoked_at FROM access_tokens t
+                   JOIN devices d USING(device_id)
+                   WHERE t.token_hash=? AND t.device_id=? AND t.expires_at>?""",
+                (_hash_secret(token), device_id, int(time.time())),
+            ).fetchone()
+        if row is None or row["revoked_at"] is not None:
+            raise HTTPException(401, "invalid or expired device session")
+        try:
+            from .parent_auth_api import issue_or_read_grant
+        except ImportError:  # pragma: no cover
+            from parent_auth_api import issue_or_read_grant
+        return issue_or_read_grant(device_id)
     if operation == "policy":
         if payload:
             raise HTTPException(400, "policy request must not contain extra fields")
@@ -627,7 +649,7 @@ async def secure_device_api(device_id: str, operation: str, request: Request):
     """All device API calls use one encrypted POST envelope and no auth headers."""
     if not DEVICE_ID_RE.fullmatch(device_id):
         raise HTTPException(404, "unknown device")
-    if operation not in {"enroll", "auth", "policy", "heartbeat", "events", "policy-ack"}:
+    if operation not in {"enroll", "auth", "policy", "heartbeat", "events", "policy-ack", "parent-auth"}:
         raise HTTPException(404, "unknown secure operation")
     path = request.url.path
     try:
@@ -742,5 +764,10 @@ async def secure_device_api(device_id: str, operation: str, request: Request):
         raise HTTPException(400, "invalid secure envelope")
 
 
-# Administrative routes are intentionally absent. Provisioning and policy
-# changes happen through the local CLI, not through an unauthenticated web UI.
+# Backend administration is protected by NXPCTL_ADMIN_TOKEN. TOTP secrets are
+# encrypted at rest with NXPCTL_PARENT_AUTH_KEY and never sent to the Switch.
+try:
+    from .parent_auth_api import router as parent_auth_router
+except ImportError:  # pragma: no cover - direct module execution
+    from parent_auth_api import router as parent_auth_router
+app.include_router(parent_auth_router)
