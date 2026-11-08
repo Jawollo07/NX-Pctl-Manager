@@ -239,6 +239,17 @@ def init_database() -> None:
             received_at INTEGER NOT NULL,
             PRIMARY KEY(device_id, revision)
         );
+        CREATE TABLE IF NOT EXISTS parent_auth (
+            device_id TEXT PRIMARY KEY REFERENCES devices(device_id) ON DELETE CASCADE,
+            secret_nonce BLOB NOT NULL,
+            secret_ciphertext BLOB NOT NULL,
+            last_counter INTEGER NOT NULL DEFAULT -1,
+            failed_attempts INTEGER NOT NULL DEFAULT 0,
+            locked_until INTEGER NOT NULL DEFAULT 0,
+            grant_expires_at INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS secure_replays (
             key_scope TEXT NOT NULL,
             sequence TEXT NOT NULL,
@@ -771,3 +782,8 @@ try:
 except ImportError:  # pragma: no cover - direct module execution
     from parent_auth_api import router as parent_auth_router
 app.include_router(parent_auth_router)
+try:
+    from .admin_api import router as admin_router
+except ImportError:  # pragma: no cover - direct module execution
+    from admin_api import router as admin_router
+app.include_router(admin_router)
