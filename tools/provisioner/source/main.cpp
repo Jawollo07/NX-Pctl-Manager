@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include "../../../protocol/provisioning.hpp"
+#include "../../../protocol/runtime_status.hpp"
 
 namespace {
 
