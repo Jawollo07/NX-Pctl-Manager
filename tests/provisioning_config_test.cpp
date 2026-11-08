@@ -44,6 +44,12 @@ int main() {
         "enrollment_code=AbCdEf0123456789_-abcdefgh\n";
     assert(!ParseProvisioningConfig(malformed, sizeof(malformed) - 1, request));
 
+    constexpr char invalid_host_label[] =
+        "api_host=bad.-host.example\n"
+        "device_id=switch-01\n"
+        "enrollment_code=AbCdEf0123456789_-abcdefgh\n";
+    assert(!ParseProvisioningConfig(invalid_host_label, sizeof(invalid_host_label) - 1, request));
+
     constexpr char quoted[] =
         "api_host=portal.example.net\n"
         "device_id=switch-01\n"
