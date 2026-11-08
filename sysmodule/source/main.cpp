@@ -263,11 +263,7 @@ namespace ams {
         }
 
         void UsageMonitorThreadMain(void *) {
-            if (g_usage_storage_corrupt) {
-                g_usage_monitor_state = 2;
-                return;
-            }
-            g_usage_monitor_state = 1;
+            g_usage_monitor_state = g_usage_storage_corrupt ? 2U : 1U;
 
             while (!os::TimedWaitEvent(
                 std::addressof(g_usage_monitor_stop_event),
@@ -275,10 +271,36 @@ namespace ams {
                 const u64 monotonic_seconds = GetMonotonicSeconds();
                 if (monotonic_seconds == 0) continue;
 
+                // Query PGL before clock/storage work so fail-closed conditions
+                // can still terminate an application that is already running.
+                os::ProcessId application_pid{};
+                const ams::Result query_result =
+                    pgl::GetRunningApplicationProcessId(std::addressof(application_pid));
+                bool application_active = false;
+                if (R_SUCCEEDED(query_result)) {
+                    application_active = true;
+                } else if (query_result.GetInnerValue() != NoRunningApplicationResult) {
+                    if (::nxpctl::sync::IsEnrolled()) g_enforcement_state = 3;
+                    continue;
+                }
+
+                const bool enrolled = ::nxpctl::sync::IsEnrolled();
+                if (enrolled && (!g_usage_storage_ready || g_usage_storage_corrupt)) {
+                    // A daily limit cannot be trusted without durable usage.
+                    g_usage_day_key_valid = 0;
+                    g_policy_decision_valid = 0;
+                    EnforceGlobalPolicy(
+                        false, false, enrolled, application_active, application_pid);
+                    continue;
+                }
+
                 s64 local_day_key = 0;
                 if (!::nxpctl::sync::GetTrustedLocalDayKey(
                         monotonic_seconds, std::addressof(local_day_key))) {
                     g_usage_day_key_valid = 0;
+                    g_policy_decision_valid = 0;
+                    EnforceGlobalPolicy(
+                        false, false, enrolled, application_active, application_pid);
                     continue;
                 }
 
@@ -289,12 +311,18 @@ namespace ams {
                             g_persisted_usage, local_day_key,
                             std::addressof(restored_day),
                             std::addressof(restored_seconds))) {
-                        // The authenticated clock is behind the stored day.
-                        // Wait for a trustworthy clock instead of erasing usage.
+                        // Never allow execution when the trusted clock regresses
+                        // behind persisted usage; do not erase the saved counter.
+                        g_policy_decision_valid = 0;
+                        EnforceGlobalPolicy(
+                            false, false, enrolled, application_active, application_pid);
                         continue;
                     }
                     if (!g_usage_tracker.Restore(
                             restored_day, restored_seconds, monotonic_seconds)) {
+                        g_policy_decision_valid = 0;
+                        EnforceGlobalPolicy(
+                            false, false, enrolled, application_active, application_pid);
                         continue;
                     }
                     g_usage_persist_dirty =
@@ -304,21 +332,6 @@ namespace ams {
                 }
 
                 const u64 previous_active_seconds = g_usage_tracker.GetActiveSeconds();
-                os::ProcessId application_pid{};
-                const ams::Result query_result =
-                    pgl::GetRunningApplicationProcessId(std::addressof(application_pid));
-
-                bool application_active = false;
-                if (R_SUCCEEDED(query_result)) {
-                    application_active = true;
-                } else if (query_result.GetInnerValue() != NoRunningApplicationResult) {
-                    // A service/IPC failure is unknown state, not evidence of
-                    // an idle console. Skip this sample; the tracker rejects
-                    // an excessive gap rather than inventing playtime.
-                    if (::nxpctl::sync::IsEnrolled()) g_enforcement_state = 3;
-                    continue;
-                }
-
                 const auto observe_result = g_usage_tracker.Observe(
                     application_active, monotonic_seconds, local_day_key);
                 if (observe_result == ::nxpctl::usage::ObserveResult::DayRolledOver ||
@@ -345,16 +358,14 @@ namespace ams {
                     g_policy_decision_reason = static_cast<u32>(decision.reason);
                     g_policy_decision_valid = 1;
                     EnforceGlobalPolicy(
-                        true, decision.allowed, ::nxpctl::sync::IsEnrolled(),
+                        true, decision.allowed, enrolled,
                         application_active, application_pid);
                 } else {
                     g_policy_decision_valid = 0;
-                    // Once enrolled, absence/expiry of a verifiable policy is
-                    // fail-closed: running software is terminated until a
-                    // fresh authenticated policy and trusted clock are ready.
+                    // An enrolled device without a current authenticated policy
+                    // and trusted clock is fail-closed for application execution.
                     EnforceGlobalPolicy(
-                        false, false, ::nxpctl::sync::IsEnrolled(),
-                        application_active, application_pid);
+                        false, false, enrolled, application_active, application_pid);
                 }
             }
             g_usage_monitor_state = 0;
