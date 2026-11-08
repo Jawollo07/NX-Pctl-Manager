@@ -8,12 +8,12 @@ The experimental Stratosphere target now has a resident main thread, a separate 
 - `Main` starts the worker, registers the `nxpctl` HIPC service, and enters the Stratosphere server loop.
 - The worker uses a dedicated 32 KiB stack and a one-second timed event wait as its idle cadence and cooperative shutdown point. The larger stack accommodates the bounded schema-v1 parser and network call frames. A separate supervisor checks thread termination with `os::TryWaitThread`, reaps the exited thread, and permits at most three automatic restarts per module lifetime. After the retry budget is exhausted, the service reports `WorkerState::Failed` and does not restart indefinitely.
 - Finalization stops and joins the supervisor before stopping the worker, preventing an intentional shutdown from being mistaken for a worker failure.
-- HIPC command 65000 (`GetRuntimeStatus`) returns protocol version, worker state, worker heartbeat, bounded worker restart count, and policy revision. Command 65001 (`ConfigureEnrollment`) accepts one fixed-size, validated host/device-ID/enrollment-code buffer. Command 65002 (`GetUsageStatus`) returns monitor state, global active seconds, and rounded daily minutes. Command 65003 (`GetPolicyDecision`) returns whether a trusted-time global policy decision is available, its allow/deny result, and the `DecisionReason` numeric value. The monitor derives weekday and minute-of-day from the authenticated server-time anchor plus monotonic elapsed time; it never consults the console wall clock. The current diagnostic evaluation passes `offline=false` and `parent_authenticated=false` because connectivity-state and parent-authentication integrations are not implemented yet. It is diagnostic only and does not enforce restrictions. Monitor state `0` means unavailable/stopped, `1` means monitoring, and `2` means persistent usage data is corrupt and the counter has failed closed. These are not general configuration or policy-write interfaces.
+- HIPC command 65000 (`GetRuntimeStatus`) returns protocol version, worker state, worker heartbeat, bounded worker restart count, and policy revision. Command 65001 (`ConfigureEnrollment`) accepts one fixed-size, validated host/device-ID/enrollment-code buffer. Command 65002 (`GetUsageStatus`) returns monitor state, global active seconds, and rounded daily minutes. Command 65003 (`GetPolicyDecision`) returns whether a trusted-time global policy decision is available, its allow/deny result, and the `DecisionReason` numeric value. The monitor derives weekday and minute-of-day from the authenticated server-time anchor plus monotonic elapsed time; it never consults the console wall clock. The current evaluation passes `offline=false` and `parent_authenticated=false` because connectivity-state and parent-authentication integrations are not implemented yet. PGL enforcement applies the resulting global allow/deny decision; parent-authentication-required policies therefore deny use until that integration is implemented. Monitor state `0` means unavailable/stopped, `1` means monitoring, and `2` means persistent usage data is corrupt and the counter has failed closed. These are not general configuration or policy-write interfaces.
 - `protocol/runtime_status.hpp` is the shared, Horizon-independent wire contract for the sysmodule and any separately built HIPC management client. `protocol/worker_supervision.hpp` contains the Horizon-independent three-restart budget used by the supervisor; CI tests that budget independently. `WorkerState::Failed` is a terminal health state after the bounded restart budget is exhausted. The CMIF output layout is four `u32` values at offsets 0/4/8/12 (protocol version, worker state, heartbeat, restart count), then the aligned `u64` policy revision at offset 16.
 - `protocol/http_response.hpp` now provides a bounded, allocation-free HTTP/1.0/1.1 response parser. It requires exactly one decimal `Content-Length`, rejects chunked/other transfer encodings, rejects compressed bodies, duplicate lengths, malformed CRLF framing, truncated bodies and trailing bytes, and caps headers/body at 8 KiB/96 KiB. It returns a view into the caller-owned receive buffer; it does not perform socket I/O or authenticate the peer.
 - `InitializeSystemModule` initializes PGL only on Horizon 10.0.0 or later; failure leaves monitoring unavailable rather than aborting module startup. `Main` starts the monitor independently from the network worker. `FinalizeSystemModule` stops and joins the monitor before finalizing PGL, then stops the other threads and finalizes their events.
 
-The HIPC interface exposes read-only diagnostics, a global usage snapshot, and a single enrollment bootstrap operation. The monitor asks PGL only whether an application process is currently running; it does not request or store the process ID beyond the call, inspect title IDs, change parental-control state or apply restrictions. Credential persistence uses this sysmodule’s own device save data. The removed NRO is not part of this headless branch; provisioning must be performed by a separately built trusted HIPC client. The worker then performs encrypted enrollment, exchanges the returned device credential for a short-lived token, fetches and validates policy snapshots, sends heartbeats and acknowledges accepted revisions.
+The HIPC interface exposes diagnostics, a global usage snapshot, enforcement status, and a single enrollment bootstrap operation. The monitor obtains the current application PID only for the immediate PGL termination call; it never stores the PID or inspects title IDs. No parental-control service is used. Credential persistence uses this sysmodule’s own device save data. The removed NRO is not part of this headless branch; provisioning must be performed by a separately built trusted HIPC client. The worker then performs encrypted enrollment, exchanges the returned device credential for a short-lived token, fetches and validates policy snapshots, sends heartbeats and acknowledges accepted revisions.
 
 ## Next implementation phases
 
@@ -23,40 +23,52 @@ The HIPC interface exposes read-only diagnostics, a global usage snapshot, and a
 4. [x] Add bounded policy validation and in-memory policy snapshots.
 5. [x] Add bounded schema-v1 JSON decoding and host tests.
 6. [x] Add bounded HTTP response framing parser and host tests. [x] Add authenticated message integrity verification and connect only verified full snapshots to the RAM store.
-7. Implement enforcement only after the required Horizon services, permissions, firmware compatibility, and recovery behavior have been validated. The pure evaluator is ready for integration, but PCTL interaction, suspend/resume accounting and the hardware recovery path remain unverified. Read-only PGL application-activity monitoring and encrypted persistent global daily usage are now connected.
+7. [x] Add PCTL-free global enforcement through the pinned PGL TerminateProcess API. Hardware validation, launch-event hardening, suspend/resume accounting and a tested recovery path remain outstanding.
 
-## Application activity monitoring and PCTL integration
+## PGL-based global enforcement (PCTL-free)
 
-The pinned Atmosphere/libstratosphere revision exposes
-`ams::pgl::Initialize` and `ams::pgl::GetRunningApplicationProcessId`.
-The wrapper delegates to the pinned libnx PGL client, which connects to the
-`pgl` service and issues its documented read-only command 5. PGL is available
-from Horizon 10.0.0 onward. The NPDM service-access list therefore includes
-`pgl`; it does not request `pm:dmnt`, debug process handles or process hooks.
+The pinned Atmosphere/libstratosphere revision
+(`6b0c077b4c608a3a2ee712b8dc35fee87ceb62e8`) exposes both
+`ams::pgl::GetRunningApplicationProcessId` and
+`ams::pgl::TerminateProcess(os::ProcessId)` in
+`pgl/pgl_shell_api.hpp`. The implementation delegates to the Horizon PGL
+service. PGL command 1 forwards to `pm:shell->TerminateProcess`; command 5
+returns the current application PID. Atmosphère's own crash-report module
+uses this exact PGL termination wrapper on Horizon 10.0.0 and later. This
+project uses PGL only; it does not initialize, query, or modify Nintendo PCTL.
 
 A dedicated one-second monitor thread queries PGL independently of the network
-worker, so DNS/TCP/HTTP waits cannot stall usage sampling. A successful query
-means an application is active. PGL's documented no-running-application result
-(`0x6E4`) means idle; any other query failure is treated as unknown and the
-sample is skipped. The monitor does not use the returned PID as a key or retain
-it. It passes only an active/inactive boolean to the global daily tracker.
-The tracker therefore counts all games/applications together and has no
-per-title usage buckets. Exact HOME-menu, overlay and suspend behavior still
-requires hardware validation; the implementation counts only what PGL reports
-as an active application.
+worker. A successful query means an application is active. PGL's documented
+no-running-application result (`0x6E4`) means idle; any other query failure is
+unknown and is reported as an enforcement error rather than treated as idle.
+The PID is used only as a transient argument to `pgl::TerminateProcess`; it is
+never persisted, indexed, or associated with a title ID. Usage accounting
+continues to receive only an active/inactive boolean, so all applications share
+one global daily counter.
+
+When a verified policy allows use, enforcement state is `1`. When a verified
+policy denies use, the monitor calls `pgl::TerminateProcess` for the running
+application and records state `2` on success or `3` on failure. If an enrolled
+device has no usable verified policy/trusted clock, it fails closed and
+terminates running applications; state `4` reports this condition. An
+unenrolled device is not locked by an absent policy. HIPC command 65004
+(`GetEnforcementStatus`) exposes the state and cumulative termination-attempt
+count. Command 65003 continues to expose the policy decision.
+
+This is process termination, not PCTL suspension and not a whole-console lock.
+The monitor retries on its next one-second sample if software is launched again,
+so a short relaunch window exists; a PGL launch-event observer could reduce that
+window in a later hardening phase. HOME, system settings, recovery mode and
+control of the boot chain are outside this application-process enforcement
+boundary. A person able to disable or replace the sysmodule/CFW can bypass it.
+No absolute tamper-proof guarantee is claimed.
 
 The trusted local-day key comes from the authenticated policy `server_time`
 and the policy's fixed UTC offset. The server timestamp is anchored to
 Atmosphère's monotonic system tick and advanced only by monotonic elapsed time;
 the device wall clock is not used. The anchor is valid only until the policy's
-`not_after` time. If no verified policy clock is available, the monitor
-continues running but does not fabricate a day key or count usage.
-
-The pinned libnx PCTL wrapper exposes parental-control state/settings queries
-and synchronization/play-timer events. Its public wrapper does not expose a
-general command to install arbitrary per-title allow/block rules or to
-terminate a title based on this project's policy. No guessed PCTL IPC command
-IDs are used.
+`not_after` time. An enrolled device without a valid anchor is fail-closed for
+application execution, rather than inventing usage or silently allowing use.
 
 The tracker restores its global daily total from two alternating AES-128-GCM
 authenticated records in this sysmodule's own device save data. A device-derived
@@ -69,17 +81,18 @@ trusted day restores its total; a later trusted day starts at zero; a trusted
 clock earlier than the stored day is rejected rather than erasing usage.
 Snapshots are attempted at most once per minute while dirty and are force-flushed
 on orderly module shutdown. A sudden power loss can therefore lose up to about
-one minute of newly accumulated usage. If save-data mounting or key derivation fails, monitoring remains RAM-only
-for that session and persistence is not claimed. Failed writes leave the newest
-valid slot intact and are retried at the next persistence interval. If two authenticated records have the same sequence but different totals or day keys, the snapshot set is treated as ambiguous and rejected. If both
-existing slots are present but fail authentication/validation, the monitor
-reports storage error state `2` and refuses to overwrite them or silently
-reset the counter. Started minutes round up, forward local-day transitions reset the
-bucket, gaps longer than two seconds are ignored, and backward clock corrections
-do not erase an accumulated counter. HIPC command 65002 exposes monitor state,
-global active seconds and daily minutes. Neither monitoring nor the evaluator
-applies restrictions; suspend/resume accounting, real-device validation and
-enforcement remain separate gates.
+one minute of newly accumulated usage. If save-data mounting or key derivation
+fails, monitoring remains RAM-only for that session and persistence is not
+claimed. Failed writes leave the newest valid slot intact and are retried at
+the next persistence interval. If two authenticated records have the same
+sequence but different totals or day keys, the snapshot set is treated as
+ambiguous and rejected. If both existing slots are present but fail
+authentication/validation, the monitor reports storage error state `2` and
+refuses to overwrite them or silently reset the counter. Started minutes round
+up, forward local-day transitions reset the bucket, gaps longer than two
+seconds are ignored, and backward clock corrections do not erase an accumulated
+counter. HIPC command 65002 exposes monitor state, global active seconds and
+daily minutes.
 
 ## Power-state integration gate
 
@@ -93,7 +106,7 @@ The NPDM title ID is currently configured as `0x420000000A3F1E7C`, but is not ye
 
 `protocol/policy.hpp` defines the fixed-size, versioned policy model and a bounded in-memory `PolicyStore`. It validates device binding, protocol/schema versions, strictly increasing revisions, trusted-server clock skew, expiry and maximum lifetime, offline behavior, fixed UTC offset, daily limits, quiet hours, and global offline behavior. A candidate is validated again while holding the store lock against the currently active revision, then copied as one complete snapshot. Invalid or stale candidates leave the previous snapshot unchanged.
 
-The store uses fixed-size memory and performs no allocation, file I/O, database access, or network access. The HIPC status endpoint reports the store's active revision. The secure sync worker now feeds it only after encrypted response verification and schema/clock/device/revision validation. The model still does not enforce restrictions.
+The store uses fixed-size memory and performs no allocation, file I/O, database access, or network access. The HIPC status endpoint reports the store's active revision. The secure sync worker now feeds it only after encrypted response verification and schema/clock/device/revision validation. The runtime enforces the resulting global decision through PGL.
 
 ## Bounded policy JSON decoding
 
@@ -119,11 +132,11 @@ policy server-time anchor, monotonic elapsed seconds and the policy's fixed
 UTC offset. It rejects invalid, expired or regressed anchors. Host tests cover
 UTC and offset day boundaries, expiry and monotonic regression.
 
-## Deterministic policy evaluation (not enforcement)
+## Deterministic global policy evaluation
 
 `protocol/policy_evaluator.hpp` evaluates a supplied immutable policy and context without Horizon calls or side effects. It covers parent-authentication gating, offline behavior, global daily-limit decisions, fixed-offset weekday budgets and quiet hours including intervals that cross midnight. All decisions apply globally to the console and never inspect or distinguish individual titles.
 
-The evaluator is host-tested and is now called by the usage monitor to publish a diagnostic global allow/deny decision through HIPC command 65003. Its offline and parent-authentication inputs are explicit placeholders until those integrations exist. The decision does not mutate PCTL state, lock HOME/qlaunch, terminate applications or block anything on a console. Monotonic accounting and a verified system integration point remain separate work.
+The evaluator is host-tested and is now called by the usage monitor to publish a diagnostic global allow/deny decision through HIPC command 65003. Its offline and parent-authentication inputs are explicit placeholders until those integrations exist. The evaluator itself remains pure; the runtime consumes its decision and uses PGL to terminate the active application when globally denied. It does not lock HOME/qlaunch or block system menus.
 
 ## HTTP transport and secure envelope client
 
