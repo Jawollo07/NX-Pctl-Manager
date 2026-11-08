@@ -37,7 +37,7 @@ namespace {
 
     bool IsOperation(const char *operation) {
         static constexpr const char *Allowed[] = {
-            "enroll", "auth", "policy", "heartbeat", "events", "policy-ack"
+            "enroll", "auth", "policy", "heartbeat", "events", "policy-ack", "parent-auth"
         };
         if (!operation) return false;
         for (const char *candidate : Allowed) {
