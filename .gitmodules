@@ -1,3 +1,6 @@
 [submodule "deps/libnx"]
 	path = deps/libnx
 	url = https://github.com/switchbrew/libnx.git
+[submodule "Atmosphere"]
+	path = Atmosphere
+	url = https://github.com/atmosphere-nx/atmosphere.git

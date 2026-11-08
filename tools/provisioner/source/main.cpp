@@ -22,10 +22,13 @@ void Show(const char *message) {
 }
 
 void WaitForExit() {
+    PadState pad{};
+    padConfigureInput(1, HidNpadStyleSet_NpadStandard);
+    padInitializeDefault(&pad);
     Show("\nDruecke +, um zum Homebrew-Menue zurueckzukehren.");
     while (appletMainLoop()) {
-        hidScanInput();
-        if (hidKeysDown(CONTROLLER_P1_AUTO) & KEY_PLUS) break;
+        padUpdate(&pad);
+        if (padGetButtonsDown(&pad) & HidNpadButton_Plus) break;
         consoleUpdate(NULL);
         svcSleepThread(16'000'000);
     }
