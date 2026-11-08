@@ -20,7 +20,8 @@ uvicorn server.app:app --host 127.0.0.1 --port 8080
 Open `http://127.0.0.1:8080/admin` for local-only development. For remote
 administration use the Docker Compose deployment in
 [../docs/deployment.md](../docs/deployment.md) and put the dashboard behind
-HTTPS. Never expose the origin port directly.
+HTTPS. A non-secret environment template is provided at `.env.example` in
+this directory.
 
 Keep both secrets outside version control. Back up
 `NXPCTL_PARENT_AUTH_KEY` separately from SQLite: losing it makes stored TOTP
