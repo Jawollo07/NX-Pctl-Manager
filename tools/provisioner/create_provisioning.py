@@ -1,47 +1,41 @@
 #!/usr/bin/env python3
-"""Create the fixed-size one-time bootstrap payload consumed by nxpctl-bootstrap.nro."""
+"""Create the one-time nxpctl.conf file consumed by nxpctl-bootstrap.nro."""
 from __future__ import annotations
 
 import argparse
 import getpass
 import re
-import struct
 from pathlib import Path
 
-API_HOST_CAPACITY = 254
-DEVICE_ID_CAPACITY = 65
-ENROLLMENT_CODE_CAPACITY = 129
-PAYLOAD_SIZE = API_HOST_CAPACITY + DEVICE_ID_CAPACITY + ENROLLMENT_CODE_CAPACITY
+HOST_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,252}[A-Za-z0-9])?")
+DEVICE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+CODE_RE = re.compile(r"[A-Za-z0-9_-]{20,128}")
 
 
-def build_payload(api_host: str, device_id: str, enrollment_code: str) -> bytes:
-    if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,252}[A-Za-z0-9])?", api_host):
+def build_config(api_host: str, device_id: str, enrollment_code: str) -> str:
+    if not HOST_RE.fullmatch(api_host):
         raise ValueError("API host must be a hostname only (no scheme, port, path or underscore)")
-    if len(api_host) >= API_HOST_CAPACITY:
+    if len(api_host) >= 254:
         raise ValueError("API host is too long")
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", device_id):
+    if not DEVICE_RE.fullmatch(device_id):
         raise ValueError("invalid device ID")
-    if not re.fullmatch(r"[A-Za-z0-9_-]{20,128}", enrollment_code):
+    if not CODE_RE.fullmatch(enrollment_code):
         raise ValueError("enrollment code must be 20..128 URL-safe characters")
-
-    payload = struct.pack(
-        f"<{API_HOST_CAPACITY}s{DEVICE_ID_CAPACITY}s{ENROLLMENT_CODE_CAPACITY}s",
-        api_host.encode("ascii"),
-        device_id.encode("ascii"),
-        enrollment_code.encode("ascii"),
+    return (
+        "# NX-Pctl-Manager one-time device enrollment\n"
+        f"api_host={api_host}\n"
+        f"device_id={device_id}\n"
+        f"enrollment_code={enrollment_code}\n"
     )
-    if len(payload) != PAYLOAD_SIZE:
-        raise AssertionError("provisioning payload layout mismatch")
-    return payload
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Create a one-time NX-Pctl-Manager HIPC bootstrap file."
+        description="Create the one-time NX-Pctl-Manager SD-card config."
     )
     parser.add_argument(
-        "-o", "--output", type=Path, default=Path("nxpctl-provision.bin"),
-        help="output file (default: ./nxpctl-provision.bin)",
+        "-o", "--output", type=Path, default=Path("nxpctl.conf"),
+        help="output file (default: ./nxpctl.conf)",
     )
     args = parser.parse_args()
 
@@ -49,14 +43,14 @@ def main() -> int:
     device_id = input("Device ID: ").strip()
     code = getpass.getpass("One-time enrollment code: ").strip()
     try:
-        payload = build_payload(host, device_id, code)
-    except (UnicodeEncodeError, ValueError) as exc:
+        config = build_config(host, device_id, code)
+    except ValueError as exc:
         parser.error(str(exc))
 
-    args.output.write_bytes(payload)
+    args.output.write_text(config, encoding="ascii", newline="\n")
     args.output.chmod(0o600)
-    print(f"Created {args.output} ({len(payload)} bytes). Copy it to the SD-card root.")
-    print("The bootstrap app deletes the file after the sysmodule accepts the request.")
+    print(f"Created {args.output}. Copy it to the root of the Switch SD card.")
+    print("The bootstrap app deletes nxpctl.conf after the sysmodule accepts it.")
     return 0
 
 
