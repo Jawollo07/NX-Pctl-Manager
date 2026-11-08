@@ -24,6 +24,10 @@ class ProvisioningConfigTests(unittest.TestCase):
             ("https://portal.example.net", "switch-01", "a" * 24),
             ("portal.example.net:8080", "switch-01", "a" * 24),
             ("portal.example.net/path", "switch-01", "a" * 24),
+            ("bad..host", "switch-01", "a" * 24),
+            ("-bad.host", "switch-01", "a" * 24),
+            ("bad-.host", "switch-01", "a" * 24),
+            ("bad.-host", "switch-01", "a" * 24),
             ("portal.example.net", "../switch", "a" * 24),
             ("portal.example.net", "switch-01", "short"),
         ]
