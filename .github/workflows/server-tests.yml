@@ -6,12 +6,18 @@ on:
       - feature/headless-sysmodule-migration
     paths:
       - "server/**"
+      - "tools/provisioner/**"
+      - "protocol/provisioning.hpp"
+      - "tests/provisioning_config_test.cpp"
       - "sysmodule/source/secure_crypto.*"
       - "protocol/secure_http-protocol.md"
       - ".github/workflows/server-tests.yml"
   pull_request:
     paths:
       - "server/**"
+      - "tools/provisioner/**"
+      - "protocol/provisioning.hpp"
+      - "tests/provisioning_config_test.cpp"
       - ".github/workflows/server-tests.yml"
 
 permissions:
