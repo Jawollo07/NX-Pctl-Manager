@@ -31,3 +31,5 @@ jobs:
         run: python -m pip install -r server/requirements.txt
       - name: Run backend unit tests
         run: python -m unittest discover -s server/tests -v
+      - name: Validate administration dashboard JavaScript
+        run: node --check server/static/admin.js
