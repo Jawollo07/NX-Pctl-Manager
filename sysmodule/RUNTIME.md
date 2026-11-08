@@ -152,7 +152,7 @@ allocation-free HTTP framing with 96 KiB body limits, strict Content-Length
 handling, and rejection of chunked/compressed responses.
 
 `sysmodule/source/http_transport.cpp` initializes Atmosphere's system BSD client,
-resolves IPv4 hostnames through the platform resolver on one dedicated,
+resolves IPv4 addresses and IPv4 hostnames through the platform resolver on one dedicated,
 single-flight resolver thread. The HTTP worker waits at most five seconds for
 DNS. If the platform resolver has not returned, the worker receives a timeout;
 the resolver thread is not forcibly cancelled and retains its static state
@@ -169,12 +169,12 @@ plaintext. The AES-GCM NIST vector and backend-matched HKDF vector are run
 before the first secure POST. Large transport buffers are static BSS
 allocations, not worker stack allocations.
 
-The one-shot `tools/provisioner/nxpctl-bootstrap.nro` helper reads the API hostname, device ID and one-time enrollment code from the validated `nxpctl.conf` file on the SD card and submits them through HIPC command 65001. It is a minimal bootstrap utility only; the headless sysmodule remains the product runtime and all policy administration stays in the backend dashboard.
+The one-shot `tools/provisioner/nxpctl-bootstrap.nro` helper reads the complete backend URL (including optional port), device ID and one-time enrollment code from the validated `nxpctl.conf` file on the SD card and submits them through HIPC command 65001. It is a minimal bootstrap utility only; the headless sysmodule remains the product runtime and all policy administration stays in the backend dashboard.
 The worker invokes the secure client to enroll,
 authenticate, refresh its short-lived token, send heartbeats, retrieve and
 validate policy snapshots, publish accepted snapshots to the in-memory policy store,
 and acknowledge their revisions. The enrollment code is erased after a
-successful enrollment. The API host, device ID and long-lived device credential
+successful enrollment. The backend URL, device ID and long-lived device credential
 are stored in two versioned AES-128-GCM records in this sysmodule's own device
 save data. The encryption key is derived through SPL from an application-owned
 key source and the console device key ladder; neither the key nor plaintext
@@ -215,7 +215,9 @@ Access login or browser challenges. Keep the origin private.
 
 The pinned Atmosphere socket backend initializes libnx BSD in system-client
 mode. The sysmodule uses `bsd:s` for sockets and `sfdnsres` for hostname
-resolution. Credential persistence additionally uses `fsp-srv` to mount its
+resolution. Enrollment accepts a complete `http://` base URL with an optional
+TCP port; the transport connects to the parsed host/port and includes the port
+in the HTTP Host header when explicitly configured. Credential persistence additionally uses `fsp-srv` to mount its
 own device save data and `spl:crypto` to derive a console-bound storage key.
 The NPDM filesystem capability mask grants only `DeviceSaveData` and
 `CreateOwnSaveData`; it does not grant SD-card, BIS or other-save-data access.
