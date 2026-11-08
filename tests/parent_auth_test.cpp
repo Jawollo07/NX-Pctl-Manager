@@ -29,6 +29,9 @@ int main() {
     auth.EndSession();
     assert(!auth.IsAuthenticated(102));
 
+    // Start a fresh authentication test window while retaining replay state.
+    assert(auth.Configure(secret, sizeof(secret) - 1, auth.LastAcceptedCounter()));
+
     // Five invalid attempts activate a monotonic-time lockout.
     std::uint32_t current_code = 0;
     assert(nxpctl::totp::GenerateCode(secret, sizeof(secret) - 1, 89 / 30, &current_code));
