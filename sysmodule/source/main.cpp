@@ -495,7 +495,8 @@ namespace ams {
                         ::nxpctl::policy::EvaluateAtLocalUnixTime(
                             active_policy, trusted_local_time,
                             g_usage_daily_minutes,
-                            ::nxpctl::sync::IsOffline(monotonic_seconds), false);
+                            ::nxpctl::sync::IsOffline(monotonic_seconds),
+                            ::nxpctl::sync::IsParentAuthenticated(monotonic_seconds));
                     g_policy_decision_allowed = decision.allowed ? 1 : 0;
                     g_policy_decision_reason = static_cast<u32>(decision.reason);
                     g_policy_decision_valid = 1;
