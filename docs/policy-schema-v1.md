@@ -36,6 +36,7 @@ transport verifies its integrity. The model contains only console-wide rules.
 | `not_after` | integer | Unix seconds |
 | `server_time` | integer | Server Unix seconds |
 | `enabled` | boolean | Whether policy is enabled |
+| `require_parent_authentication` | boolean | Require a currently valid backend-issued 15-minute parent-auth grant for global application execution |
 | `require_parent_authentication` | boolean | Parent-auth requirement |
 | `offline_behavior` | integer | Enum above |
 | `timezone_offset_minutes` | integer | Fixed UTC offset |
