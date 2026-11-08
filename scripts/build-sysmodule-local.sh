@@ -62,11 +62,18 @@ grep -q "GetRunningApplicationProcessId" \
 
 # Never pull, rebase, reset, or otherwise mutate the user's Git checkout here.
 make -C "$ROOT/sysmodule" ATMOSPHERE_ROOT="$ATMOSPHERE_ROOT" nx_release
+make -C "$ROOT/tools/provisioner"
 
 ARTIFACT="$ROOT/sysmodule/out/nintendo_nx_arm64_armv8a/release/nx_pctl_manager.nsp"
+BOOTSTRAP="$ROOT/tools/provisioner/nxpctl-bootstrap.nro"
 if [[ ! -s "$ARTIFACT" ]]; then
   echo "Expected non-empty NSP was not produced: $ARTIFACT" >&2
   exit 1
 fi
-file "$ARTIFACT"
-echo "Build finished: $ARTIFACT"
+if [[ ! -s "$BOOTSTRAP" ]]; then
+  echo "Expected non-empty bootstrap NRO was not produced: $BOOTSTRAP" >&2
+  exit 1
+fi
+file "$ARTIFACT" "$BOOTSTRAP"
+echo "Sysmodule build finished: $ARTIFACT"
+echo "One-shot bootstrap helper: $BOOTSTRAP"

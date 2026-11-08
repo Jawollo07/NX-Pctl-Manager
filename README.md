@@ -27,7 +27,7 @@ AES-GCM-encrypted bodies over HTTP; HTTP metadata remains visible.
 
 The feature branch builds an experimental NSP in GitHub Actions and runs the
 backend and host-side protocol tests. This is not a production release.
-First-time enrollment still needs a separate trusted HIPC provisioning client.
+A one-shot, non-interactive HIPC bootstrap NRO is included for first-time enrollment; its console-side behavior still requires hardware validation.
 Suspend/resume accounting, firmware-specific compatibility review, boot
 recovery and physical-console enforcement tests remain outstanding.
 

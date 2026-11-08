@@ -52,11 +52,16 @@ non-standard location, set `DEVKITPRO` to that existing installation before
 running the script. All libnx install output stays under this repository's
 `toolchain/libnx`; `/opt/devkitpro` is not modified.
 
-The expected release package is:
+The build script produces both the experimental sysmodule package and the
+one-shot HIPC bootstrap helper:
 
 ```text
 sysmodule/out/nintendo_nx_arm64_armv8a/release/nx_pctl_manager.nsp
+tools/provisioner/nxpctl-bootstrap.nro
 ```
+
+See [first-time device enrollment](device-enrollment.md) for the bootstrap
+file workflow.
 
 Generated `build/`, `out/`, and `toolchain/` directories are local build
 products and must not be committed.

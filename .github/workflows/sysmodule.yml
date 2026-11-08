@@ -109,6 +109,7 @@ jobs:
               test -f /work/atmosphere/libraries/libstratosphere/include/stratosphere/pgl/pgl_shell_api.hpp
               grep -q "GetRunningApplicationProcessId" /work/atmosphere/libraries/libstratosphere/include/stratosphere/pgl/pgl_shell_api.hpp
               make -C sysmodule ATMOSPHERE_ROOT=/work/atmosphere nx_release
+              make -C tools/provisioner
             '
 
       - name: Verify packaged sysmodule
@@ -122,11 +123,14 @@ jobs:
           fi
           mkdir -p project/sysmodule/artifacts
           cp "${nsp_files[0]}" project/sysmodule/artifacts/nx_pctl_manager.nsp
-          file project/sysmodule/artifacts/nx_pctl_manager.nsp
+          test -s project/tools/provisioner/nxpctl-bootstrap.nro
+          file project/sysmodule/artifacts/nx_pctl_manager.nsp project/tools/provisioner/nxpctl-bootstrap.nro
 
       - name: Upload experimental sysmodule artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nx-pctl-manager-sysmodule-experimental
-          path: project/sysmodule/artifacts/nx_pctl_manager.nsp
+          name: nx-pctl-manager-experimental
+          path: |
+            project/sysmodule/artifacts/nx_pctl_manager.nsp
+            project/tools/provisioner/nxpctl-bootstrap.nro
           if-no-files-found: error

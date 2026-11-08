@@ -60,11 +60,13 @@ tamper-proof against someone who controls the console, SD card or CFW.
 Suspend/resume accounting is not implemented because a safe PSC module
 identity has not been established.
 
-The branch exposes HIPC command 65001 for one-time enrollment configuration,
-but it does not ship a HIPC provisioning client. A trusted client must provide
-the API hostname, device ID and one-time enrollment code. Until that separate
-bootstrap client exists, first-time device enrollment is not a complete
-end-user workflow.
+The branch includes `tools/provisioner/nxpctl-bootstrap.nro`, a one-shot,
+non-interactive HIPC bootstrap helper. It reads a fixed-size
+`nxpctl-provision.bin` file from the SD-card root, submits it through command
+65001 and deletes it after the sysmodule accepts the request. The host-side
+Python generator prompts for the API hostname, device ID and one-time
+enrollment code without echoing the code. This is not a management UI and does
+not use Borealis.
 
 The configured NPDM title ID is a development value and has not been
 independently reviewed or validated on hardware. CI packaging does not prove
