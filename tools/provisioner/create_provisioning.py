@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 from urllib.parse import urlsplit
 
+HOST_RE = re.compile(r"(?=.{1,253}\Z)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*")
 DEVICE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 CODE_RE = re.compile(r"[A-Za-z0-9_-]{20,128}")
 
@@ -25,8 +26,8 @@ def validate_api_url(api_url: str) -> None:
         raise ValueError("credentials in backend URL are not allowed")
     if parsed.path not in ("", "/") or parsed.query or parsed.fragment:
         raise ValueError("enter only the base address, without a path, query or fragment")
-    if not parsed.hostname:
-        raise ValueError("backend URL is missing a hostname or IP address")
+    if not parsed.hostname or not HOST_RE.fullmatch(parsed.hostname):
+        raise ValueError("backend URL must contain a valid DNS hostname or IPv4 address")
     if len(api_url) >= 254:
         raise ValueError("backend URL is too long")
     if port is not None and not (1 <= port <= 65535):
@@ -41,7 +42,7 @@ def build_config(api_url: str, device_id: str, enrollment_code: str) -> str:
         raise ValueError("enrollment code must be 20..128 URL-safe characters")
     return (
         "# NX-Pctl-Manager one-time device enrollment\n"
-        f"api_url={api_url.rstrip('/') }\n"
+        f"api_url={api_url.rstrip('/')}\n"
         f"device_id={device_id}\n"
         f"enrollment_code={enrollment_code}\n"
     )
