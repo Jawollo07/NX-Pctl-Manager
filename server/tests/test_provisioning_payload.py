@@ -1,23 +1,23 @@
-"""The host bootstrap generator must match the fixed HIPC request ABI."""
-import struct
+"""The config generator emits the exact text format consumed by the bootstrap."""
 import unittest
 
-from tools.provisioner.create_provisioning import PAYLOAD_SIZE, build_payload
+from tools.provisioner.create_provisioning import build_config
 
 
-class ProvisioningPayloadTests(unittest.TestCase):
-    def test_binary_layout_matches_sysmodule_struct(self):
-        payload = build_payload(
+class ProvisioningConfigTests(unittest.TestCase):
+    def test_generates_readable_config(self):
+        config = build_config(
             "portal.example.net",
             "switch-livingroom",
             "AbCdEf0123456789_-abcdefgh",
         )
-        self.assertEqual(len(payload), 448)
-        host, device_id, code = struct.unpack("<254s65s129s", payload)
-        self.assertEqual(host.split(b"\0", 1)[0], b"portal.example.net")
-        self.assertEqual(device_id.split(b"\0", 1)[0], b"switch-livingroom")
-        self.assertEqual(code.split(b"\0", 1)[0], b"AbCdEf0123456789_-abcdefgh")
-        self.assertEqual(PAYLOAD_SIZE, 448)
+        self.assertEqual(
+            config,
+            "# NX-Pctl-Manager one-time device enrollment\n"
+            "api_host=portal.example.net\n"
+            "device_id=switch-livingroom\n"
+            "enrollment_code=AbCdEf0123456789_-abcdefgh\n",
+        )
 
     def test_rejects_scheme_port_path_and_invalid_identifiers(self):
         invalid = [
@@ -29,11 +29,11 @@ class ProvisioningPayloadTests(unittest.TestCase):
         ]
         for args in invalid:
             with self.subTest(args=args), self.assertRaises(ValueError):
-                build_payload(*args)
+                build_config(*args)
 
     def test_rejects_non_ascii(self):
         with self.assertRaises(ValueError):
-            build_payload("portal.example.net", "switch-01", "ä" * 24)
+            build_config("portal.example.net", "switch-01", "ä" * 24)
 
 
 if __name__ == "__main__":
