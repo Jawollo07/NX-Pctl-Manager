@@ -132,7 +132,7 @@ counter. Time is counted only while PGL reports an active application;
 HOME-menu/overlay behavior requires hardware validation. Started minutes
 round up, forward day transitions reset the daily bucket, backward clock corrections do not
 erase accumulated time, and observation gaps over two seconds are ignored.
-The counter is persisted as an encrypted daily snapshot and is not enforcement.
+The counter is persisted as an encrypted daily snapshot. It supplies the policy evaluator; the separate runtime enforcement path consumes the evaluator's global decision and applies it through PGL.
 
 `protocol/trusted_clock.hpp` derives the local day from an authenticated
 policy server-time anchor, monotonic elapsed seconds and the policy's fixed
@@ -234,5 +234,6 @@ host, device ID and long-lived credential are stored in alternating
 AES-GCM-authenticated records in this sysmodule's own device save data. After
 a restart, the newest valid record is restored and a fresh short-lived access
 token is obtained. Cross-language fixture coverage and real-device
-validation remain required before public deployment. No restrictions are
-enforced on the console yet.
+validation remain required before public deployment. Global restrictions are
+currently enforced by the PGL process-termination path described above; actual
+console behavior still requires hardware validation.
