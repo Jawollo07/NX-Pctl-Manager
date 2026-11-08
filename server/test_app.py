@@ -4,6 +4,7 @@ import json
 import time
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from server import app as api
