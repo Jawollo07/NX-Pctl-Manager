@@ -36,7 +36,10 @@
         (out_valid, out_allowed, out_reason)) \
     AMS_SF_METHOD_INFO(C, H, 65004, Result, GetEnforcementStatus, \
         (sf::Out<u32> out_state, sf::Out<u32> out_termination_attempts, sf::Out<u32> out_event_monitor_state), \
-        (out_state, out_termination_attempts, out_event_monitor_state))
+        (out_state, out_termination_attempts, out_event_monitor_state)) \
+    AMS_SF_METHOD_INFO(C, H, 65005, Result, GetConnectivityStatus, \
+        (sf::Out<u32> out_state, sf::Out<u64> out_last_success_age_seconds), \
+        (out_state, out_last_success_age_seconds))
 
 AMS_SF_DEFINE_INTERFACE(ams::nxpctl::impl, IRuntime, AMS_NXPCTL_I_RUNTIME_INTERFACE_INFO, 0x00000000)
 
@@ -491,7 +494,8 @@ namespace ams {
                     const auto decision =
                         ::nxpctl::policy::EvaluateAtLocalUnixTime(
                             active_policy, trusted_local_time,
-                            g_usage_daily_minutes, false, false);
+                            g_usage_daily_minutes,
+                            ::nxpctl::sync::IsOffline(monotonic_seconds), false);
                     g_policy_decision_allowed = decision.allowed ? 1 : 0;
                     g_policy_decision_reason = static_cast<u32>(decision.reason);
                     g_policy_decision_valid = 1;
@@ -631,6 +635,17 @@ namespace ams {
                     *out_state = g_enforcement_state;
                     *out_termination_attempts = g_termination_attempts;
                     *out_event_monitor_state = g_pgl_event_monitor_state;
+                    R_SUCCEED();
+                }
+
+                Result GetConnectivityStatus(
+                    sf::Out<u32> out_state,
+                    sf::Out<u64> out_last_success_age_seconds) {
+                    u64 age_seconds = UINT64_MAX;
+                    const auto state = ::nxpctl::sync::GetConnectivityStatus(
+                        GetMonotonicSeconds(), std::addressof(age_seconds));
+                    *out_state = static_cast<u32>(state);
+                    *out_last_success_age_seconds = age_seconds;
                     R_SUCCEED();
                 }
 

@@ -26,7 +26,8 @@ pinned libnx submodule, a pinned Atmosphère source checkout, and the host
 utilities `npdmtool`, `elf2nso` and `build_pfs0`.
 
 See [the reproducible sysmodule build guide](docs/sysmodule-build.md) for exact
-source revisions and commands.
+source revisions and commands. Offline-state semantics are documented in
+[offline behavior](docs/offline-behavior.md).
 
 ## Current implementation status
 

@@ -45,7 +45,7 @@ jobs:
       - name: Verify shared protocol and accounting tests
         run: |
           set -euo pipefail
-          for test in runtime_protocol worker_supervision policy_engine policy_json policy_evaluator usage_tracker usage_snapshot http_response http_request provisioning trusted_clock; do
+          for test in runtime_protocol worker_supervision policy_engine policy_json policy_evaluator usage_tracker usage_snapshot http_response http_request provisioning trusted_clock connectivity; do
             c++ -std=c++17 -Wall -Wextra -Werror "project/tests/${test}_test.cpp" -o "$RUNNER_TEMP/${test}-test"
             "$RUNNER_TEMP/${test}-test"
           done

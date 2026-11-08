@@ -1,4 +1,5 @@
 #include "secure_sync.hpp"
+#include "../../protocol/connectivity.hpp"
 #include "secure_http_client.hpp"
 #include "credential_store.hpp"
 #include "../../protocol/policy_json.hpp"
@@ -31,6 +32,8 @@ namespace {
     std::atomic<s64> g_clock_not_after{0};
     std::atomic<u64> g_clock_monotonic_anchor{0};
     std::atomic<s16> g_clock_timezone_offset_minutes{0};
+    std::atomic<u64> g_last_successful_contact_monotonic{0};
+    std::atomic<bool> g_has_successful_contact{false};
     char g_response[ResponseCapacity];
 
     u64 GetMonotonicSeconds() {
@@ -119,11 +122,20 @@ namespace {
     bool Post(const char* operation, const char* secret, const char* purpose,
               const char* payload, std::size_t payload_size, u16* status,
               std::size_t* response_size) {
-        return secure_http::Post(
+        const auto result = secure_http::Post(
             g_config.api_host, ApiPort, g_config.device_id, operation,
             secret, std::strlen(secret), purpose, payload, payload_size,
-            g_response, sizeof(g_response), response_size, status) ==
-            secure_http::Error::None;
+            g_response, sizeof(g_response), response_size, status);
+        if (result != secure_http::Error::None) return false;
+
+        // Only a fully authenticated server response refreshes connectivity.
+        // A TCP connection or an unauthenticated HTTP response is insufficient.
+        const u64 now = GetMonotonicSeconds();
+        if (now != 0) {
+            g_last_successful_contact_monotonic.store(now, std::memory_order_relaxed);
+            g_has_successful_contact.store(true, std::memory_order_release);
+        }
+        return true;
     }
 
     bool Enroll() {
@@ -277,6 +289,8 @@ namespace {
 }
 
 bool Initialize() {
+    g_has_successful_contact.store(false, std::memory_order_release);
+    g_last_successful_contact_monotonic.store(0, std::memory_order_relaxed);
     g_clock_anchor_valid.store(false, std::memory_order_release);
     g_clock_server_time_anchor.store(0, std::memory_order_relaxed);
     g_clock_not_after.store(0, std::memory_order_relaxed);
@@ -323,6 +337,23 @@ bool IsConfigured() {
 bool IsEnrolled() {
     return g_enrolled.load(std::memory_order_acquire) ||
            g_enrollment_in_progress.load(std::memory_order_acquire);
+}
+
+connectivity::State GetConnectivityStatus(u64 monotonic_seconds, u64* out_age_seconds) {
+    const bool has_success = g_has_successful_contact.load(std::memory_order_acquire);
+    const u64 last_success = g_last_successful_contact_monotonic.load(std::memory_order_relaxed);
+    const auto state = connectivity::GetState(has_success, last_success, monotonic_seconds);
+    if (out_age_seconds != nullptr) {
+        *out_age_seconds = connectivity::GetSuccessAge(has_success, last_success, monotonic_seconds);
+    }
+    return state;
+}
+
+bool IsOffline(u64 monotonic_seconds) {
+    return connectivity::IsOffline(
+        g_has_successful_contact.load(std::memory_order_acquire),
+        g_last_successful_contact_monotonic.load(std::memory_order_relaxed),
+        monotonic_seconds);
 }
 
 bool GetTrustedLocalUnixTime(u64 monotonic_seconds, s64* out_local_time) {
@@ -438,6 +469,8 @@ void Clear() {
     g_enrollment_in_progress.store(false, std::memory_order_release);
     g_persistence_pending = false;
     g_cycles_since_auth = AuthRefreshCycles;
+    g_has_successful_contact.store(false, std::memory_order_release);
+    g_last_successful_contact_monotonic.store(0, std::memory_order_relaxed);
     g_clock_anchor_valid.store(false, std::memory_order_release);
     g_clock_server_time_anchor.store(0, std::memory_order_relaxed);
     g_clock_not_after.store(0, std::memory_order_relaxed);
