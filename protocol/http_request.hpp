@@ -67,13 +67,23 @@ inline bool AppendUnsigned(char* output, std::size_t capacity, std::size_t* used
         return RequestError::InvalidMethod;
 
     const auto host_length = request_detail::Length(host);
-    if (host_length == 0 || host_length > 253 || !request_detail::IsHeaderSafe(host, host_length))
+    if (host_length == 0 || host_length > 260 || !request_detail::IsHeaderSafe(host, host_length))
         return RequestError::InvalidHost;
+    bool seen_port_separator = false;
     for (std::size_t i = 0; i < host_length; ++i) {
         const char c = host[i];
-        const bool valid = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
-            || (c >= '0' && c <= '9') || c == '.' || c == '-';
-        if (!valid) return RequestError::InvalidHost;
+        if (c == ':') {
+            if (seen_port_separator || i == 0 || i + 1 == host_length) return RequestError::InvalidHost;
+            seen_port_separator = true;
+            continue;
+        }
+        if (seen_port_separator) {
+            if (c < '0' || c > '9') return RequestError::InvalidHost;
+        } else {
+            const bool valid = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+                || (c >= '0' && c <= '9') || c == '.' || c == '-';
+            if (!valid) return RequestError::InvalidHost;
+        }
     }
     const auto path_length = request_detail::Length(path);
     if (path_length == 0 || path[0] != '/' || path_length > 512)
