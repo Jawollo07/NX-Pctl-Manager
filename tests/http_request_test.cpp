@@ -24,7 +24,7 @@ int main() {
     {
         assert(BuildRequest("POST", "192.168.178.10:1212", "/v1/secure/switch-01/enroll",
             nullptr, "{}", 2, buffer, sizeof(buffer), &request) == RequestError::None);
-        assert(std::strstr(request.data, "Host: 192.168.178.10:1212\\r\\n") != nullptr);
+        assert(std::strstr(request.data, "Host: 192.168.178.10:1212\r\n") != nullptr);
     }
     {
         assert(BuildRequest("GET", "api.example.net", "/v1/devices/switch-a/policy",
