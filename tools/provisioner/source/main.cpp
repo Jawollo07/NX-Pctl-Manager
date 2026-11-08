@@ -27,9 +27,10 @@ void WriteStatus(const char *state, Result result) {
 } // namespace
 
 int main() {
-    Result result = fsdevMountSdmc();
-    if (R_FAILED(result)) return 10;
+    /* libnx mounts sdmc during process initialization; do not mount it twice. */
+    if (fsdevGetDeviceFileSystem("sdmc") == nullptr) return 10;
 
+    Result result = 0;
     ::nxpctl::protocol::ProvisioningRequest request{};
     FILE *file = std::fopen(ProvisioningPath, "rb");
     if (file == nullptr) {
