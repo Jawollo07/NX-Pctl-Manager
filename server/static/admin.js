@@ -68,7 +68,11 @@ async function connect() {
     $("admin-token").value = "";
   }
 }
-function formatDuration(seconds) {\n  const total = Math.max(0, Number(seconds) || 0);\n  return Math.floor(total / 3600) + " h " + Math.floor((total % 3600) / 60) + " min";\n}\nfunction makeCell(text, className) {
+function formatDuration(seconds) {
+  const total = Math.max(0, Number(seconds) || 0);
+  return Math.floor(total / 3600) + " h " + Math.floor((total % 3600) / 60) + " min";
+}
+function makeCell(text, className) {
   const td = document.createElement("td");
   td.textContent = text;
   if (className) td.className = className;
