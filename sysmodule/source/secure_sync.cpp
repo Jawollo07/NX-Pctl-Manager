@@ -11,7 +11,6 @@
 
 namespace nxpctl::sync {
 namespace {
-    constexpr u16 ApiPort = 80;
     constexpr u32 AuthRefreshCycles = 10; // Worker cadence is one minute.
     constexpr std::size_t ResponseCapacity = 20 * 1024;
 
@@ -143,11 +142,54 @@ namespace {
         return false;
     }
 
+    bool ParseApiEndpoint(const char* api_url, char* host, std::size_t host_capacity,
+                          char* host_header, std::size_t header_capacity, u16* out_port) {
+        if (!api_url || !host || !host_header || !out_port) return false;
+        const char* authority = api_url;
+        if (std::strncmp(authority, "http://", 7) == 0) authority += 7;
+        const char* end = authority + std::strlen(authority);
+        const char* colon = nullptr;
+        for (const char* p = authority; p < end; ++p) {
+            if (*p == '/' || *p == '?' || *p == '#') return false;
+            if (*p == ':') {
+                if (colon != nullptr) return false;
+                colon = p;
+            }
+        }
+        const char* host_end = colon ? colon : end;
+        const std::size_t host_length = static_cast<std::size_t>(host_end - authority);
+        if (host_length == 0 || host_length >= host_capacity) return false;
+        std::memcpy(host, authority, host_length);
+        host[host_length] = '\0';
+
+        u32 port = 80;
+        if (colon) {
+            if (colon + 1 == end) return false;
+            port = 0;
+            for (const char* p = colon + 1; p < end; ++p) {
+                if (*p < '0' || *p > '9') return false;
+                port = port * 10 + static_cast<u32>(*p - '0');
+                if (port > 65535) return false;
+            }
+            if (port == 0) return false;
+        }
+        *out_port = static_cast<u16>(port);
+        const int header_length = colon
+            ? std::snprintf(host_header, header_capacity, "%s:%u", host, port)
+            : std::snprintf(host_header, header_capacity, "%s", host);
+        return header_length > 0 && static_cast<std::size_t>(header_length) < header_capacity;
+    }
+
     bool Post(const char* operation, const char* secret, const char* purpose,
               const char* payload, std::size_t payload_size, u16* status,
               std::size_t* response_size) {
+        char host[254]{};
+        char host_header[262]{};
+        u16 port = 0;
+        if (!ParseApiEndpoint(g_config.api_url, host, sizeof(host),
+                              host_header, sizeof(host_header), &port)) return false;
         const auto result = secure_http::Post(
-            g_config.api_host, ApiPort, g_config.device_id, operation,
+            host, host_header, port, g_config.device_id, operation,
             secret, std::strlen(secret), purpose, payload, payload_size,
             g_response, sizeof(g_response), response_size, status);
         if (result != secure_http::Error::None) return false;
@@ -181,7 +223,7 @@ namespace {
         std::memcpy(g_device_credential, credential, std::strlen(credential) + 1);
 
         credential_store::CredentialData stored{};
-        std::memcpy(stored.api_host, g_config.api_host, sizeof(stored.api_host));
+        std::memcpy(stored.api_url, g_config.api_url, sizeof(stored.api_url));
         std::memcpy(stored.device_id, g_config.device_id, sizeof(stored.device_id));
         std::memcpy(stored.device_credential, g_device_credential, sizeof(stored.device_credential));
         g_persistence_pending = !credential_store::Save(stored);
@@ -365,7 +407,7 @@ bool Initialize() {
     credential_store::CredentialData stored{};
     if (storage_available && credential_store::Load(&stored)) {
         Wipe(&g_config, sizeof(g_config));
-        std::memcpy(g_config.api_host, stored.api_host, sizeof(g_config.api_host));
+        std::memcpy(g_config.api_url, stored.api_url, sizeof(g_config.api_url));
         std::memcpy(g_config.device_id, stored.device_id, sizeof(g_config.device_id));
         std::memcpy(g_device_credential, stored.device_credential, sizeof(g_device_credential));
         g_configured.store(true, std::memory_order_release);
@@ -514,7 +556,7 @@ void RunCycle(policy::PolicyStore& store, u64 uptime_seconds,
 
     if (g_persistence_pending && g_enrolled.load(std::memory_order_acquire)) {
         credential_store::CredentialData stored{};
-        std::memcpy(stored.api_host, g_config.api_host, sizeof(stored.api_host));
+        std::memcpy(stored.api_url, g_config.api_url, sizeof(stored.api_url));
         std::memcpy(stored.device_id, g_config.device_id, sizeof(stored.device_id));
         std::memcpy(stored.device_credential, g_device_credential, sizeof(stored.device_credential));
         g_persistence_pending = !credential_store::Save(stored);
