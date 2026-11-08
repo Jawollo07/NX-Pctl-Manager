@@ -7,12 +7,12 @@ PCTL service.
 ## Product scope
 
 The project is a backend-managed, headless Atmosphère sysmodule for global
-console usage control. The backend is the authoritative control plane. The
+application usage control. The backend is the authoritative control plane. The
 Switch module is a small execution agent that synchronizes authenticated
 policy snapshots, measures global application-active time and enforces the
 current global decision.
 
-The supported policy surface is console-wide only:
+The supported policy surface applies globally to application execution only:
 
 - global daily playtime limit;
 - weekday-specific global limits;

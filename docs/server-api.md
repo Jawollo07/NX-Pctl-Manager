@@ -167,7 +167,7 @@ For device API paths:
 
 ## Persistence and current limitations
 
-The encrypted heartbeat stores the latest reported global daily usage day key and active seconds in `devices.last_heartbeat_json`; it is a single console-wide counter, not a per-title breakdown. The Switch sends it on the normal heartbeat cadence (about once per minute) only after the trusted day is available.\n\nSQLite stores device credential hashes, enrollment-code hashes, access-token
+The encrypted heartbeat stores the latest reported global daily usage day key and active seconds in `devices.last_heartbeat_json`; it is a single global application-active counter, not a per-title breakdown. The Switch sends it on the normal heartbeat cadence (about once per minute) only after the trusted day is available.\nSQLite stores device credential hashes, enrollment-code hashes, access-token
 hashes, policies, events, acknowledgements and secure replay identifiers.
 Raw credentials, invitation codes and bearer tokens are never stored.
 Protect and back up the database directory.

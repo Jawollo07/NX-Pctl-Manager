@@ -17,7 +17,7 @@ transport verifies its integrity. The model contains only console-wide rules.
 - All numeric values are base-10 integers. Fractions and exponent notation are
   rejected. Booleans must be JSON `true` or `false`.
 - `offline_behavior`: 0 = continue using the last verified global policy;
-  1 = block all console usage while offline. No title-specific behavior exists.
+  1 = block all application execution while offline. No title-specific behavior exists.
 - `global_daily_limit_minutes` and each weekday entry are 0–1440, or 65535
   for no limit / inherit. Weekday order is Monday through Sunday.
 - `timezone_offset_minutes` is a fixed UTC offset in the range -840..840.
