@@ -34,8 +34,16 @@ named `nxpctl-data` volume. It runs read-only apart from the persistent data
 volume and temporary filesystem.
 
 Open `https://YOUR-HOSTNAME/admin` after configuring a reverse proxy with a
-valid certificate and an upstream of `http://127.0.0.1:8080`. The reverse
-proxy must forward the original request path and request body unchanged.
+valid certificate. If the proxy runs directly on the Ubuntu host, its upstream
+is `http://127.0.0.1:8080`. The compose port is deliberately bound to loopback.
+
+If the reverse proxy runs in another Docker container (for example, Nginx
+Proxy Manager), that container cannot reach the host's `127.0.0.1`. Connect
+both containers to a dedicated shared Docker network and use the Compose
+service name `nxpctl-api:8080`, or explicitly configure a host-gateway route
+for the proxy container. Do not solve this by publishing port 8080 on
+`0.0.0.0`. The reverse proxy must forward the original request path and
+request body unchanged.
 Disable caching, body rewriting, browser challenges and interactive access
 gates on `/v1/secure/*`; the Switch client cannot complete browser-based
 authentication challenges. Do not expose port 8080 directly to the Internet.
