@@ -300,23 +300,30 @@ namespace ams {
         void PglEventMonitorThreadMain(void *) {
             g_pgl_event_monitor_state = 2;
 
-            while (!os::TimedWaitEvent(
-                std::addressof(g_pgl_event_stop_event),
-                TimeSpan::FromNanoSeconds(WorkerPollIntervalNs))) {
+            while (!os::TryWaitEvent(std::addressof(g_pgl_event_stop_event))) {
                 if (hos::GetVersion() < hos::Version_10_0_0 || !g_pgl_initialized) {
                     g_pgl_event_monitor_state = 2;
+                    os::TimedWaitEvent(
+                        std::addressof(g_pgl_event_stop_event),
+                        TimeSpan::FromMilliSeconds(250));
                     continue;
                 }
 
                 pgl::EventObserver observer;
                 if (R_FAILED(pgl::CreateShellEvent(std::addressof(observer)))) {
                     g_pgl_event_monitor_state = 2;
+                    os::TimedWaitEvent(
+                        std::addressof(g_pgl_event_stop_event),
+                        TimeSpan::FromNanoSeconds(WorkerPollIntervalNs));
                     continue;
                 }
 
                 os::SystemEvent shell_event;
                 if (R_FAILED(observer.GetShellEvent(shell_event.GetBase()))) {
                     g_pgl_event_monitor_state = 2;
+                    os::TimedWaitEvent(
+                        std::addressof(g_pgl_event_stop_event),
+                        TimeSpan::FromNanoSeconds(WorkerPollIntervalNs));
                     continue;
                 }
 
