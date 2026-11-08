@@ -26,7 +26,7 @@ namespace nxpctl::secure_http {
      * plaintext_json must be a complete JSON object. The decrypted response
      * is copied to caller-owned storage and NUL-terminated.
      */
-    Error Post(const char *host, u16 port,
+    Error Post(const char *host, const char *host_header, u16 port,
                const char *device_id, const char *operation,
                const char *secret, std::size_t secret_size,
                const char *purpose,
