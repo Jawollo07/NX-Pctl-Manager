@@ -50,7 +50,7 @@
                 <div class="form-grid">
                   <label class="toggle-row"><input id="policy-enabled" type="checkbox"><span>Richtlinie aktiv</span></label>
                   <label class="toggle-row"><input id="policy-parent" type="checkbox"><span>Elternauthentifizierung erforderlich</span></label>
-                  <label>Globales Tageslimit (Minuten)<input id="daily-limit" type="number" min="0" max="1440" required><small>0 = gesperrt · 65535 = unbegrenzt</small></label>
+                  <label>Globales Tageslimit (Minuten)<input id="daily-limit" type="number" min="0" max="65535" required><small>0 = gesperrt · 65535 = unbegrenzt</small></label>
                   <label>UTC-Zeitzonenoffset (Minuten)<input id="timezone" type="number" min="-840" max="840" required><small>Beispiel Deutschland: 60 (Winter), 120 (Sommer)</small></label>
                   <label>Offline-Verhalten<select id="offline"><option value="0">Letzte gültige Richtlinie weiterverwenden</option><option value="1">Offline vollständig sperren</option></select></label>
                 </div>
