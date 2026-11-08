@@ -3,9 +3,10 @@
  *
  * Project-authored code, licensed under GPL-2.0-or-later.
  * This phase provides a resident worker, local HIPC provisioning/status service,
- * encrypted HTTP policy synchronization and read-only global application-activity
- * monitoring for daily playtime. It does not enforce policies, retain title IDs,
- * or mutate PCTL state. Device credentials are persisted separately by secure sync.
+ * encrypted HTTP policy synchronization, global application-activity monitoring,
+ * and global policy enforcement through PGL process termination. The running PID
+ * is used transiently and never retained; no title IDs or PCTL state are used.
+ * Device credentials are persisted separately by secure sync.
  */
 #include <stratosphere.hpp>
 #include <stratosphere/pgl/pgl_shell_api.hpp>
@@ -32,7 +33,10 @@
         (out_monitor_state, out_active_seconds, out_daily_minutes)) \
     AMS_SF_METHOD_INFO(C, H, 65003, Result, GetPolicyDecision, \
         (sf::Out<u32> out_valid, sf::Out<u32> out_allowed, sf::Out<u32> out_reason), \
-        (out_valid, out_allowed, out_reason))
+        (out_valid, out_allowed, out_reason)) \
+    AMS_SF_METHOD_INFO(C, H, 65004, Result, GetEnforcementStatus, \
+        (sf::Out<u32> out_state, sf::Out<u32> out_termination_attempts), \
+        (out_state, out_termination_attempts))
 
 AMS_SF_DEFINE_INTERFACE(ams::nxpctl::impl, IRuntime, AMS_NXPCTL_I_RUNTIME_INTERFACE_INFO, 0x00000000)
 
@@ -69,6 +73,10 @@ namespace ams {
         util::Atomic<u32> g_policy_decision_valid;
         util::Atomic<u32> g_policy_decision_allowed;
         util::Atomic<u32> g_policy_decision_reason;
+        // 0=inactive/unenrolled, 1=allowed, 2=blocked, 3=termination/query error,
+        // 4=fail-closed because an enrolled device has no usable verified policy.
+        util::Atomic<u32> g_enforcement_state;
+        util::Atomic<u32> g_termination_attempts;
         ::nxpctl::policy::PolicyStore g_policy_store;
         ::nxpctl::usage::DailyUsageTracker g_usage_tracker;
         bool g_worker_thread_created = false;
@@ -224,6 +232,36 @@ namespace ams {
             }
         }
 
+        void EnforceGlobalPolicy(
+            bool policy_valid,
+            bool allowed,
+            bool enrolled,
+            bool application_active,
+            os::ProcessId application_pid) {
+            if (!enrolled) {
+                g_enforcement_state = 0;
+                return;
+            }
+
+            if (policy_valid && allowed) {
+                g_enforcement_state = 1;
+                return;
+            }
+
+            if (!application_active) {
+                g_enforcement_state = policy_valid ? 2 : 4;
+                return;
+            }
+
+            // PGL's supported TerminateProcess path delegates to pm:shell.
+            // The PID is used only for this call and is never stored or keyed.
+            const ams::Result terminate_result = pgl::TerminateProcess(application_pid);
+            ++g_termination_attempts;
+            g_enforcement_state = R_SUCCEEDED(terminate_result)
+                ? (policy_valid ? 2U : 4U)
+                : 3U;
+        }
+
         void UsageMonitorThreadMain(void *) {
             if (g_usage_storage_corrupt) {
                 g_usage_monitor_state = 2;
@@ -277,6 +315,7 @@ namespace ams {
                     // A service/IPC failure is unknown state, not evidence of
                     // an idle console. Skip this sample; the tracker rejects
                     // an excessive gap rather than inventing playtime.
+                    if (::nxpctl::sync::IsEnrolled()) g_enforcement_state = 3;
                     continue;
                 }
 
@@ -305,9 +344,18 @@ namespace ams {
                     g_policy_decision_allowed = decision.allowed ? 1 : 0;
                     g_policy_decision_reason = static_cast<u32>(decision.reason);
                     g_policy_decision_valid = 1;
+                    EnforceGlobalPolicy(
+                        true, decision.allowed, ::nxpctl::sync::IsEnrolled(),
+                        application_active, application_pid);
                 } else {
                     g_policy_decision_valid = 0;
-                };
+                    // Once enrolled, absence/expiry of a verifiable policy is
+                    // fail-closed: running software is terminated until a
+                    // fresh authenticated policy and trusted clock are ready.
+                    EnforceGlobalPolicy(
+                        false, false, ::nxpctl::sync::IsEnrolled(),
+                        application_active, application_pid);
+                }
             }
             g_usage_monitor_state = 0;
         }
@@ -427,6 +475,14 @@ namespace ams {
                     R_SUCCEED();
                 }
 
+                Result GetEnforcementStatus(
+                    sf::Out<u32> out_state,
+                    sf::Out<u32> out_termination_attempts) {
+                    *out_state = g_enforcement_state;
+                    *out_termination_attempts = g_termination_attempts;
+                    R_SUCCEED();
+                }
+
         };
 
         static_assert(impl::IsIRuntime<RuntimeService>);
@@ -468,8 +524,9 @@ namespace ams {
                 false,
                 os::EventClearMode_AutoClear);
 
-            // PGL is the supported application-process query interface on
-            // Horizon 10.0.0+. It is read-only here; no process is modified.
+            // PGL provides both application-process queries and the supported
+            // TerminateProcess operation used for global policy enforcement.
+            // This project does not initialize or call Nintendo PCTL.
             if (hos::GetVersion() >= hos::Version_10_0_0) {
                 g_pgl_initialized = R_SUCCEEDED(pgl::Initialize());
             }
