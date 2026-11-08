@@ -46,7 +46,7 @@ export DEVKITPRO="$PROJECT_TOOLCHAIN"
 export DEVKITA64="$PROJECT_TOOLCHAIN/devkitA64"
 export PATH="$DEVKITA64/bin:$SYSTEM_DEVKITPRO/tools/bin:$PATH"
 
-for tool in npdmtool elf2nso build_pfs0; do
+for tool in npdmtool elf2nso build_pfs0 elf2nro nacptool; do
   command -v "$tool" >/dev/null || {
     echo "Missing required Switch packaging tool: $tool" >&2
     exit 2
