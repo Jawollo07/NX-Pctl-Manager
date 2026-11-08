@@ -2,18 +2,18 @@
 
 ## Current runtime phase
 
-The experimental Stratosphere target now has a resident main thread, a separate cooperative network worker, a dedicated global playtime monitor thread, and a local HIPC status and enrollment-provisioning service.
+The experimental Stratosphere target now has a resident main thread, a separate cooperative network worker, a dedicated global playtime monitor, a PGL process-start event monitor, and a local HIPC status and enrollment-provisioning service.
 
 - `InitializeSystemModule` initializes the service-manager client, checks the pinned libstratosphere API, creates the worker stop event, and attempts to mount this sysmodule’s own device save data before the worker starts.
 - `Main` starts the worker, registers the `nxpctl` HIPC service, and enters the Stratosphere server loop.
 - The worker uses a dedicated 32 KiB stack and a one-second timed event wait as its idle cadence and cooperative shutdown point. The larger stack accommodates the bounded schema-v1 parser and network call frames. A separate supervisor checks thread termination with `os::TryWaitThread`, reaps the exited thread, and permits at most three automatic restarts per module lifetime. After the retry budget is exhausted, the service reports `WorkerState::Failed` and does not restart indefinitely.
 - Finalization stops and joins the supervisor before stopping the worker, preventing an intentional shutdown from being mistaken for a worker failure.
-- HIPC command 65000 (`GetRuntimeStatus`) returns protocol version, worker state, worker heartbeat, bounded worker restart count, and policy revision. Command 65001 (`ConfigureEnrollment`) accepts one fixed-size, validated host/device-ID/enrollment-code buffer. Command 65002 (`GetUsageStatus`) returns monitor state, global active seconds, and rounded daily minutes. Command 65003 (`GetPolicyDecision`) returns whether a trusted-time global policy decision is available, its allow/deny result, and the `DecisionReason` numeric value. Command 65004 (`GetEnforcementStatus`) returns the PGL enforcement state and cumulative process-termination attempts. The monitor derives weekday and minute-of-day from the authenticated server-time anchor plus monotonic elapsed time; it never consults the console wall clock. The current evaluation passes `offline=false` and `parent_authenticated=false` because connectivity-state and parent-authentication integrations are not implemented yet. PGL enforcement applies the resulting global allow/deny decision; parent-authentication-required policies therefore deny use until that integration is implemented. Monitor state `0` means unavailable/stopped, `1` means monitoring, and `2` means persistent usage data is corrupt and the counter has failed closed. These are not general configuration or policy-write interfaces.
+- HIPC command 65000 (`GetRuntimeStatus`) returns protocol version, worker state, worker heartbeat, bounded worker restart count, and policy revision. Command 65001 (`ConfigureEnrollment`) accepts one fixed-size, validated host/device-ID/enrollment-code buffer. Command 65002 (`GetUsageStatus`) returns monitor state, global active seconds, and rounded daily minutes. Command 65003 (`GetPolicyDecision`) returns whether a trusted-time global policy decision is available, its allow/deny result, and the `DecisionReason` numeric value. Command 65004 (`GetEnforcementStatus`) returns the PGL enforcement state, cumulative process-termination attempts, and process-start event-monitor state (0=stopped, 1=active, 2=waiting/retrying). The monitor derives weekday and minute-of-day from the authenticated server-time anchor plus monotonic elapsed time; it never consults the console wall clock. The current evaluation passes `offline=false` and `parent_authenticated=false` because connectivity-state and parent-authentication integrations are not implemented yet. PGL enforcement applies the resulting global allow/deny decision; parent-authentication-required policies therefore deny use until that integration is implemented. Monitor state `0` means unavailable/stopped, `1` means monitoring, and `2` means persistent usage data is corrupt and the counter has failed closed. These are not general configuration or policy-write interfaces.
 - `protocol/runtime_status.hpp` is the shared, Horizon-independent wire contract for the sysmodule and any separately built HIPC management client. `protocol/worker_supervision.hpp` contains the Horizon-independent three-restart budget used by the supervisor; CI tests that budget independently. `WorkerState::Failed` is a terminal health state after the bounded restart budget is exhausted. The CMIF output layout is four `u32` values at offsets 0/4/8/12 (protocol version, worker state, heartbeat, restart count), then the aligned `u64` policy revision at offset 16.
 - `protocol/http_response.hpp` now provides a bounded, allocation-free HTTP/1.0/1.1 response parser. It requires exactly one decimal `Content-Length`, rejects chunked/other transfer encodings, rejects compressed bodies, duplicate lengths, malformed CRLF framing, truncated bodies and trailing bytes, and caps headers/body at 8 KiB/96 KiB. It returns a view into the caller-owned receive buffer; it does not perform socket I/O or authenticate the peer.
-- `InitializeSystemModule` attempts PGL initialization only on Horizon 10.0.0 or later; the monitor retries a failed connection on its one-second cadence and reports enforcement error state `3` while PGL is unavailable. `Main` starts the monitor independently from the network worker, even if the initial PGL connection failed. `FinalizeSystemModule` stops and joins the monitor before finalizing PGL, then stops the other threads and finalizes their events.
+- `InitializeSystemModule` attempts PGL initialization only on Horizon 10.0.0 or later; the monitor retries a failed connection on its one-second cadence and reports enforcement error state `3` while PGL is unavailable. `Main` starts both PGL monitors independently from the network worker, even if the initial PGL connection failed. The event monitor retries observer creation if needed and uses a timed wait so shutdown remains cooperative. `FinalizeSystemModule` stops and joins both monitors before finalizing PGL, then stops the other threads and finalizes their events.
 
-The HIPC interface exposes diagnostics, a global usage snapshot, enforcement status, and a single enrollment bootstrap operation. The monitor obtains the current application PID only for the immediate PGL termination call; it never stores the PID or inspects title IDs. No parental-control service is used. Credential persistence uses this sysmodule’s own device save data. The removed NRO is not part of this headless branch; provisioning must be performed by a separately built trusted HIPC client. The worker then performs encrypted enrollment, exchanges the returned device credential for a short-lived token, fetches and validates policy snapshots, sends heartbeats and acknowledges accepted revisions.
+The HIPC interface exposes diagnostics, a global usage snapshot, enforcement status (including event-monitor health), and a single enrollment bootstrap operation. The monitor obtains the current application PID only for the immediate PGL termination call; it never stores the PID or inspects title IDs. No parental-control service is used. Credential persistence uses this sysmodule’s own device save data. The removed NRO is not part of this headless branch; provisioning must be performed by a separately built trusted HIPC client. The worker then performs encrypted enrollment, exchanges the returned device credential for a short-lived token, fetches and validates policy snapshots, sends heartbeats and acknowledges accepted revisions.
 
 ## Next implementation phases
 
@@ -23,7 +23,7 @@ The HIPC interface exposes diagnostics, a global usage snapshot, enforcement sta
 4. [x] Add bounded policy validation and in-memory policy snapshots.
 5. [x] Add bounded schema-v1 JSON decoding and host tests.
 6. [x] Add bounded HTTP response framing parser and host tests. [x] Add authenticated message integrity verification and connect only verified full snapshots to the RAM store.
-7. [x] Add PCTL-free global enforcement through the pinned PGL TerminateProcess API. Hardware validation, launch-event hardening, suspend/resume accounting and a tested recovery path remain outstanding.
+7. [x] Add PCTL-free global enforcement through the pinned PGL TerminateProcess API. [x] Add a PGL process-start event observer to enforce cached global deny decisions immediately when a new application process is reported. Hardware validation, suspend/resume accounting and a tested recovery path remain outstanding.
 
 ## PGL-based global enforcement (PCTL-free)
 
@@ -53,12 +53,19 @@ device has no usable verified policy/trusted clock, it fails closed and
 terminates running applications; state `4` reports this condition. An
 unenrolled device is not locked by an absent policy. HIPC command 65004
 (`GetEnforcementStatus`) exposes the state and cumulative termination-attempt
-count. Command 65003 continues to expose the policy decision.
+count and the event observer's health state. Command 65003 continues to expose the policy decision.
 
 This is process termination, not PCTL suspension and not a whole-console lock.
-The monitor retries on its next one-second sample if software is launched again,
-so a short relaunch window exists; a PGL launch-event observer could reduce that
-window in a later hardening phase. HOME, system settings, recovery mode and
+The one-second monitor remains the accounting and recovery fallback. A separate
+PGL shell-event observer drains queued `pm::ProcessEventInfo` records and reacts
+to `Started` events. It compares the event PID transiently with
+`GetRunningApplicationProcessId` before terminating, so non-application process
+notifications are not treated as games. It does not retain the PID or inspect a
+title ID. The observer queue only reports processes tracked by PGL; the polling
+monitor remains necessary for startup races, missed events, and existing
+applications. When the observer is active, ordinary relaunches can be handled
+on the process-start notification rather than waiting for the next poll, but
+this timing and event coverage still require hardware validation. HOME, system settings, recovery mode and
 control of the boot chain are outside this application-process enforcement
 boundary. A person able to disable or replace the sysmodule/CFW can bypass it.
 No absolute tamper-proof guarantee is claimed.
