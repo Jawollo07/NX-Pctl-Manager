@@ -51,10 +51,13 @@ configuration with `DELETE /v1/admin/devices/{device_id}/parent-auth`.
 
 The backend API, encrypted secret storage, replay protection, lockout, and
 secure device grant response are implemented and covered by host-side tests.
-The Switch worker does **not yet poll this operation or feed its response into
-the policy evaluator**. Until that runtime integration is complete, the
-backend grant does not actively gate console usage. No claim of end-to-end
-parent-auth enforcement or hardware validation is made.
+The Switch synchronization worker now polls the grant through the encrypted
+`parent-auth` operation and supplies the result to the global policy evaluator.
+When the active policy requires parent authentication, global application
+execution is denied unless the grant is valid according to the trusted backend
+clock. A previously received grant remains valid offline only until its
+15-minute expiry; after reboot, the volatile grant must be fetched again.
+Hardware validation is still outstanding.
 
 This is application-level authentication only. It does not replace Nintendo's
 native parental-control PIN or authenticate Nintendo system screens.
