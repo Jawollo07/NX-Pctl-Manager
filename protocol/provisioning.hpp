@@ -6,54 +6,83 @@
 namespace nxpctl::protocol {
 
 inline constexpr std::uint32_t ProvisioningCommandId = 65001;
-inline constexpr std::size_t ApiHostCapacity = 254;
+inline constexpr std::size_t ApiUrlCapacity = 254;
 inline constexpr std::size_t DeviceIdCapacity = 65;
 inline constexpr std::size_t EnrollmentCodeCapacity = 129;
 inline constexpr std::size_t ProvisioningConfigMaxSize = 1024;
 
 struct ProvisioningRequest {
-    char api_host[ApiHostCapacity]{};
+    char api_url[ApiUrlCapacity]{};
     char device_id[DeviceIdCapacity]{};
     char enrollment_code[EnrollmentCodeCapacity]{};
 };
 
 static_assert(sizeof(ProvisioningRequest) == 448);
 
-inline bool IsValidProvisioningRequest(const ProvisioningRequest& request) noexcept {
-    const auto length = [](const char* value, std::size_t capacity) {
-        for (std::size_t i = 0; i < capacity; ++i) if (value[i] == '\0') return i;
-        return capacity;
-    };
-    const auto host_length = length(request.api_host, ApiHostCapacity);
-    const auto id_length = length(request.device_id, DeviceIdCapacity);
-    const auto code_length = length(request.enrollment_code, EnrollmentCodeCapacity);
-    if (host_length == 0 || host_length >= ApiHostCapacity ||
-        id_length == 0 || id_length >= DeviceIdCapacity ||
-        code_length < 20 || code_length >= EnrollmentCodeCapacity) return false;
+inline bool IsValidApiUrl(const char* url, std::size_t capacity,
+                          bool allow_legacy_host = false) noexcept {
+    std::size_t length = 0;
+    while (length < capacity && url[length] != '\0') ++length;
+    if (length == 0 || length >= capacity) return false;
 
-    for (std::size_t i = 0; i < host_length; ++i) {
-        const char c = request.api_host[i];
-        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-              (c >= '0' && c <= '9') || c == '.' || c == '-')) return false;
+    std::size_t authority = 0;
+    if (length >= 7 && __builtin_memcmp(url, "http://", 7) == 0) {
+        authority = 7;
+    } else if (!allow_legacy_host) {
+        return false;
     }
+
+    const std::size_t host_start = authority;
+    std::size_t host_end = host_start;
+    while (host_end < length && url[host_end] != ':' && url[host_end] != '/') ++host_end;
+    const std::size_t host_length = host_end - host_start;
+    if (host_length == 0 || host_length > 253) return false;
+
     const auto is_alnum = [](char c) {
         return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
                (c >= '0' && c <= '9');
     };
-    if (!is_alnum(request.api_host[0]) || !is_alnum(request.api_host[host_length - 1])) return false;
     std::size_t label_length = 0;
-    for (std::size_t i = 0; i < host_length; ++i) {
-        const char c = request.api_host[i];
+    for (std::size_t i = host_start; i < host_end; ++i) {
+        const char c = url[i];
         if (c == '.') {
             if (label_length == 0 || label_length > 63 ||
-                !is_alnum(request.api_host[i - 1]) || !is_alnum(request.api_host[i + 1])) return false;
+                !is_alnum(url[i - 1]) || !is_alnum(url[i + 1])) return false;
             label_length = 0;
         } else {
             if (!is_alnum(c) && c != '-') return false;
             if (++label_length > 63) return false;
         }
     }
-    if (label_length == 0 || label_length > 63) return false;
+    if (label_length == 0 || label_length > 63 ||
+        !is_alnum(url[host_start]) || !is_alnum(url[host_end - 1])) return false;
+
+    if (host_end == length) return true;
+    if (url[host_end] != ':') return false;
+    const std::size_t port_start = host_end + 1;
+    if (port_start == length) return false;
+    unsigned int port = 0;
+    for (std::size_t i = port_start; i < length; ++i) {
+        const char c = url[i];
+        if (c < '0' || c > '9') return false;
+        port = port * 10 + static_cast<unsigned int>(c - '0');
+        if (port > 65535) return false;
+    }
+    return port > 0;
+}
+
+inline bool IsValidProvisioningRequest(const ProvisioningRequest& request) noexcept {
+    const auto length = [](const char* value, std::size_t capacity) {
+        for (std::size_t i = 0; i < capacity; ++i) if (value[i] == '\0') return i;
+        return capacity;
+    };
+    const auto url_length = length(request.api_url, ApiUrlCapacity);
+    const auto id_length = length(request.device_id, DeviceIdCapacity);
+    const auto code_length = length(request.enrollment_code, EnrollmentCodeCapacity);
+    if (url_length >= ApiUrlCapacity || id_length == 0 || id_length >= DeviceIdCapacity ||
+        code_length < 20 || code_length >= EnrollmentCodeCapacity ||
+        !IsValidApiUrl(request.api_url, ApiUrlCapacity)) return false;
+
     for (std::size_t i = 0; i < id_length; ++i) {
         const char c = request.device_id[i];
         if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
@@ -107,8 +136,8 @@ inline bool ParseProvisioningConfig(const char* input, std::size_t size,
         std::size_t capacity = 0;
         unsigned int bit = 0;
         const std::size_t key_size = key_end - begin;
-        if (key_size == 8 && __builtin_memcmp(input + begin, "api_host", 8) == 0) {
-            destination = request.api_host; capacity = ApiHostCapacity; bit = 1;
+        if (key_size == 7 && __builtin_memcmp(input + begin, "api_url", 7) == 0) {
+            destination = request.api_url; capacity = ApiUrlCapacity; bit = 1;
         } else if (key_size == 9 && __builtin_memcmp(input + begin, "device_id", 9) == 0) {
             destination = request.device_id; capacity = DeviceIdCapacity; bit = 2;
         } else if (key_size == 15 && __builtin_memcmp(input + begin, "enrollment_code", 15) == 0) {
