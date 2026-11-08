@@ -36,8 +36,9 @@ PCTL-free global enforcement through PGL's `TerminateProcess` API. Denied
 policies terminate the currently running application; an enrolled device
 without a usable verified policy/trusted clock fails closed. Only the global
 counter is retained: process IDs are transient and no title IDs or per-title
-records are stored. This is not a whole-console lock, and the one-second
-monitor leaves a short relaunch window. Global daily playtime is persisted in
+records are stored. This is not a whole-console lock. A PGL process-start event observer reacts to
+tracked application launches, while the one-second monitor remains the accounting
+and recovery fallback; actual event coverage requires hardware validation. Global daily playtime is persisted in
 alternating device-key-derived AES-GCM records in the sysmodule's own save
 data. Interrupted writes preserve the newest valid slot; a trusted clock
 regression cannot erase a newer saved day. Hardware behavior, suspend/resume
