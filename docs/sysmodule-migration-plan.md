@@ -34,9 +34,10 @@ per-title monitoring, and an on-console UI.
 - [ ] Add a supported firmware/Atmosphère compatibility matrix and verify
       NPDM title ID, service permissions and capabilities against the exact
       pinned source.
-- [x] Add a non-interactive HIPC bootstrap NRO and host-side payload generator
-      for the one-time enrollment code. Physical transfer and console behavior
-      still require hardware validation.
+- [x] Add a non-interactive HIPC bootstrap NRO, strict human-readable
+      `nxpctl.conf` parser and host-side config generator for the one-time
+      enrollment code. Physical transfer and console behavior still require
+      hardware validation.
 - [ ] Add documented key/database backup and restore automation.
 - [ ] Add usage-history retention/cleanup and bounded event-log maintenance.
 - [ ] Add release artifact checksum publication and versioned release notes.
