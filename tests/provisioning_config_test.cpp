@@ -10,7 +10,7 @@ int main() {
     constexpr char valid[] =
         "# comment\r\n"
         "; another comment\r\n"
-        "  api_url = http://portal.example.net  \r\n"
+        "  api_url = http://192.168.178.10:1212  \r\n"
         "device_id=switch-01\n"
         "enrollment_code=AbCdEf0123456789_-abcdefgh\n";
     ProvisioningRequest request{};
@@ -39,16 +39,22 @@ int main() {
     assert(!ParseProvisioningConfig(missing, sizeof(missing) - 1, request));
 
     constexpr char malformed[] =
-        "api_url=https://http://portal.example.net\n"
+        "api_url=https://portal.example.net\n"
         "device_id=switch-01\n"
         "enrollment_code=AbCdEf0123456789_-abcdefgh\n";
     assert(!ParseProvisioningConfig(malformed, sizeof(malformed) - 1, request));
 
     constexpr char invalid_host_label[] =
-        "api_url=bad.-host.example\n"
+        "api_url=http://bad.-host.example\n"
         "device_id=switch-01\n"
         "enrollment_code=AbCdEf0123456789_-abcdefgh\n";
     assert(!ParseProvisioningConfig(invalid_host_label, sizeof(invalid_host_label) - 1, request));
+
+    constexpr char invalid_port[] =
+        "api_url=http://192.168.178.10:65536\n"
+        "device_id=switch-01\n"
+        "enrollment_code=AbCdEf0123456789_-abcdefgh\n";
+    assert(!ParseProvisioningConfig(invalid_port, sizeof(invalid_port) - 1, request));
 
     constexpr char quoted[] =
         "api_url=http://portal.example.net\n"
@@ -57,7 +63,7 @@ int main() {
     assert(!ParseProvisioningConfig(quoted, sizeof(quoted) - 1, request));
 
     constexpr char embedded_nul[] = {
-        'a','p','i','_','h','o','s','t','=','x','\0','\n'
+        'a','p','i','_','u','r','l','=','x','\0','\n'
     };
     assert(!ParseProvisioningConfig(embedded_nul, sizeof(embedded_nul), request));
     assert(!ParseProvisioningConfig(valid, 1025, request));
