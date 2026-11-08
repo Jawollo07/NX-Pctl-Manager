@@ -8,7 +8,8 @@ and submits the validated values to the resident sysmodule.
 
 ## 1. Create an invitation
 
-1. Open the backend dashboard at `https://YOUR-HOSTNAME/admin`.
+1. Open the backend dashboard at `http://YOUR-SERVER:PORT/admin` (or the
+   reverse-proxy URL you configured).
 2. Sign in with `NXPCTL_ADMIN_TOKEN`.
 3. Choose **Gerät registrieren**, enter a device ID and create the one-time
    enrollment code.
@@ -23,23 +24,31 @@ On a trusted computer, from the repository root run:
 python3 tools/provisioner/create_provisioning.py --output nxpctl.conf
 ```
 
-Enter the backend API hostname without a scheme, port or path, the same device
-ID used in the dashboard, and the one-time code. The code is requested without
-echo and the output file is written with owner-only permissions.
+Enter the complete backend base address, including scheme and optional port,
+for example `http://192.168.178.10:1212`. Enter the same device ID used in the
+dashboard and the one-time code. The code is requested without echo and the
+output file is written with owner-only permissions.
 
 The resulting file has this format:
 
 ```ini
 # NX-Pctl-Manager one-time device enrollment
-api_host=api.example.com
+api_url=http://192.168.178.10:1212
 device_id=switch-01
 enrollment_code=PASTE_THE_ONE_TIME_CODE_HERE
 ```
 
-The three keys are mandatory and must each occur exactly once. Blank lines and
-lines beginning with `#` or `;` are ignored. Unknown keys, duplicate keys,
-empty values, quotes and malformed values are rejected. Do not add a URL
-scheme, port or path to `api_host`.
+Only plain HTTP URLs are currently supported by the Switch transport. The
+application payload itself is authenticated and encrypted with AES-GCM, but
+HTTP does not protect connection metadata or prevent traffic analysis. HTTPS
+is not supported by the current sysmodule transport. Use a trusted LAN or
+configure a secure network tunnel/reverse proxy appropriate for the console.
+
+The URL must be a base address only: no credentials, API path, query or
+fragment. A missing port defaults to 80. The three keys are mandatory and
+must each occur exactly once. Blank lines and lines beginning with `#` or
+`;` are ignored. Unknown keys, duplicate keys, empty values, quotes and
+malformed values are rejected.
 
 Copy `nxpctl.conf` to the root of the Switch SD card. The enrollment code is
 plaintext in this file; do not share it or leave it on untrusted storage.
