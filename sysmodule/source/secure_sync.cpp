@@ -123,13 +123,13 @@ namespace {
     bool ExtractBoolean(const char* json, std::size_t length, const char* key,
                         bool* output) {
         char pattern[80];
-        const int n = std::snprintf(pattern, sizeof(pattern), "\\"%s\\":", key);
+        const int n = std::snprintf(pattern, sizeof(pattern), "\"%s\":", key);
         if (n <= 0 || static_cast<std::size_t>(n) >= sizeof(pattern)) return false;
         const std::size_t pattern_size = static_cast<std::size_t>(n);
         for (std::size_t i = 0; i + pattern_size <= length; ++i) {
             if (std::memcmp(json + i, pattern, pattern_size) != 0) continue;
             std::size_t p = i + pattern_size;
-            while (p < length && (json[p] == ' ' || json[p] == '\\n')) ++p;
+            while (p < length && (json[p] == ' ' || json[p] == '\n')) ++p;
             if (p + 4 <= length && std::memcmp(json + p, "true", 4) == 0) {
                 *output = true;
                 return true;
@@ -316,7 +316,7 @@ namespace {
         char payload[384];
         ScopedWipe payload_wiper(payload, sizeof(payload));
         const int n = std::snprintf(payload, sizeof(payload),
-            "{\\"access_token\\":\\"%s\\"}", g_access_token);
+            "{\"access_token\":\"%s\"}", g_access_token);
         if (n <= 0 || static_cast<std::size_t>(n) >= sizeof(payload)) return false;
         u16 status = 0;
         std::size_t response_size = 0;
