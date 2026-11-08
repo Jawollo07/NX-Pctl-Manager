@@ -293,6 +293,9 @@ async def limit_request_size(request: Request, call_next):
         except ValueError:
             return JSONResponse(status_code=400, content={"detail": "invalid content-length"})
     response = await call_next(request)
+    if request.url.path.startswith("/v1/admin/"):
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
     return response
 
 
