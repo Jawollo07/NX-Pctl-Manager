@@ -159,7 +159,7 @@ inline bool ConstantTimeEqual6(const char* supplied, std::uint32_t expected) noe
 [[nodiscard]] inline bool GenerateCode(
     const std::uint8_t* secret, std::size_t secret_size,
     std::uint64_t time_counter, std::uint32_t* out_code) noexcept {
-    if (secret == nullptr || secret_size == 0 || out_code == nullptr) return false;
+    if (secret == nullptr || secret_size == 0 || secret_size > 64 || out_code == nullptr) return false;
     std::uint8_t message[8]{};
     for (unsigned i = 0; i < 8; ++i)
         message[i] = static_cast<std::uint8_t>(time_counter >> (56 - i * 8));
@@ -178,7 +178,7 @@ inline bool ConstantTimeEqual6(const char* supplied, std::uint32_t expected) noe
     std::uint64_t* out_matched_counter,
     std::uint64_t window = DefaultWindow) noexcept {
     if (secret == nullptr || secret_size == 0 || six_digit_code == nullptr
-        || out_matched_counter == nullptr) return false;
+        || out_matched_counter == nullptr || secret_size > 64 || window > 2) return false;
     for (unsigned i = 0; i < 6; ++i)
         if (six_digit_code[i] < '0' || six_digit_code[i] > '9') return false;
     if (six_digit_code[6] != '\0') return false;
