@@ -65,7 +65,7 @@ non-interactive HIPC bootstrap helper. It reads the human-readable
 `nxpctl.conf` file from the SD-card root, strictly validates its three required
 keys, submits the fixed-size request through command 65001 and deletes the file
 after the sysmodule accepts the request. The host-side Python generator prompts
-for the API hostname, device ID and one-time enrollment code without echoing
+for the complete backend URL (including IP and port), device ID and one-time enrollment code without echoing
 the code. See [device enrollment](../docs/device-enrollment.md). This is not a
 management UI and does not use Borealis.
 
