@@ -62,6 +62,10 @@ int main() {
                         "sdmc-mount-failed", mount_result, 10);
         }
     }
+    /* Remove a previous run's marker so the next result is unambiguous. */
+    (void)std::remove(StatusPath);
+    (void)fsdevCommitDevice("sdmc");
+
     Show("SD-Karte: OK");
     Show("Lese sdmc:/nxpctl.conf ...");
 
@@ -90,10 +94,18 @@ int main() {
     }
     Wipe(config, sizeof(config));
     Show("Konfiguration: OK");
+
+    /*
+     * Persist a marker before entering the service-manager call. If the app
+     * appears stuck after this point, the marker tells us whether the SD write
+     * succeeded; a second marker is written immediately after the call returns.
+     */
+    WriteStatus("before-smGetService", 0);
     Show("Suche HIPC-Dienst 'nxpctl' ...");
 
     Service service{};
     result = smGetService(&service, ::nxpctl::protocol::ServiceName);
+    WriteStatus("after-smGetService", result);
     if (R_FAILED(result)) {
         Wipe(&request, sizeof(request));
         char message[96]{};
