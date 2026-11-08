@@ -1,33 +1,60 @@
-# Local parent-authentication foundation
+# Backend-managed parent authentication
 
-This branch now includes a platform-independent RFC 6238 TOTP verifier in
-`protocol/totp.hpp`. It uses HMAC-SHA1, six decimal digits, a 30-second time
-step, and a configurable time-step window (default: one step on either side).
-The verifier rejects malformed input and counters at or below the caller's
-last accepted counter, allowing the integration layer to enforce replay
-protection.
+Parent authentication is owned by the backend. The Switch never receives the
+TOTP seed and has no local setup, rotation, recovery, or administrative HIPC
+command for it.
 
-The verifier deliberately does not own or persist the shared secret, trusted
-clock, last accepted counter, lockout state, or authenticated-session expiry.
-Those values must be provided by the sysmodule's encrypted save-data layer.
-The next integration stage must add an authenticated provisioning path for the
-secret, durable anti-replay state, bounded failed-attempt lockout, and a
-short-lived HIPC parent-authentication session. Until that work is complete,
-this is a tested cryptographic primitive, not an active parental-authentication
-feature. It does not replace Nintendo's native parental-controls PIN or
-authenticate Nintendo system screens.
+## Backend implementation
 
-## Volatile authentication state machine
+- RFC 6238 TOTP: HMAC-SHA1, six digits, 30-second step, ±1 step tolerance.
+- A successful verification creates a 15-minute parent-auth grant.
+- Each accepted TOTP counter can be used only once.
+- Five failed attempts trigger a five-minute lockout.
+- TOTP secrets are encrypted at rest with AES-256-GCM. The device ID is bound
+  as associated data.
+- The plaintext seed is displayed once during provisioning. Status endpoints
+  never return it.
+- The Switch reads only `parent_authenticated` and `authenticated_until`
+  through the authenticated encrypted device operation
+  `POST /v1/secure/{device_id}/parent-auth`.
 
-`protocol/parent_auth.hpp` adds a host-testable state machine around the TOTP
-primitive. A successful code opens a 15-minute in-memory session. Five
-consecutive invalid attempts trigger a five-minute monotonic-time lockout.
-The same 30-second TOTP counter cannot be accepted twice by one configured
-instance. Ending a session clears its authorization immediately.
+The admin API is protected by `NXPCTL_ADMIN_TOKEN`. Secret encryption requires
+a separate 32-byte key in `NXPCTL_PARENT_AUTH_KEY` (64 hexadecimal
+characters). There is no insecure fallback if either value is missing.
 
-The state machine is intentionally volatile. It does not yet persist the
-shared secret, accepted counter, failed-attempt count, or lockout deadline, and
-it is not yet exposed through HIPC or connected to the policy evaluator. The
-platform integration must persist replay/lockout state in encrypted device
-save data and must only install or rotate a secret through an authenticated
-provisioning path before this can be treated as an active parent-auth feature.
+## Administration
+
+Provision/rotate a seed:
+
+```http
+POST /v1/admin/devices/{device_id}/parent-auth
+Authorization: Bearer <NXPCTL_ADMIN_TOKEN>
+Content-Type: application/json
+
+{"confirm":true}
+```
+
+Verify a current code and issue the grant:
+
+```http
+POST /v1/admin/devices/{device_id}/parent-auth/verify
+Authorization: Bearer <NXPCTL_ADMIN_TOKEN>
+Content-Type: application/json
+
+{"code":"123456"}
+```
+
+Read status with `GET /v1/admin/devices/{device_id}/parent-auth`; revoke the
+configuration with `DELETE /v1/admin/devices/{device_id}/parent-auth`.
+
+## Integration status and limits
+
+The backend API, encrypted secret storage, replay protection, lockout, and
+secure device grant response are implemented and covered by host-side tests.
+The Switch worker does **not yet poll this operation or feed its response into
+the policy evaluator**. Until that runtime integration is complete, the
+backend grant does not actively gate console usage. No claim of end-to-end
+parent-auth enforcement or hardware validation is made.
+
+This is application-level authentication only. It does not replace Nintendo's
+native parental-control PIN or authenticate Nintendo system screens.
