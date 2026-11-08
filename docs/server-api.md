@@ -140,7 +140,7 @@ retrieves only the current authorization state over the encrypted
 attempts cause a five-minute lockout. Rotating the secret invalidates any
 previous grant.
 
-The browser dashboard is served from the same backend at `/admin`. It provides device inventory and enrollment, global policy editing, parent-auth setup/verification/revocation, event inspection and device revocation. It calls these same authenticated endpoints; it does not create a second source of policy state or add any local Switch administration surface. The administrator token is held only in page memory and is not written to localStorage or cookies. The legacy CLI remains available for isolated development and recovery.
+For deployment, use the [backend deployment guide](deployment.md). The browser dashboard is served from the same backend at `/admin`. It provides device inventory and enrollment, global policy editing, parent-auth setup/verification/revocation, event inspection and device revocation. It calls these same authenticated endpoints; it does not create a second source of policy state or add any local Switch administration surface. The administrator token is held only in page memory and is not written to localStorage or cookies. The legacy CLI remains available for isolated development and recovery.
 
 **Runtime integration status:** the Switch synchronization worker polls the
 backend grant over the encrypted device channel and feeds its expiry into the
@@ -172,8 +172,7 @@ hashes, policies, events, acknowledgements and secure replay identifiers.
 Raw credentials, invitation codes and bearer tokens are never stored.
 Protect and back up the database directory.
 
-The Python backend now implements encrypted device routes and replay
-protection. The Switch-side AES-GCM/HKDF implementation, HTTP client, secure enrollment, token refresh and worker integration are present in this branch. Remaining gates include automated cross-language known-answer/fixture coverage, real-device transport and save-data validation, credential recovery, and policy enforcement. Until those gates pass, do not expose the API publicly over HTTP.
+The Python backend and Switch client implement encrypted device routes, replay protection and a shared fixed heartbeat known-answer fixture. The sysmodule runs NIST AES-GCM and backend-matched HKDF checks before its first secure POST. Additional operation-level cross-language fixtures, first-time HIPC provisioning client, real-device transport/save-data validation, suspend/resume accounting and a tested recovery path remain open. Do not expose the origin directly; use the documented reverse-proxy deployment and keep the browser dashboard behind HTTPS.
 
 
 ## Backend tests

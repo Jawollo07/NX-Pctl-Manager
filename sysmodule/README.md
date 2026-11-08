@@ -1,118 +1,76 @@
 # NX-Pctl-Manager Sysmodule (experimental)
 
-This directory is the first independent, headless Stratosphere sysmodule target.
-It does not replace the legacy Borealis NRO build.
+This directory contains the headless Atmosphère/Stratosphère sysmodule. The
+legacy NRO/Borealis application is not part of this feature branch.
 
 ## Pinned build dependencies
 
-The initial build is tied to these exact source revisions:
-
-- Atmosphere: `6b0c077b4c608a3a2ee712b8dc35fee87ceb62e8`
-- libnx: `b156b4774fb2df7b93402169509266da7547fc4c` (the `deps/libnx` submodule)
+- Atmosphère: `6b0c077b4c608a3a2ee712b8dc35fee87ceb62e8`
+- libnx: `b156b4774fb2df7b93402169509266da7547fc4c` (`deps/libnx`)
 - switch-tools: `22756068dd0ed6ff9734c59cb4f99ebd3f62555b` (CI host tools)
 
-Atmosphere is pinned as the `Atmosphere` submodule. Do not build against
-Atmosphere `master` or an arbitrary release and assume compatibility.
+Atmosphère is an external checkout, not a Git submodule. Build only against
+the documented pinned revision.
 
 ## Local build
 
-Initialize the submodules and build against the pinned libnx:
+Install devkitPro/devkitA64 and the pinned host tools, then:
 
 ```sh
-git submodule update --init --recursive
-
-export DEVKITPRO=/opt/devkitpro
-export PATH="$DEVKITPRO/devkitA64/bin:$DEVKITPRO/tools/bin:$PATH"
-
-make -C deps/libnx -j"$(nproc)"
-make -C deps/libnx install
-
-make -C sysmodule ATMOSPHERE_ROOT="$PWD/Atmosphere" nx_release
+git submodule update --init deps/libnx
+git clone https://github.com/Atmosphere-NX/Atmosphere.git /tmp/nxpctl-atmosphere
+git -C /tmp/nxpctl-atmosphere checkout 6b0c077b4c608a3a2ee712b8dc35fee87ceb62e8
+export ATMOSPHERE_ROOT=/tmp/nxpctl-atmosphere
+bash scripts/build-sysmodule-local.sh
 ```
 
-Install the `switch-tools` host utilities separately if they are not already
-available in your PATH. The full reproducible build instructions are in
-[`docs/sysmodule-build.md`](../docs/sysmodule-build.md).
+The script verifies both pinned revisions and required APIs. It does not pull,
+rebase, reset or otherwise update the project checkout. Full details:
+[reproducible build guide](../docs/sysmodule-build.md).
 
-The output is written under the Atmosphere-derived `sysmodule/out/` directory.
-The expected release package is
+Expected artifact:
 `sysmodule/out/nintendo_nx_arm64_armv8a/release/nx_pctl_manager.nsp`.
 
-## Development-only metadata
+## Implemented runtime
 
-The NPDM title ID `0x420000000A3F1E7C` is the currently configured development value,
-not a registered or hardware-validated title ID. Do not install this package
-on a Switch until the title ID, service permissions, kernel capabilities,
-firmware compatibility and boot/recovery procedure have been reviewed.
+- Headless resident sysmodule with a narrow `nxpctl` HIPC service.
+- Encrypted HTTP device protocol using AES-128-GCM/HKDF, random request IDs,
+  response authentication and backend replay protection.
+- Backend enrollment, authentication, short-lived access tokens, heartbeat,
+  policy fetch/acknowledgement and parent-auth grant polling.
+- Global application-active time accounting, fixed-offset day rollover and
+  encrypted alternating usage snapshots in the module's own save data.
+- Backend-managed global daily/weekday limits, quiet hours and offline rules.
+- Backend-managed TOTP parent authentication. The TOTP seed remains encrypted
+  on the server and never reaches the Switch.
+- PGL process-start observation and one-second accounting/enforcement
+  fallback. Only the current application PID is used transiently for
+  `pgl::TerminateProcess`; no title IDs or per-title records are retained.
+- HIPC diagnostics for runtime, usage, policy decision, enforcement and
+  authenticated connectivity.
 
-The current experimental module initializes the service-manager client,
-starts a resident worker and supervisor, and exposes the `nxpctl` HIPC
-service. HIPC command 65000 reports runtime status; command 65001 accepts a
-validated, fixed-size API-host/device-ID/one-time-code provisioning request;
-command 65002 reports global daily usage and monitor state.
-The NRO client exposes the matching enrollment configuration call.
+No Nintendo PCTL service/API is used. There are no per-game restrictions,
+per-title histories, or on-console administrator screens.
 
-The worker performs encrypted enrollment, device authentication, short-lived
-token refresh, heartbeats, policy retrieval, schema/clock/device/revision
-validation, in-memory policy publication and policy acknowledgements. The
-HTTP-only Horizon BSD transport and AES-128-GCM/HKDF envelope client verify
-response authenticity before plaintext reaches the policy decoder. The
-provisioning lock is held only for bounded memory copies, never across network
-I/O, so local HIPC requests are not blocked by DNS/TCP/HTTP waits.
+## Important limitations
 
-The sysmodule stores the API host, device ID and long-lived device credential
-in its own device save data. Records are AES-128-GCM encrypted with a key
-derived through SPL from an application-owned key source and the console
-device key ladder. Two alternating records provide recovery from interrupted
-writes. The short-lived access token and one-time enrollment code remain
-RAM-only; after restart, the sysmodule restores the device credential and
-authenticates again for a fresh access token. The NPDM requests the device-save
-data and own-save-data capabilities plus `fsp-srv`, `spl:` and read-only
-`pgl` service access. A dedicated monitor queries whether any application is
-active and updates one global daily playtime counter; it does not retain title
-IDs. PGL monitoring is available on Horizon 10.0.0+. There is still no PCTL
-mutation or system-wide enforcement. Hardware validation has not been performed.
+This enforcement boundary terminates application processes. It does not lock
+HOME/qlaunch, system settings, recovery mode or the boot chain, and it is not
+tamper-proof against someone who controls the console, SD card or CFW.
+Suspend/resume accounting is not implemented because a safe PSC module
+identity has not been established.
 
-A successful host-side compile is not evidence that the module is safe to load.
-Hardware installation/testing is intentionally not part of this phase.
+The branch exposes HIPC command 65001 for one-time enrollment configuration,
+but it does not ship a HIPC provisioning client. A trusted client must provide
+the API hostname, device ID and one-time enrollment code. Until that separate
+bootstrap client exists, first-time device enrollment is not a complete
+end-user workflow.
 
-The exact schema-v1 JSON profile is documented in [`docs/policy-schema-v1.md`](../docs/policy-schema-v1.md).
+The configured NPDM title ID is a development value and has not been
+independently reviewed or validated on hardware. CI packaging does not prove
+runtime safety. Do not install the experimental NSP until title ID, service
+permissions, capabilities, firmware compatibility, save-data behavior and a
+tested recovery/uninstall procedure have been verified on a physical console.
 
-## Policy processing status
-
-The current branch includes a bounded schema-v1 decoder, authenticated encrypted
-policy retrieval, full-snapshot validation and atomic publication to the
-RAM-only policy store. The pure evaluator supports allow-all and allow-list-only
-global-only limits, quiet hours and offline behavior and is host-tested. A separate daily usage tracker is host-tested and connected to a dedicated,
-read-only PGL application-activity monitor. All games/apps share one counter;
-no title IDs are stored for playtime. Its local-day key uses an authenticated
-server-time anchor plus monotonic elapsed time and the policy's fixed UTC
-offset. Global usage is restored from alternating AES-GCM-authenticated
-daily snapshots in the sysmodule's own device save data. Writes are flushed
-periodically and on orderly shutdown; abrupt power loss may lose up to about
-one minute of new usage. A trusted clock regression cannot erase the newer
-stored day. Usage is not connected to enforcement. No global restrictions are
-currently enforced yet.
-
-
-## HTTP backend
-
-A reference FastAPI/SQLite backend now lives in [`server/`](../server/README.md).
-It implements one-time enrollment, per-device credentials, short-lived bearer
-tokens, strict policy retrieval, heartbeats, deduplicated event batches and
-policy acknowledgements. Administration is performed through
-`python -m server.cli`; there is intentionally no unauthenticated web-admin
-surface.
-
-The device API uses HTTP with application-layer AES-128-GCM encryption and
-authentication for every request/response body. IP addresses, hostname, URL
-path, headers, packet sizes and timing remain visible. The secure routes are
-required; legacy plaintext routes are disabled by default.
-
-The sysmodule worker activates the TCP/HTTP transport and encrypted wire
-client after local provisioning or restoration of a saved device credential.
-Enrollment, authentication, token refresh, heartbeat, policy retrieval and
-acknowledgement are part of the synchronization cycle. DNS resolution has a
-five-second caller deadline and uses a single-flight resolver thread; a timed
-out resolver is never forcibly cancelled and must finish before another lookup
-can begin.
+See [runtime details](RUNTIME.md), [target architecture](../docs/full-parental-control-architecture.md)
+and the [implementation gates](../docs/sysmodule-migration-plan.md).
