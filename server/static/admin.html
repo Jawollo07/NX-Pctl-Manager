@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>NX-Pctl-Manager · Verwaltung</title>
+  <link rel="stylesheet" href="/admin/assets/admin.css">
+  <script src="/admin/assets/admin.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/admin"><span class="brand-mark">NX</span><span>NX-Pctl-Manager<small>Backend-Verwaltung</small></span></a>
+    <div class="top-actions"><span id="connection" class="connection">Nicht verbunden</span><button id="refresh" class="button secondary" disabled>Aktualisieren</button><button id="logout" class="button ghost" hidden>Abmelden</button></div>
+  </header>
+  <main class="shell">
+    <section id="login-view" class="login-panel panel">
+      <div class="eyebrow">Zentraler Kontrollpunkt</div>
+      <h1>Backend-Verwaltung</h1>
+      <p class="muted">Melde dich mit dem Backend-Administrator-Token an. Das Token bleibt nur im Arbeitsspeicher dieser Browserseite und wird nicht lokal gespeichert.</p>
+      <form id="login-form">
+        <label for="admin-token">Administrator-Token</label>
+        <input id="admin-token" type="password" autocomplete="off" required minlength="32" placeholder="NXPCTL_ADMIN_TOKEN">
+        <button class="button primary" type="submit">Verbinden</button>
+      </form>
+      <p id="login-error" class="error" role="alert"></p>
+    </section>
+
+    <section id="app-view" hidden>
+      <div class="page-heading"><div><div class="eyebrow">Übersicht</div><h1>Geräte & Richtlinien</h1><p class="muted">Verwalte ausschließlich globale Konsolenregeln über das Backend.</p></div><button id="new-enrollment" class="button primary">＋ Gerät registrieren</button></div>
+      <div class="stats">
+        <article class="stat panel"><span>Geräte gesamt</span><strong id="stat-total">0</strong></article>
+        <article class="stat panel"><span>Aktiv registriert</span><strong id="stat-active">0</strong></article>
+        <article class="stat panel"><span>Mit Elternauth</span><strong id="stat-parent">0</strong></article>
+        <article class="stat panel"><span>Zuletzt online</span><strong id="stat-online">—</strong></article>
+      </div>
+      <div class="workspace">
+        <section class="panel device-panel">
+          <div class="section-head"><div><h2>Geräte</h2><p class="muted">Wähle ein Gerät zur Verwaltung.</p></div><span id="device-count" class="pill">0</span></div>
+          <div class="table-wrap"><table><thead><tr><th>Gerät</th><th>Status</th><th>Richtlinie</th><th>Zuletzt gesehen</th></tr></thead><tbody id="devices-body"><tr><td colspan="4" class="empty">Noch keine Geräte geladen.</td></tr></tbody></table></div>
+        </section>
+        <section id="detail-panel" class="panel detail-panel">
+          <div id="empty-selection" class="empty-state"><div class="empty-icon">⌁</div><h2>Kein Gerät ausgewählt</h2><p class="muted">Wähle links ein Gerät aus oder registriere eine neue Konsole.</p></div>
+          <div id="device-detail" hidden>
+            <div class="section-head"><div><div class="eyebrow">Geräteverwaltung</div><h2 id="selected-name">—</h2><p id="selected-meta" class="muted"></p></div><span id="selected-status" class="pill">—</span></div>
+            <div class="tabs" role="tablist"><button class="tab active" data-tab="policy">Richtlinie</button><button class="tab" data-tab="parent">Elternauth</button><button class="tab" data-tab="events">Ereignisse</button></div>
+            <section id="tab-policy" class="tab-content">
+              <div class="section-head compact"><div><h3>Globale Spielzeitregeln</h3><p class="muted">Änderungen werden als neue Richtlinienrevision veröffentlicht.</p></div><button id="load-policy" class="button secondary small">Laden</button></div>
+              <form id="policy-form">
+                <div class="form-grid">
+                  <label class="toggle-row"><input id="policy-enabled" type="checkbox"><span>Richtlinie aktiv</span></label>
+                  <label class="toggle-row"><input id="policy-parent" type="checkbox"><span>Elternauthentifizierung erforderlich</span></label>
+                  <label>Globales Tageslimit (Minuten)<input id="daily-limit" type="number" min="0" max="1440" required><small>0 = gesperrt · 65535 = unbegrenzt</small></label>
+                  <label>UTC-Zeitzonenoffset (Minuten)<input id="timezone" type="number" min="-840" max="840" required><small>Beispiel Deutschland: 60 (Winter), 120 (Sommer)</small></label>
+                  <label>Offline-Verhalten<select id="offline"><option value="0">Letzte gültige Richtlinie weiterverwenden</option><option value="1">Offline vollständig sperren</option></select></label>
+                </div>
+                <div class="subsection"><h4>Wochentagslimits</h4><div id="weekday-fields" class="weekday-grid"></div><p class="hint">Montag bis Sonntag. 65535 übernimmt das globale Tageslimit.</p></div>
+                <div class="subsection">
+                  <label class="toggle-row"><input id="quiet-enabled" type="checkbox"><span>Ruhezeiten aktivieren</span></label>
+                  <div class="form-grid two">
+                    <label>Beginn<input id="quiet-start" type="time" value="22:00"></label>
+                    <label>Ende<input id="quiet-end" type="time" value="07:00"></label>
+                  </div>
+                </div>
+                <div class="form-actions"><span id="policy-revision" class="muted">Noch keine Richtlinie geladen</span><button class="button primary" type="submit">Richtlinie veröffentlichen</button></div>
+              </form>
+            </section>
+            <section id="tab-parent" class="tab-content" hidden>
+              <div class="notice"><strong>Backend-gesteuert</strong><p>Das TOTP-Geheimnis bleibt verschlüsselt auf dem Server. Es wird nur bei der Einrichtung einmalig angezeigt und niemals an die Switch übertragen.</p></div>
+              <div id="parent-status" class="status-card">Status wird geladen …</div>
+              <div class="button-row"><button id="provision-parent" class="button primary">TOTP einrichten / rotieren</button><button id="revoke-parent" class="button danger-outline">Elternauth entfernen</button></div>
+              <form id="verify-parent" class="verify-form"><label>Sechsstelliger TOTP-Code<input id="totp-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="000000" required></label><button class="button secondary" type="submit">Code prüfen und 15 Minuten freigeben</button></form>
+              <div id="totp-secret" class="secret-box" hidden></div>
+            </section>
+            <section id="tab-events" class="tab-content" hidden>
+              <div class="section-head compact"><div><h3>Letzte Ereignisse</h3><p class="muted">Vom Gerät gemeldete globale Ereignisse.</p></div><button id="load-events" class="button secondary small">Aktualisieren</button></div>
+              <div id="events-list" class="events-list"><p class="muted">Noch nicht geladen.</p></div>
+            </section>
+            <div class="danger-zone"><div><strong>Gerät sperren</strong><p class="muted">Widerruft Gerätezugriff und laufende Backend-Sitzungen.</p></div><button id="revoke-device" class="button danger">Gerät widerrufen</button></div>
+          </div>
+        </section>
+      </div>
+    </section>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <dialog id="enrollment-dialog"><form method="dialog" class="dialog-card"><div class="eyebrow">Einmaliger Registrierungscode</div><h2>Gerät koppeln</h2><p class="muted">Dieser Code wird nur jetzt angezeigt. Übertrage ihn über einen vertrauenswürdigen lokalen Bootstrap-Prozess auf die Switch.</p><label>Geräte-ID<input id="enroll-device-id" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,63}" placeholder="switch-livingroom"></label><label>Code gültig für<select id="enroll-ttl"><option value="900">15 Minuten</option><option value="1800" selected>30 Minuten</option><option value="3600">1 Stunde</option><option value="86400">24 Stunden</option></select></label><button id="create-enrollment" type="button" class="button primary">Code erstellen</button><div id="enrollment-result" hidden></div><button class="button ghost" value="cancel">Schließen</button></form></dialog>
+  </main>
+  <footer>NX-Pctl-Manager · Backend als zentrale Verwaltungsinstanz · keine Titel-/Spiel-spezifischen Regeln</footer>
+</body>
+</html>
