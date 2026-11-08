@@ -146,11 +146,12 @@ administration surface. The legacy CLI remains available for isolated
 development and recovery, but the intended normal workflow is through these
 backend endpoints.
 
-**Runtime integration status:** the backend grant endpoint exists and is
-tested, but the Switch synchronization worker does not yet poll it or feed
-the grant into the policy evaluator. Therefore parent-auth grants do not yet
-actively gate console usage. Do not treat this as end-to-end enforcement until
-that sysmodule integration and real-device testing are complete.
+**Runtime integration status:** the Switch synchronization worker polls the
+backend grant over the encrypted device channel and feeds its expiry into the
+global policy evaluator. If `require_parent_authentication` is enabled, the
+sysmodule denies global application execution without an active grant. The
+grant expires using the trusted backend clock, including while offline. Real
+Switch hardware validation remains outstanding.
 
 ## Cloudflare deployment
 
