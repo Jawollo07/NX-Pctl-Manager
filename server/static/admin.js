@@ -58,12 +58,14 @@ async function connect() {
   adminToken = $("admin-token").value.trim();
   try {
     await loadDevices();
+    $("admin-token").value = "";
     $("login-view").hidden = true;
     $("app-view").hidden = false;
     setConnected(true);
   } catch (error) {
     $("login-error").textContent = error.message;
     adminToken = "";
+    $("admin-token").value = "";
   }
 }
 function makeCell(text, className) {
