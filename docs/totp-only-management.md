@@ -1,11 +1,18 @@
-# TOTP-only access to Pctl Manager
+# Backend-only parent-authentication management
 
-After initial enrollment, the current six-digit TOTP code is the credential for opening Pctl Manager. The app's parental-control management actions are available only after that launch gate succeeds. Rotating the TOTP secret also requires the current TOTP code; it no longer asks the app to read or re-enter the static console PIN for rotation.
+Parent-authentication setup and control are performed by the backend API. No
+TOTP secret is stored on the Switch SD card, and the Switch exposes no local
+secret provisioning or rotation command.
 
-## Important platform boundary
+The backend generates the TOTP secret, displays it once to the administrator,
+and stores only an AES-256-GCM encrypted copy. The administrator verifies
+six-digit codes through the authenticated backend API. A successful check
+creates a 15-minute authorization grant; replayed codes are rejected and
+five failed attempts cause a five-minute lockout.
 
-This does **not** replace Nintendo's system parental-control PIN globally. The TOTP check is implemented by this homebrew application. Horizon's own System Settings, the HOME-menu parental-controls screen, and Nintendo's native authentication applet continue to use Nintendo's registered PIN or their own supported authentication flow. A homebrew app cannot make those native screens accept a changing TOTP code just by changing its own code.
+The Switch can only retrieve the grant state through its authenticated,
+encrypted device channel. Runtime polling and policy enforcement integration
+are still pending, so this is not yet an active end-to-end console lock.
 
-The first TOTP enrollment still requires the existing console PIN to verify that the person enrolling controls the current setup. If the TOTP secret or authenticator is lost, recovery still uses the documented local re-enrollment process and the console PIN.
-
-The TOTP secret is stored on the SD card at `/switch/nx_pctl_totp.key`; this is an application access gate, not a security boundary against a person who can modify the SD card or run privileged homebrew.
+This feature is independent of Nintendo's native parental-control PIN and
+does not change the authentication behavior of Horizon system screens.
