@@ -32,6 +32,7 @@ namespace {
     std::atomic<s64> g_clock_not_after{0};
     std::atomic<u64> g_clock_monotonic_anchor{0};
     std::atomic<s16> g_clock_timezone_offset_minutes{0};
+    std::atomic<u64> g_parent_auth_expires_at_utc{0};
     std::atomic<u64> g_last_successful_contact_monotonic{0};
     std::atomic<bool> g_has_successful_contact{false};
     char g_response[ResponseCapacity];
@@ -115,6 +116,29 @@ namespace {
             } while (p < length && json[p] >= '0' && json[p] <= '9');
             *output = value;
             return true;
+        }
+        return false;
+    }
+
+    bool ExtractBoolean(const char* json, std::size_t length, const char* key,
+                        bool* output) {
+        char pattern[80];
+        const int n = std::snprintf(pattern, sizeof(pattern), "\\"%s\\":", key);
+        if (n <= 0 || static_cast<std::size_t>(n) >= sizeof(pattern)) return false;
+        const std::size_t pattern_size = static_cast<std::size_t>(n);
+        for (std::size_t i = 0; i + pattern_size <= length; ++i) {
+            if (std::memcmp(json + i, pattern, pattern_size) != 0) continue;
+            std::size_t p = i + pattern_size;
+            while (p < length && (json[p] == ' ' || json[p] == '\\n')) ++p;
+            if (p + 4 <= length && std::memcmp(json + p, "true", 4) == 0) {
+                *output = true;
+                return true;
+            }
+            if (p + 5 <= length && std::memcmp(json + p, "false", 5) == 0) {
+                *output = false;
+                return true;
+            }
+            return false;
         }
         return false;
     }
@@ -286,6 +310,46 @@ namespace {
         (void)Post("policy-ack", g_device_credential, "device",
                    payload, static_cast<std::size_t>(n), &status, &response_size);
     }
+    bool FetchParentAuthGrant() {
+        ResponseWiper response_wiper;
+        if (!g_access_token[0]) return false;
+        char payload[384];
+        ScopedWipe payload_wiper(payload, sizeof(payload));
+        const int n = std::snprintf(payload, sizeof(payload),
+            "{\\"access_token\\":\\"%s\\"}", g_access_token);
+        if (n <= 0 || static_cast<std::size_t>(n) >= sizeof(payload)) return false;
+        u16 status = 0;
+        std::size_t response_size = 0;
+        if (!Post("parent-auth", g_device_credential, "device",
+                  payload, static_cast<std::size_t>(n), &status, &response_size) ||
+            status != 200) return false;
+
+        bool authenticated = false;
+        if (!ExtractBoolean(g_response, response_size, "parent_authenticated",
+                            &authenticated)) return false;
+        if (!authenticated) {
+            g_parent_auth_expires_at_utc.store(0, std::memory_order_release);
+            return true;
+        }
+
+        u64 expires_at = 0;
+        if (!ExtractUnsigned(g_response, response_size, "authenticated_until",
+                             &expires_at) || expires_at == 0) return false;
+        const u64 monotonic_now = GetMonotonicSeconds();
+        s64 local_now = 0;
+        if (!GetTrustedLocalUnixTime(monotonic_now, &local_now)) return false;
+        const s64 offset_seconds =
+            static_cast<s64>(g_clock_timezone_offset_minutes.load(std::memory_order_relaxed)) * 60;
+        const s64 utc_now = local_now - offset_seconds;
+        if (utc_now <= 0 || expires_at <= static_cast<u64>(utc_now) ||
+            expires_at > static_cast<u64>(utc_now) + 15 * 60) {
+            g_parent_auth_expires_at_utc.store(0, std::memory_order_release);
+            return false;
+        }
+        g_parent_auth_expires_at_utc.store(expires_at, std::memory_order_release);
+        return true;
+    }
+
 }
 
 bool Initialize() {
@@ -296,6 +360,7 @@ bool Initialize() {
     g_clock_not_after.store(0, std::memory_order_relaxed);
     g_clock_monotonic_anchor.store(0, std::memory_order_relaxed);
     g_clock_timezone_offset_minutes.store(0, std::memory_order_relaxed);
+    g_parent_auth_expires_at_utc.store(0, std::memory_order_relaxed);
     const bool storage_available = credential_store::Initialize();
     credential_store::CredentialData stored{};
     if (storage_available && credential_store::Load(&stored)) {
@@ -379,6 +444,17 @@ bool GetTrustedLocalUnixTime(u64 monotonic_seconds, s64* out_local_time) {
     return false;
 }
 
+bool IsParentAuthenticated(u64 monotonic_seconds) {
+    const u64 expires_at = g_parent_auth_expires_at_utc.load(std::memory_order_acquire);
+    if (expires_at == 0) return false;
+    s64 local_now = 0;
+    if (!GetTrustedLocalUnixTime(monotonic_seconds, &local_now)) return false;
+    const s64 offset_seconds =
+        static_cast<s64>(g_clock_timezone_offset_minutes.load(std::memory_order_relaxed)) * 60;
+    const s64 utc_now = local_now - offset_seconds;
+    return utc_now > 0 && static_cast<u64>(utc_now) < expires_at;
+}
+
 bool GetTrustedLocalDayKey(u64 monotonic_seconds, s64* out_day_key) {
     if (out_day_key == nullptr) return false;
 
@@ -454,6 +530,7 @@ void RunCycle(policy::PolicyStore& store, u64 uptime_seconds,
     if (FetchPolicy(store)) {
         AcknowledgePolicy(store.GetRevision());
     }
+    (void)FetchParentAuthGrant();
     ++g_cycles_since_auth;
 }
 
@@ -476,6 +553,7 @@ void Clear() {
     g_clock_not_after.store(0, std::memory_order_relaxed);
     g_clock_monotonic_anchor.store(0, std::memory_order_relaxed);
     g_clock_timezone_offset_minutes.store(0, std::memory_order_relaxed);
+    g_parent_auth_expires_at_utc.store(0, std::memory_order_relaxed);
 }
 
 }
