@@ -271,6 +271,17 @@ namespace ams {
                 const u64 monotonic_seconds = GetMonotonicSeconds();
                 if (monotonic_seconds == 0) continue;
 
+                // Retry PGL initialization if the boot-time connection was
+                // temporarily unavailable. Enforcement cannot proceed without it.
+                if (!g_pgl_initialized) {
+                    if (R_SUCCEEDED(pgl::Initialize())) {
+                        g_pgl_initialized = true;
+                    } else {
+                        if (::nxpctl::sync::IsEnrolled()) g_enforcement_state = 3;
+                        continue;
+                    }
+                }
+
                 // Query PGL before clock/storage work so fail-closed conditions
                 // can still terminate an application that is already running.
                 os::ProcessId application_pid{};
@@ -372,7 +383,7 @@ namespace ams {
         }
 
         void StartUsageMonitorThread() {
-            if (!g_pgl_initialized || g_usage_monitor_thread_created) return;
+            if (g_usage_monitor_thread_created) return;
 
             const ams::Result create_result = os::CreateThread(
                 std::addressof(g_usage_monitor_thread),
