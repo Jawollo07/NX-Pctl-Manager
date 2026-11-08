@@ -248,14 +248,14 @@ namespace {
 
 }
 
-Error Post(const char *host, u16 port,
+Error Post(const char *host, const char *host_header, u16 port,
            const char *device_id, const char *operation,
            const char *secret, std::size_t secret_size,
            const char *purpose,
            const char *plaintext_json, std::size_t plaintext_size,
            char *out_plaintext, std::size_t out_capacity,
            std::size_t *out_size, u16 *out_http_status) {
-    if (!host || port != net::DefaultHttpPort || !device_id || !operation || !secret || !purpose ||
+    if (!host || !host_header || port == 0 || !device_id || !operation || !secret || !purpose ||
         !plaintext_json || !out_plaintext || !out_size || !out_http_status ||
         plaintext_size == 0 || plaintext_size > crypto::MaxPlaintextSize ||
         out_capacity == 0) return Error::InvalidArgument;
@@ -341,7 +341,7 @@ Error Post(const char *host, u16 port,
     g_envelope[envelope_size] = '\0';
 
     nxpctl::http::RequestView request_view{};
-    if (nxpctl::http::BuildRequest("POST", host, path, nullptr,
+    if (nxpctl::http::BuildRequest("POST", host_header, path, nullptr,
             g_envelope, envelope_size, g_request, sizeof(g_request), &request_view) !=
             nxpctl::http::RequestError::None) {
         std::memset(key, 0, sizeof(key));
