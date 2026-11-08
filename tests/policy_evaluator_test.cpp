@@ -76,6 +76,7 @@ int main() {
 
     // Unix-time adapter derives Monday=0 weekday and minute-of-day from the
     // authenticated local timestamp, without consulting a wall clock.
+    p.weekday_limit_minutes[0] = NoDailyLimit;
     p.global_daily_limit_minutes = 120;
     const std::int64_t monday_10am = 4 * 86400 + 10 * 3600;
     assert(EvaluateAtLocalUnixTime(p, monday_10am, 119, false, false).allowed);
