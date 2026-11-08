@@ -140,11 +140,7 @@ retrieves only the current authorization state over the encrypted
 attempts cause a five-minute lockout. Rotating the secret invalidates any
 previous grant.
 
-The admin API is a backend control plane, not yet a finished browser dashboard.
-A web management UI can call these endpoints without adding any local Switch
-administration surface. The legacy CLI remains available for isolated
-development and recovery, but the intended normal workflow is through these
-backend endpoints.
+The browser dashboard is served from the same backend at `/admin`. It provides device inventory and enrollment, global policy editing, parent-auth setup/verification/revocation, event inspection and device revocation. It calls these same authenticated endpoints; it does not create a second source of policy state or add any local Switch administration surface. The administrator token is held only in page memory and is not written to localStorage or cookies. The legacy CLI remains available for isolated development and recovery.
 
 **Runtime integration status:** the Switch synchronization worker polls the
 backend grant over the encrypted device channel and feeds its expiry into the
