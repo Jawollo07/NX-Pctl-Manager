@@ -38,6 +38,7 @@ Operations:
 | Heartbeat | `/v1/secure/{id}/heartbeat` | Token, uptime/policy revision and optional global daily usage (`global_usage_day_key`, `global_usage_active_seconds`) |
 | Events | `/v1/secure/{id}/events` | Token plus `events` array |
 | Policy ack | `/v1/secure/{id}/policy-ack` | Token plus revision/status/message |
+| Parent-auth status | `/v1/secure/{id}/parent-auth` | Token only; returns current backend grant state |
 
 The HTTP path, method, device ID, direction and random request identifier are
 bound into AES-GCM associated data. Responses use the same request identifier
@@ -110,6 +111,46 @@ Title-specific policy fields are rejected. Event batches also reject `title.*`
 event types and payload keys such as `title_id`, `title_ids` or `title_name`. Revocation invalidates
 all bearer tokens. Re-enrollment requires a new one-time invitation and
 rotates the device credential, policy epoch, event history and acknowledgements.
+
+## Backend administration API
+
+All administrative actions use the backend control plane and require
+`Authorization: Bearer <NXPCTL_ADMIN_TOKEN>`. The token must contain at
+least 32 characters. Parent-auth secret encryption additionally requires
+`NXPCTL_PARENT_AUTH_KEY`, exactly 32 bytes encoded as 64 hexadecimal
+characters. There is no default key or development fallback.
+
+| Action | Method and path | Purpose |
+|---|---|---|
+| Device inventory | `GET /v1/admin/devices` | Devices, policy revision, last heartbeat and parent-auth state |
+| Create enrollment | `POST /v1/admin/devices/{id}/enrollment` | Create one-time code; body: `{"ttl_seconds":1800}` |
+| Read policy | `GET /v1/admin/devices/{id}/policy` | Read current global policy |
+| Publish policy | `PUT /v1/admin/devices/{id}/policy` | Validate and publish a strictly newer global policy revision |
+| Revoke device | `POST /v1/admin/devices/{id}/revoke` | Revoke device and invalidate access tokens |
+| Event log | `GET /v1/admin/devices/{id}/events?limit=100` | Read recent global events |
+| Provision TOTP | `POST /v1/admin/devices/{id}/parent-auth` | Generate seed; requires body `{"confirm":true}`; seed returned once |
+| Verify TOTP | `POST /v1/admin/devices/{id}/parent-auth/verify` | Verify `{"code":"123456"}` and issue a 15-minute grant |
+| Parent-auth status | `GET /v1/admin/devices/{id}/parent-auth` | Read configuration, lockout and grant status |
+| Revoke TOTP | `DELETE /v1/admin/devices/{id}/parent-auth` | Remove secret and active grant |
+
+TOTP seeds are encrypted at rest using AES-256-GCM with the device ID as
+associated data. The backend never sends the seed to the Switch. A device
+retrieves only the current authorization state over the encrypted
+`parent-auth` operation. A successful TOTP counter is single-use; five failed
+attempts cause a five-minute lockout. Rotating the secret invalidates any
+previous grant.
+
+The admin API is a backend control plane, not yet a finished browser dashboard.
+A web management UI can call these endpoints without adding any local Switch
+administration surface. The legacy CLI remains available for isolated
+development and recovery, but the intended normal workflow is through these
+backend endpoints.
+
+**Runtime integration status:** the backend grant endpoint exists and is
+tested, but the Switch synchronization worker does not yet poll it or feed
+the grant into the policy evaluator. Therefore parent-auth grants do not yet
+actively gate console usage. Do not treat this as end-to-end enforcement until
+that sysmodule integration and real-device testing are complete.
 
 ## Cloudflare deployment
 
