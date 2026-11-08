@@ -33,6 +33,9 @@ __pycache__/
 *.py[cod]
 
 # Runtime data and secrets
+nxpctl.conf
+nxpctl-provision.bin
+nxpctl-provision.status
 data/
 server/data/
 *.sqlite
