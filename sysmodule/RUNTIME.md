@@ -143,7 +143,7 @@ UTC and offset day boundaries, expiry and monotonic regression.
 
 `protocol/policy_evaluator.hpp` evaluates a supplied immutable policy and context without Horizon calls or side effects. It covers parent-authentication gating, offline behavior, global daily-limit decisions, fixed-offset weekday budgets and quiet hours including intervals that cross midnight. All decisions apply globally to the console and never inspect or distinguish individual titles.
 
-The evaluator is host-tested and is now called by the usage monitor to publish a diagnostic global allow/deny decision through HIPC command 65003. Its offline and parent-authentication inputs are explicit placeholders until those integrations exist. The evaluator itself remains pure; the runtime consumes its decision and uses PGL to terminate the active application when globally denied. It does not lock HOME/qlaunch or block system menus.
+The evaluator is host-tested and is called by the usage monitor to publish a diagnostic global allow/deny decision through HIPC command 65003. Its offline input is wired to authenticated backend-contact freshness: a fully authenticated server response keeps the device online for 120 seconds, after which it is offline; unknown connectivity after boot is treated as offline. The parent-authentication input remains a placeholder until a local parent-authentication flow and trusted provisioning interface are implemented. The evaluator itself remains pure; the runtime consumes its decision and uses PGL to terminate the active application when globally denied. It does not lock HOME/qlaunch or block system menus. See [offline behavior](../docs/offline-behavior.md).
 
 ## HTTP transport and secure envelope client
 
