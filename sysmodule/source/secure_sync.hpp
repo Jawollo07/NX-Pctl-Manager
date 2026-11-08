@@ -16,5 +16,6 @@ namespace nxpctl::sync {
                   s64 usage_day_key, u64 usage_active_seconds);
     bool GetTrustedLocalDayKey(u64 monotonic_seconds, s64* out_day_key);
     bool GetTrustedLocalUnixTime(u64 monotonic_seconds, s64* out_local_time);
+    bool IsParentAuthenticated(u64 monotonic_seconds);
     void Clear();
 }
