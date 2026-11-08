@@ -30,14 +30,18 @@ source revisions and commands.
 
 ## Current implementation status
 
-The module currently provides encrypted HTTP synchronization, local IPC,
-credential storage, and read-only global application activity monitoring
-through PGL. Global daily playtime is persisted in alternating device-key-
-derived AES-GCM records in the sysmodule's own save data. Interrupted writes
-preserve the newest valid slot; a trusted clock regression cannot erase a
-newer saved day. This is not policy enforcement. Hardware behavior,
-suspend/resume accounting, recovery and enforcement remain unfinished and
-must not be assumed safe for installation.
+The module provides encrypted HTTP synchronization, local IPC, protected
+credential storage, global daily application-activity monitoring, and
+PCTL-free global enforcement through PGL's `TerminateProcess` API. Denied
+policies terminate the currently running application; an enrolled device
+without a usable verified policy/trusted clock fails closed. Only the global
+counter is retained: process IDs are transient and no title IDs or per-title
+records are stored. This is not a whole-console lock, and the one-second
+monitor leaves a short relaunch window. Global daily playtime is persisted in
+alternating device-key-derived AES-GCM records in the sysmodule's own save
+data. Interrupted writes preserve the newest valid slot; a trusted clock
+regression cannot erase a newer saved day. Hardware behavior, suspend/resume
+accounting and a tested recovery procedure remain outstanding.
 
 The CI workflow runs backend tests, shared C++ protocol/accounting tests, and
 an experimental Stratosphere package build. A successful CI build is not
