@@ -271,8 +271,12 @@ namespace ams {
                 const u64 monotonic_seconds = GetMonotonicSeconds();
                 if (monotonic_seconds == 0) continue;
 
-                // Retry PGL initialization if the boot-time connection was
-                // temporarily unavailable. Enforcement cannot proceed without it.
+                // PGL is available from Horizon 10.0.0 onward. Retry its
+                // initialization if the boot-time connection was unavailable.
+                if (hos::GetVersion() < hos::Version_10_0_0) {
+                    if (::nxpctl::sync::IsEnrolled()) g_enforcement_state = 3;
+                    continue;
+                }
                 if (!g_pgl_initialized) {
                     if (R_SUCCEEDED(pgl::Initialize())) {
                         g_pgl_initialized = true;
