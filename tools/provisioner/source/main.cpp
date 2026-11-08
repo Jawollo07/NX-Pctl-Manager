@@ -4,11 +4,10 @@
 #include <cstring>
 
 #include "../../../protocol/provisioning.hpp"
-#include "../../../protocol/runtime_status.hpp"
 
 namespace {
 
-constexpr const char *ProvisioningPath = "sdmc:/nxpctl-provision.bin";
+constexpr const char *ProvisioningPath = "sdmc:/nxpctl.conf";
 constexpr const char *StatusPath = "sdmc:/nxpctl-provision.status";
 
 void Wipe(void *data, std::size_t size) {
@@ -31,24 +30,27 @@ int main() {
     if (fsdevGetDeviceFileSystem("sdmc") == nullptr) return 10;
 
     Result result = 0;
+    char config[::nxpctl::protocol::ProvisioningConfigMaxSize + 1]{};
     ::nxpctl::protocol::ProvisioningRequest request{};
     FILE *file = std::fopen(ProvisioningPath, "rb");
     if (file == nullptr) {
-        WriteStatus("missing-provisioning-file", MAKERESULT(Module_Libnx, LibnxError_NotFound));
+        WriteStatus("missing-config-file", MAKERESULT(Module_Libnx, LibnxError_NotFound));
         return 11;
     }
 
-    const std::size_t bytes_read = std::fread(&request, 1, sizeof(request), file);
-    const int trailing_byte = std::fgetc(file);
+    const std::size_t bytes_read = std::fread(config, 1, sizeof(config), file);
     const bool read_error = std::ferror(file) != 0;
     std::fclose(file);
 
-    if (read_error || bytes_read != sizeof(request) || trailing_byte != EOF ||
-        !::nxpctl::protocol::IsValidProvisioningRequest(request)) {
+    if (read_error || bytes_read == 0 ||
+        bytes_read > ::nxpctl::protocol::ProvisioningConfigMaxSize ||
+        !::nxpctl::protocol::ParseProvisioningConfig(config, bytes_read, request)) {
+        Wipe(config, sizeof(config));
         Wipe(&request, sizeof(request));
-        WriteStatus("invalid-provisioning-file", MAKERESULT(Module_Libnx, LibnxError_BadInput));
+        WriteStatus("invalid-config-file", MAKERESULT(Module_Libnx, LibnxError_BadInput));
         return 12;
     }
+    Wipe(config, sizeof(config));
 
     Service service{};
     result = smGetService(&service, ::nxpctl::protocol::ServiceName);
@@ -68,13 +70,13 @@ int main() {
     Wipe(&request, sizeof(request));
 
     if (R_FAILED(result)) {
-        WriteStatus("sysmodule-rejected-provisioning", result);
+        WriteStatus("sysmodule-rejected-config", result);
         return 14;
     }
 
-    /* The enrollment code is one-time. Remove the bootstrap file after HIPC accepts it. */
+    /* The enrollment code is one-time. Remove the config after HIPC accepts it. */
     if (std::remove(ProvisioningPath) != 0) {
-        WriteStatus("accepted-but-file-removal-failed", result);
+        WriteStatus("accepted-but-config-removal-failed", result);
         return 15;
     }
     (void)fsdevCommitDevice("sdmc");
