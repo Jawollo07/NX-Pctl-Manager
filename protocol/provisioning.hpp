@@ -36,7 +36,20 @@ inline bool IsValidProvisioningRequest(const ProvisioningRequest& request) noexc
         if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
               (c >= '0' && c <= '9') || c == '.' || c == '-')) return false;
     }
-    if (request.api_host[0] == '.' || request.api_host[host_length - 1] == '.') return false;
+    const auto is_alnum = [](char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+               (c >= '0' && c <= '9');
+    };
+    if (!is_alnum(request.api_host[0]) || !is_alnum(request.api_host[host_length - 1])) return false;
+    for (std::size_t i = 0; i < host_length; ++i) {
+        const char c = request.api_host[i];
+        if (c == '.') {
+            if (i == 0 || i + 1 == host_length ||
+                !is_alnum(request.api_host[i - 1]) || !is_alnum(request.api_host[i + 1])) return false;
+        } else if (!is_alnum(c) && c != '-') {
+            return false;
+        }
+    }
     for (std::size_t i = 0; i < id_length; ++i) {
         const char c = request.device_id[i];
         if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
