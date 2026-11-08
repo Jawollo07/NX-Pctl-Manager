@@ -7,7 +7,7 @@ import getpass
 import re
 from pathlib import Path
 
-HOST_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,252}[A-Za-z0-9])?")
+HOST_RE = re.compile(r"(?=.{1,253}\\Z)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*")
 DEVICE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 CODE_RE = re.compile(r"[A-Za-z0-9_-]{20,128}")
 
