@@ -22,6 +22,11 @@ int main() {
         assert(std::memcmp(request.data + request.length - (sizeof(body)-1), body, sizeof(body)-1) == 0);
     }
     {
+        assert(BuildRequest("POST", "192.168.178.10:1212", "/v1/secure/switch-01/enroll",
+            nullptr, "{}", 2, buffer, sizeof(buffer), &request) == RequestError::None);
+        assert(std::strstr(request.data, "Host: 192.168.178.10:1212\\r\\n") != nullptr);
+    }
+    {
         assert(BuildRequest("GET", "api.example.net", "/v1/devices/switch-a/policy",
             "token-123", nullptr, 0, buffer, sizeof(buffer), &request) == RequestError::None);
         assert(std::strstr(request.data, "Authorization: Bearer token-123\r\n") != nullptr);
