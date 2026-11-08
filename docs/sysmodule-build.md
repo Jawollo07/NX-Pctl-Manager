@@ -88,8 +88,9 @@ uses only the current application PID transiently; it does not retain title IDs
 or create per-title usage/rules. A denied global policy terminates the running
 application. An enrolled device without a usable verified policy/trusted clock
 fails closed. This is process termination, not a whole-console lock; the
-one-second monitor leaves a short relaunch window and hardware validation is
-still required. Global daily usage is stored in alternating AES-128-GCM-
+one-second monitor remains as an accounting/recovery fallback; a PGL shell-event
+observer also reacts to tracked process-start notifications. Event coverage and
+actual launch-to-termination timing still require hardware validation. Global daily usage is stored in alternating AES-128-GCM-
 authenticated snapshots in the sysmodule's own device save data. The newest
 valid sequence is restored after restart; a trusted clock regression cannot
 roll the saved day backwards. Periodic writes are flushed once per minute
