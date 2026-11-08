@@ -81,15 +81,20 @@ runner.
 
 ## Scope and safety
 
-The current module includes encrypted network synchronization, local IPC, and
-read-only global application-activity monitoring through PGL for daily playtime.
-It does not yet enforce policies, write PCTL state, implement suspend/resume
-accounting, or provide a hardware recovery path. Global daily usage is stored
-in alternating AES-128-GCM-authenticated snapshots in the sysmodule's own
-device save data. The newest valid sequence is restored after restart; a
-trusted clock regression cannot roll the saved day backwards. Periodic writes
-are flushed once per minute while dirty and on orderly shutdown. A sudden
-power loss may lose up to about one minute of new usage.
+The current module includes encrypted network synchronization, local IPC,
+protected credential storage, global daily activity monitoring, and PCTL-free
+global enforcement through the pinned PGL `TerminateProcess` API. The runtime
+uses only the current application PID transiently; it does not retain title IDs
+or create per-title usage/rules. A denied global policy terminates the running
+application. An enrolled device without a usable verified policy/trusted clock
+fails closed. This is process termination, not a whole-console lock; the
+one-second monitor leaves a short relaunch window and hardware validation is
+still required. Global daily usage is stored in alternating AES-128-GCM-
+authenticated snapshots in the sysmodule's own device save data. The newest
+valid sequence is restored after restart; a trusted clock regression cannot
+roll the saved day backwards. Periodic writes are flushed once per minute
+while dirty and on orderly shutdown. A sudden power loss may lose up to about
+one minute of new usage.
 
 Do not install the NSP on hardware until the NPDM title ID, service permissions,
 kernel capabilities, firmware compatibility and a boot-recovery procedure
