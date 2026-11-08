@@ -1,67 +1,75 @@
-# MVP: Require local TOTP before using the Nintendo Switch
+# NX-Pctl-Manager — target architecture
 
-Status: **Milestone 1 diagnostic probe prepared; system-wide lock remains unimplemented.** This document narrows the immediate project scope to one goal: require a valid local TOTP code before the console can be used. It does not claim that a system-wide lock has been implemented.
+This document describes the current project scope. It supersedes the earlier
+local/offline TOTP lock proposal and any design that depends on Nintendo's
+PCTL service.
 
-## Goal and acceptance criteria
+## Product scope
 
-- On boot and wake, show a dedicated lock screen before normal console use.
-- A valid offline TOTP code grants a clearly defined unlock session.
-- HOME, B, closing a homebrew app, or restarting the UI must not bypass the lock.
-- The lock/enforcement mechanism must live outside the ordinary NRO process.
-- A one-time parent recovery code can restore access if the authenticator is lost.
-- No network, Nintendo account, or phone connection is required to verify TOTP.
-- Unknown firmware/Atmosphère versions must not enable untested system hooks.
+The project is a backend-managed, headless Atmosphère sysmodule for global
+console usage control. The backend is the authoritative control plane. The
+Switch module is a small execution agent that synchronizes authenticated
+policy snapshots, measures global application-active time and enforces the
+current global decision.
 
-## Important current limitation
+The supported policy surface is console-wide only:
 
-The current C++/libnx/Borealis NRO asks for TOTP when opening the homebrew app. That protects the app's own menu only. It cannot prevent someone from closing the app and using the HOME menu, launching other software, or changing system settings.
+- global daily playtime limit;
+- weekday-specific global limits;
+- quiet hours;
+- optional backend-issued parent-authentication grant;
+- configured offline behavior.
 
-The current project already has TOTP enrollment/verification and a pctl adapter for parental-control settings. Neither of those provides a persistent system-wide lock. A Tesla overlay or ordinary homebrew app is also not enough because it can be dismissed or exited.
+There are no per-title/game rules, title histories, title IDs, local
+administrator UI, or Nintendo PCTL calls. The running process ID is transient
+and is used only for the PGL termination call.
 
-The first feasibility artifact is `feasibility/nx_pctl_lock_probe`. It is a non-enforcing, two-minute resident-process probe that writes a heartbeat to the SD-card root. It has no HOME/qlaunch hooks, does not inspect or change parental-control state, and does not include an Atmosphere boot flag. Its only purpose is to verify that an Atmosphere sysmodule can start and continue running after the NRO closes.
-## Minimal target architecture
+## Components
 
-1. **Lock-screen UI** — C++/Borealis presentation and numeric TOTP entry. Reuse the current TOTP verifier where appropriate, but separate the lock UI from the parent settings UI.
-2. **Local auth module** — RFC 6238 TOTP, fixed documented parameters shared with common authenticator apps, a small clock-skew window, throttling, no secret logging, and a one-time recovery code.
-3. **Resident Atmosphère component (new)** — remains active independently of the NRO, exposes a narrow versioned IPC interface, and owns lock state. Closing the UI must not stop enforcement.
-4. **HOME/qlaunch integration (new, feasibility-critical)** — displays the lock before normal use and prevents normal navigation from dismissing it. This needs a firmware-specific proof of concept; the exact maintainable integration point is not yet established.
-5. **Safe recovery** — a one-time high-entropy recovery code can rotate the TOTP secret. Store only a salted verifier using a standard KDF available in the project. Rate-limit attempts and invalidate the old recovery code after use. Provide a tested service-disable/uninstall recovery route.
+1. **Backend** — FastAPI and SQLite own device enrollment, device credentials,
+   policy revisions, event history, TOTP seeds, parent-authentication grants
+   and revocation.
+2. **Web dashboard** — same-origin browser UI at `/admin`; all management
+   actions call the backend's authenticated admin API.
+3. **Secure device protocol** — bounded JSON envelopes authenticated and
+   encrypted with AES-GCM. HTTP metadata remains visible.
+4. **Sysmodule** — headless Atmosphère module with local HIPC diagnostics,
+   credential storage, trusted server clock, global usage accounting and PGL
+   enforcement.
+5. **Host tests and CI** — deterministic protocol/policy tests, backend
+   regression tests and an experimental NSP build.
 
-## Unlock semantics
+## Parent authentication
 
-For the first MVP, choose a simple explicit policy: successful TOTP unlocks the console for a configurable session (initially proposed as “until the next sleep or reboot”). The resident component must relock on the selected lifecycle events. This behaviour must be verified on the supported firmware rather than assumed.
-
-The lock must not patch Nintendo's native parental-control authentication to accept TOTP. The custom lock is an additional app-owned gate; native Nintendo PIN behaviour remains unchanged.
+TOTP is configured and verified by the backend. The secret remains encrypted
+on the backend and is never provisioned to the Switch. A successful code
+creates a short-lived grant. The sysmodule retrieves only the grant state
+through its authenticated encrypted device channel and enforces its expiry
+using the trusted backend clock. The dashboard displays the TOTP seed only
+once during setup; configure an authenticator app before closing that view.
 
 ## Security boundary
 
-Offline TOTP is practical, but the SD card is not a hardware-backed secret store. A person who can read or modify the SD card, run privileged homebrew, or change CFW can copy the secret or bypass a custom lock. This design is a parental-control mechanism for normal console use, not a tamper-proof boundary against someone with full physical/CFW control.
+The system is designed to enforce policy during ordinary operation under the
+supported Atmosphère configuration. It is not tamper-proof against a person
+who controls the console, SD card, boot chain or custom firmware. A backend
+revocation cannot reach a disconnected console until it reconnects. A host
+build or CI result is not proof of runtime enforcement.
 
-## Implementation milestones
+## Completion criteria
 
-### Milestone 1 — feasibility spike before broad code changes
+A production release requires all of the following:
 
-On one explicitly supported Atmosphère/Horizon version, prove:
-- a resident component can start and survive closing the NRO;
-- the current title/system state can be observed reliably enough to know when the lock should apply;
-- a lock surface can be shown through a maintainable HOME/qlaunch integration point;
-- HOME/B and ordinary navigation cannot dismiss the lock;
-- sleep/wake, reboot, crash, and safe recovery work without a boot loop.
+- reproducible build from documented pinned toolchain revisions;
+- cross-language known-answer tests for the complete secure envelope;
+- enrollment and credential persistence tested across reboot;
+- trusted clock, day rollover, clock regression and offline transitions tested;
+- usage accounting verified through sleep/wake, HOME, user changes and
+  application lifecycle transitions;
+- PGL event coverage and termination timing verified on supported hardware;
+- recovery from corrupt storage, failed update and interrupted boot tested;
+- supported Atmosphère/Horizon matrix and installation/uninstall instructions;
+- no secrets, runtime databases, caches or generated artifacts committed.
 
-Do not claim a system-wide lock until all of these pass on-device. If qlaunch integration cannot reliably enforce the lock, stop and document that limitation instead of shipping a false sense of security.
-
-### Milestone 2 — minimal implementation
-
-- Reuse/refactor the current local TOTP verifier.
-- Add the resident lock-state service and versioned IPC.
-- Add lock-screen UI and session/relock state machine.
-- Add recovery-code setup and single-use rotation.
-- Keep unrelated features (play-time budgets, history, per-title restrictions, warnings) out of this MVP.
-
-### Milestone 3 — hardening
-
-Test valid/invalid TOTP, clock drift and rollback, rate limiting, repeated failures, lost authenticator recovery, corrupt configuration, service crash, UI crash, sleep/wake, reboot, unsupported firmware, and safe uninstall. Publish a compatibility matrix and make unsupported firmware fail closed without risking a boot loop.
-
-## Explicitly deferred
-
-Daily and weekday limits, bedtime windows, play-time accounting, usage history, notifications, per-title policies, and general parental-control dashboard improvements are deferred until the system-wide TOTP lock is demonstrated and stable.
+Until the hardware gates pass, releases must be labeled experimental and must
+not claim an unbypassable whole-console lock.

@@ -2,15 +2,19 @@
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-ATMOSPHERE_ROOT=$ROOT/Atmosphere
-if [[ -z "$ATMOSPHERE_ROOT" ]]; then
+readonly EXPECTED_ATMOSPHERE="6b0c077b4c608a3a2ee712b8dc35fee87ceb62e8"
+readonly EXPECTED_LIBNX="b156b4774fb2df7b93402169509266da7547fc4c"
+
+if [[ -z "${ATMOSPHERE_ROOT:-}" ]]; then
   echo "Set ATMOSPHERE_ROOT to the pinned Atmosphere checkout." >&2
+  echo "Expected revision: $EXPECTED_ATMOSPHERE" >&2
   exit 2
 fi
 ATMOSPHERE_ROOT="$(cd -- "$ATMOSPHERE_ROOT" && pwd)"
-
-readonly EXPECTED_ATMOSPHERE="6b0c077b4c608a3a2ee712b8dc35fee87ceb62e8"
-readonly EXPECTED_LIBNX="b156b4774fb2df7b93402169509266da7547fc4c"
+if ! git -C "$ATMOSPHERE_ROOT" rev-parse --verify HEAD >/dev/null 2>&1; then
+  echo "ATMOSPHERE_ROOT is not a Git checkout: $ATMOSPHERE_ROOT" >&2
+  exit 2
+fi
 
 SYSTEM_DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
 if [[ ! -d "$SYSTEM_DEVKITPRO/devkitA64" ]]; then
@@ -56,7 +60,13 @@ grep -q "FsStorageForBatchRead" "$DEVKITPRO/libnx/include/switch/services/fs.h"
 grep -q "GetRunningApplicationProcessId" \
   "$ATMOSPHERE_ROOT/libraries/libstratosphere/include/stratosphere/pgl/pgl_shell_api.hpp"
 
-git pull --rebase --autostash
+# Never pull, rebase, reset, or otherwise mutate the user's Git checkout here.
 make -C "$ROOT/sysmodule" ATMOSPHERE_ROOT="$ATMOSPHERE_ROOT" nx_release
 
-echo "Build finished. Inspect: $ROOT/sysmodule/out/nintendo_nx_arm64_armv8a/release/nx_pctl_manager.nsp"
+ARTIFACT="$ROOT/sysmodule/out/nintendo_nx_arm64_armv8a/release/nx_pctl_manager.nsp"
+if [[ ! -s "$ARTIFACT" ]]; then
+  echo "Expected non-empty NSP was not produced: $ARTIFACT" >&2
+  exit 1
+fi
+file "$ARTIFACT"
+echo "Build finished: $ARTIFACT"

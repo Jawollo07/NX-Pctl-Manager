@@ -21,7 +21,10 @@ function dateTime(value) {
   const date = new Date(Number(value) * 1000);
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("de-DE");
 }
-function escapeText(value) { return String(value ?? ""); }
+function formatDuration(seconds) {
+  const total = Math.max(0, Number(seconds) || 0);
+  return Math.floor(total / 3600) + " h " + Math.floor((total % 3600) / 60) + " min";
+}
 async function api(path, options = {}) {
   const headers = new Headers(options.headers || {});
   headers.set("Authorization", "Bearer " + adminToken);
@@ -68,10 +71,6 @@ async function connect() {
     $("admin-token").value = "";
   }
 }
-function formatDuration(seconds) {
-  const total = Math.max(0, Number(seconds) || 0);
-  return Math.floor(total / 3600) + " h " + Math.floor((total % 3600) / 60) + " min";
-}
 function makeCell(text, className) {
   const td = document.createElement("td");
   td.textContent = text;
@@ -88,8 +87,11 @@ function renderDevices() {
   const latest = devices.filter(d => d.last_seen_at).sort((a,b) => b.last_seen_at-a.last_seen_at)[0];
   $("stat-online").textContent = latest ? dateTime(latest.last_seen_at) : "—";
   if (!devices.length) {
-    body.append(makeCell("Keine Geräte registriert.", "empty"));
-    body.firstChild.colSpan = 4;
+    const row = document.createElement("tr");
+    const cell = makeCell("Keine Geräte registriert.", "empty");
+    cell.colSpan = 5;
+    row.append(cell);
+    body.append(row);
     return;
   }
   for (const device of devices) {
@@ -106,6 +108,8 @@ function renderDevices() {
     const status = makeCell(device.revoked_at ? "Widerrufen" : "Registriert");
     status.className = device.revoked_at ? "bad" : "good"; tr.append(status);
     tr.append(makeCell(device.policy_revision ? "v" + device.policy_revision : "Nicht gesetzt"));
+    const usageSeconds = device.last_heartbeat?.global_usage_active_seconds;
+    tr.append(makeCell(Number.isFinite(Number(usageSeconds)) ? formatDuration(usageSeconds) : "Noch keine Daten"));
     tr.append(makeCell(dateTime(device.last_seen_at)));
     body.append(tr);
   }
@@ -123,7 +127,10 @@ async function selectDevice(id) {
   $("device-detail").hidden = false;
   $("selected-name").textContent = id;
   const device = devices.find(d => d.device_id === id);
-  $("selected-meta").textContent = "Erstellt: " + dateTime(device?.created_at) + " · Zuletzt gesehen: " + dateTime(device?.last_seen_at);
+  const usage = device?.last_heartbeat?.global_usage_active_seconds;
+  const usageText = Number.isFinite(Number(usage)) ? formatDuration(usage) : "Noch keine Nutzungsdaten";
+  $("selected-meta").textContent = "Erstellt: " + dateTime(device?.created_at) +
+    " · Zuletzt gesehen: " + dateTime(device?.last_seen_at) + " · Tagesstand: " + usageText;
   $("selected-status").textContent = device?.revoked_at ? "Widerrufen" : "Registriert";
   $("selected-status").className = "pill " + (device?.revoked_at ? "bad" : "good");
   await loadPolicy();
@@ -269,7 +276,6 @@ async function revokeDevice() {
   $("selected-status").textContent="Widerrufen"; $("selected-status").className="pill bad";
 }
 function init() {
-  weekdays.forEach(() => {});
   buildWeekdays();
   $("login-form").addEventListener("submit", e => {e.preventDefault();connect().catch(err => $("login-error").textContent=err.message);});
   $("refresh").addEventListener("click",()=>loadDevices().then(()=>selectedDevice&&selectDevice(selectedDevice)).catch(e=>toast(e.message,true)));

@@ -1,83 +1,48 @@
-# Prerequisites
-*.d
-
-# Object files
+# Build products
 *.o
 *.ko
-*.obj
 *.elf
-
-# Linker output
-*.ilk
+*.nro
+*.nsp
+*.npdm
+*.nacp
+*.zip
+*.d
 *.map
-*.exp
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
-
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
-
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
-
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
-
-# Kernel Module Compile Results
-*.mod*
 *.cmd
 .tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
+build/
+out/
+sysmodule/build/
+sysmodule/out/
+toolchain/
 
-# Editor / tool local config
+# Local development
 .vscode/
 .claude/
+.DS_Store
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
 
-# Local project notes (not for the public repo)
+# Runtime data and secrets
+data/
+server/data/
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+
+# Local notes
 CLAUDE.md
 PROGRESS.md
 HB_APPSTORE_SUBMISSION.md
-
-# Project ignores
-/build
-/out
-*.nacp
-*.nro
-*.elf
-*.zip
-.DS_Store
 nx_pctl_probe.txt
-*.nsp
-*.npdm
-nx_pctl_probe.txt
-# Local development toolchain
-/toolchain/
-
-# Sysmodule build artifacts
-/sysmodule/build/
-/sysmodule/out/
-
-__pycache__
-data/
