@@ -787,3 +787,10 @@ try:
 except ImportError:  # pragma: no cover - direct module execution
     from admin_api import router as admin_router
 app.include_router(admin_router)
+
+
+try:
+    from .admin_ui import router as admin_ui_router
+except ImportError:  # pragma: no cover - direct module execution
+    from admin_ui import router as admin_ui_router
+app.include_router(admin_ui_router)
