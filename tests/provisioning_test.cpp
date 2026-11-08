@@ -5,14 +5,14 @@
 
 int main() {
     nxpctl::protocol::ProvisioningRequest request{};
-    std::strcpy(request.api_host, "api.example.test");
+    std::strcpy(request.api_url, "http://192.168.178.10:1212");
     std::strcpy(request.device_id, "switch-01");
     std::strcpy(request.enrollment_code, "abcdefghijklmnopqrstuvwxyz_0123456789");
     assert(nxpctl::protocol::IsValidProvisioningRequest(request));
 
-    request.api_host[0] = '/';
+    request.api_url[0] = '/';
     assert(!nxpctl::protocol::IsValidProvisioningRequest(request));
-    request.api_host[0] = 'a';
+    request.api_url[0] = 'a';
 
     request.enrollment_code[0] = '"';
     assert(!nxpctl::protocol::IsValidProvisioningRequest(request));
