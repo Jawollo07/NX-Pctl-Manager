@@ -6,7 +6,7 @@
 namespace nxpctl::credential_store {
 
     struct CredentialData {
-        char api_host[254]{};
+        char api_url[254]{};
         char device_id[65]{};
         char device_credential[129]{};
     };
